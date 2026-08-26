@@ -1,0 +1,16 @@
+.page {
+  padding-block: var(--space-8);
+}
+
+.prose {
+  max-width: 72ch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  color: var(--color-text-secondary);
+}
+
+.prose h2 {
+  color: var(--color-text);
+  margin-top: var(--space-4);
+}

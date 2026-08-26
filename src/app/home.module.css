@@ -1,0 +1,78 @@
+.hero {
+  padding-block: var(--space-8);
+}
+
+.heroEyebrow {
+  font-size: var(--text-micro-size);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.heroLead {
+  margin-top: var(--space-5);
+  max-width: 56ch;
+  color: var(--color-text-secondary);
+}
+
+.heroActions {
+  margin-top: var(--space-6);
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.section {
+  padding-block: var(--space-8);
+  border-top: 1px solid var(--color-border);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.sectionEyebrow {
+  font-size: var(--text-micro-size);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-5);
+}
+
+.teaser {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  background: var(--color-bg-alt);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7);
+}
+
+.teaserText {
+  max-width: 48ch;
+  color: var(--color-text-secondary);
+  margin-top: var(--space-2);
+}
+
+.gamesList {
+  border-top: 1px solid var(--color-border);
+}
+
+.emptyState {
+  color: var(--color-text-secondary);
+  padding-block: var(--space-6);
+}

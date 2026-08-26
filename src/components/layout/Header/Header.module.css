@@ -25,6 +25,36 @@
   width: auto;
 }
 
+.nav {
+  display: none;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+@media (min-width: 768px) {
+  .nav {
+    display: flex;
+  }
+}
+
+.nav a {
+  font-size: var(--text-small-size);
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--color-text-secondary);
+  transition: color var(--duration-fast) var(--easing-standard);
+}
+
+.nav a:hover {
+  color: var(--color-text);
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
 .cartButton {
   position: relative;
   display: inline-flex;

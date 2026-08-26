@@ -23,20 +23,27 @@ export function Header({ cartCount = 0 }: HeaderProps) {
               priority
             />
           </Link>
-          <button type="button" className={styles.cartButton} aria-label={`Warenkorb, ${cartCount} Artikel`}>
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path
-                d="M2.5 5h2l1.2 8.4a1.5 1.5 0 0 0 1.5 1.3h6.6a1.5 1.5 0 0 0 1.5-1.3l1-6.4H6"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx="8" cy="17.5" r="1" fill="currentColor" />
-              <circle cx="14" cy="17.5" r="1" fill="currentColor" />
-            </svg>
-            {cartCount > 0 && <span className={styles.cartCount}>{cartCount}</span>}
-          </button>
+          <nav className={styles.nav} aria-label="Hauptnavigation">
+            <Link href="/#saisonkarten">Saisonkarten</Link>
+            <Link href="/red-castle-club">Red Castle Club</Link>
+            <Link href="/spielplan">Spielplan</Link>
+          </nav>
+          <div className={styles.right}>
+            <button type="button" className={styles.cartButton} aria-label={`Warenkorb, ${cartCount} Artikel`}>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path
+                  d="M2.5 5h2l1.2 8.4a1.5 1.5 0 0 0 1.5 1.3h6.6a1.5 1.5 0 0 0 1.5-1.3l1-6.4H6"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle cx="8" cy="17.5" r="1" fill="currentColor" />
+                <circle cx="14" cy="17.5" r="1" fill="currentColor" />
+              </svg>
+              {cartCount > 0 && <span className={styles.cartCount}>{cartCount}</span>}
+            </button>
+          </div>
         </div>
       </Container>
     </header>

@@ -8,9 +8,10 @@ what each table is for, not how to build it — read the migrations for exact co
 
 Season-pass variants and Red Castle Club memberships shown in the shop; `tier_level` drives the
 price-dependent visual treatment (Phase 2/3), and `benefits` (jsonb) holds the free-text/structured
-perks per tier. Publicly readable where `active = true` — the only public policy in the whole
-schema; every other read/write is admin-only, and products are deactivated rather than deleted so
-historical orders always resolve to a real row.
+perks per tier — including an optional `single_ticket_price_rappen` on plain season passes, the
+reference figure the landing page uses to calculate (never hand-type) the "you save" amount.
+Publicly readable where `active = true`; every other read/write is admin-only, and products are
+deactivated rather than deleted so historical orders always resolve to a real row.
 
 ## price_history
 
@@ -81,6 +82,13 @@ changes and reissues, and non-price product edits (name/description/benefits/tie
 active). Kept separate from `price_history`, which is scoped strictly to prices per its own name and
 the brief's Phase 1 definition — see `docs/DECISIONS.md` D18 for the reasoning. Admin-readable only;
 populated exclusively by the `SECURITY DEFINER` mutation functions and the auto-cancel job.
+
+## games
+
+Added in Phase 3, not Phase 1 — the brief's Phase 1 table list didn't include a schedule table, but
+the public shop's individual-games list and the landing page's savings calculation both need one.
+Home games only (date, opponent, optional Eventfrog link) for a season; publicly readable, same as
+active products, since a schedule isn't sensitive. Only admins can add or edit rows.
 
 ## Mutation functions (not tables, but part of the data layer)
 

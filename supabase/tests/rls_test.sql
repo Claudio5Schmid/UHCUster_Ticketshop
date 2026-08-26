@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(53);
+select plan(58);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -44,6 +44,9 @@ values ('f0000000-0000-0000-0000-000000000001', 'TEST-TOKEN-0001', 'e0000000-000
 insert into public.scan_events (id, scanned_token, ticket_id, result, device_id)
 values ('10000001-0000-0000-0000-000000000001', 'TEST-TOKEN-0001', 'f0000000-0000-0000-0000-000000000001', 'accepted', 'test-device-1');
 
+insert into public.games (id, season, opponent, played_at)
+values ('20000001-0000-0000-0000-000000000001', '2627', 'Test Gegner', now() + interval '30 days');
+
 -- Backdated fixtures for the auto-cancel test (D14).
 insert into public.customers (id, name, address_street, address_zip, address_city, email, phone)
 values ('c0000000-0000-0000-0000-000000000002', 'Stale Customer', 'Teststrasse 2', '8610', 'Uster', 'stale@example.com', '0791234568');
@@ -63,8 +66,10 @@ values ('d0000000-0000-0000-0000-000000000003', 'TEST-0003', 'bezahlt', 'c000000
 
 set local role anon;
 
-select is((select count(*) from public.products)::int, 1, 'anon sees exactly one product');
-select is((select slug from public.products limit 1), 'test-active', 'anon only sees the active product');
+-- Existence checks, not raw counts: the real product catalog (seeded in Phase 3)
+-- lives in this same table, so "anon sees N products" isn't a stable assertion.
+select ok((select exists(select 1 from public.products where slug = 'test-active')), 'anon can see the active test product');
+select ok((select not exists(select 1 from public.products where slug = 'test-inactive')), 'anon cannot see the inactive test product');
 select is((select count(*) from public.customers)::int, 0, 'anon sees no customers');
 select is((select count(*) from public.orders)::int, 0, 'anon sees no orders');
 select is((select count(*) from public.order_items)::int, 0, 'anon sees no order_items');
@@ -73,6 +78,7 @@ select is((select count(*) from public.scan_events)::int, 0, 'anon sees no scan_
 select is((select count(*) from public.price_history)::int, 0, 'anon sees no price_history');
 select is((select count(*) from public.admin_users)::int, 0, 'anon sees no admin_users');
 select is((select count(*) from public.audit_log)::int, 0, 'anon sees no audit_log');
+select is((select count(*) from public.games)::int, 1, 'anon can see games - schedule is public information');
 
 reset role;
 
@@ -83,7 +89,7 @@ reset role;
 set local role authenticated;
 set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
 
-select is((select count(*) from public.products)::int, 1, 'non-admin authenticated still only sees the active product');
+select ok((select exists(select 1 from public.products where slug = 'test-active')), 'non-admin authenticated can see the active test product');
 select is((select count(*) from public.customers)::int, 0, 'non-admin authenticated sees no customers');
 select is((select count(*) from public.orders)::int, 0, 'non-admin authenticated sees no orders');
 select is((select count(*) from public.tickets)::int, 0, 'non-admin authenticated sees no tickets');
@@ -93,6 +99,12 @@ select throws_ok(
   'P0001',
   'only admins can transition order status',
   'non-admin authenticated cannot call transition_order_status'
+);
+select throws_ok(
+  $$insert into public.games (season, opponent, played_at) values ('2627', 'Should Fail', now())$$,
+  '42501',
+  'new row violates row-level security policy for table "games"',
+  'non-admin authenticated cannot insert a game'
 );
 
 reset role;
@@ -105,12 +117,19 @@ reset request.jwt.claim.sub;
 set local role authenticated;
 set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
 
-select is((select count(*) from public.products)::int, 2, 'admin sees all products, including inactive');
+select ok((select exists(select 1 from public.products where slug = 'test-active')), 'admin can see the active test product');
+select ok((select exists(select 1 from public.products where slug = 'test-inactive')), 'admin can also see the inactive test product');
 select is((select count(*) from public.customers)::int, 3, 'admin sees all customers');
 select is((select count(*) from public.orders)::int, 3, 'admin sees all orders');
 select is((select count(*) from public.order_items)::int, 1, 'admin sees order_items');
 select is((select count(*) from public.tickets)::int, 1, 'admin sees tickets');
 select is((select count(*) from public.admin_users)::int, 1, 'admin sees admin_users');
+
+select lives_ok(
+  $$insert into public.games (season, opponent, played_at) values ('2627', 'Admin Gegner', now() + interval '45 days')$$,
+  'admin can insert a game'
+);
+select is((select count(*) from public.games)::int, 2, 'the admin-inserted game is now visible too');
 
 -- Bare writes to orders/tickets are structurally blocked (no insert/update policy) -
 -- silently affect 0 rows under RLS, not an exception.
