@@ -2,6 +2,7 @@
 
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import { CURRENT_SEASON } from "@/lib/season";
+import { getClientIp, checkOrderRateLimit } from "@/lib/rate-limit";
 
 export interface OrderLineInput {
   productId: string;
@@ -63,6 +64,12 @@ export async function submitOrder(
 ): Promise<OrderConfirmation> {
   if (!lines || lines.length === 0) {
     throw new Error("Der Warenkorb ist leer.");
+  }
+
+  const clientIp = await getClientIp();
+  const withinLimit = await checkOrderRateLimit(clientIp);
+  if (!withinLimit) {
+    throw new Error("Zu viele Bestellversuche. Bitte versuche es in einigen Minuten erneut.");
   }
 
   const turnstileOk = await verifyTurnstile(turnstileToken);

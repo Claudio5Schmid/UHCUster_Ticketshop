@@ -351,3 +351,33 @@ client shows a brief "wird geprüft" state and asks the server first, falling ba
 a local "not found" only if the network genuinely doesn't answer. Every other
 decision (accepted, already redeemed, voided, malformed) stays instant and fully
 local, per the brief. **Resolved.**
+
+## 2026-08-27 (Phase 8) — hardening and accounting groundwork
+
+**D36 — Rate limiting via a plain Postgres table, not Redis/Upstash.** The brief asks
+for rate limiting on the order endpoint without naming a mechanism. Serverless
+functions can't hold reliable in-memory state (each cold start and each concurrent
+instance is independent), and adding a new external service (Upstash Redis or
+similar) for this alone would cut against the project's own "no added compute"
+scalability philosophy for what is, at this club's scale, a low-volume check.
+`order_rate_limits` (one row per attempt, keyed by IP) plus one `SECURITY DEFINER`
+function reuses infrastructure the project already has. Extended to
+`/api/scanner/session` too, beyond the brief's literal "order endpoint" wording -
+scanner codes are short, human-typed strings, not high-entropy secrets, so leaving
+that endpoint unlimited would have been a real, easily-exploitable gap discovered
+during this same pass, not a hypothetical one. **Resolved.**
+
+**D37 — FIBU export: one row per order, "Konto" left blank, "Datum" is order date
+not payment date.** Per the brief's explicit instruction ("do not implement an
+interface to any specific accounting system"), only the format and an internal
+function are built (`docs/FIBU-INTERFACE.md`). Three sub-choices worth recording:
+(1) one row per *paid* order, not per order line - accounting cares about the
+transaction total, matching the brief's five named fields (debtor, amount, document
+number, date, account) which describe one booking, not a line-item breakdown; (2)
+the account/Konto column is left empty rather than guessed, since which GL account
+each revenue type posts to depends on a chart of accounts that doesn't exist yet -
+inventing one would violate the same "don't invent" rule that applies to prices and
+schedules; (3) the date column uses `orders.created_at`, since there is no separate
+"paid on" timestamp in the schema (`orders` only has `created_at`/`updated_at`) -
+flagged in `docs/BACKLOG.md` as a gap to close if the eventual accounting system
+specifically needs the payment date. **Resolved.**

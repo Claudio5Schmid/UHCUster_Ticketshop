@@ -1,0 +1,79 @@
+# Backlog — things deliberately left out
+
+Phase 8, per the brief's own ask: everything left out along the way, in one place,
+rather than scattered across decision logs and code comments. Not a promise to build
+any of this - just an honest inventory so nothing is quietly forgotten.
+
+## Real scope decisions still open
+
+- **CSV member import (D7, docs/DECISIONS.md).** "Mitglieder UHC Uster" don't buy
+  through the shop - they'd get a free, non-transferable season pass via a one-time
+  bulk import. Flagged back in Phase 0.5 as extra scope beyond the brief's original
+  nine phases, suggested as a "Phase 5b" step. Never confirmed or built - still
+  awaiting a yes/no from Claudio.
+- **Apple Wallet and Google Wallet (D28).** Neither built. Apple needs a paid developer
+  program enrollment and certificates; Google needs a Business Console issuer account.
+  Every ticket already has a fully functional PDF regardless - revisit Google first
+  once Claudio has an issuer account to actually test against.
+- **Real Turnstile keys.** `.env.local` and Vercel were on Cloudflare's public always-
+  pass test keys through most of development; Claudio was mid-way through swapping in
+  a real Turnstile site's keys as of this writing (docs/DECISIONS.md D25). Confirm
+  it's finished before relying on real spam protection at launch.
+
+## Admin tooling gaps (all currently possible only via direct SQL)
+
+- **Adding a second admin account.** `/admin/setup` is intentionally one-time (D26) -
+  there's no in-app way to add further admins yet. Needs either an "invite admin"
+  flow or, at minimum, documented SQL steps for whoever holds database access.
+- **Voiding a single ticket without replacing it.** `reissue_ticket()` exists (voids +
+  replaces), but there's no function or UI for "just cancel this one ticket, no
+  replacement" - relevant if a cancelled order already had tickets issued.
+- **Viewing raw `scan_events`.** No admin UI lists them; investigating a suspected
+  double-scan today means querying the table directly. The live view
+  (`/admin/live`) shows aggregate counts, not the individual log.
+- **Renaming a ticket holder from the admin UI.** `rename_ticket_holder()` (D18)
+  exists and is tested, but nothing in the admin UI calls it yet.
+
+## Data model gaps
+
+- **No `paid_at` timestamp on `orders`**, distinct from `created_at`. Affects the
+  FIBU export's date column (docs/FIBU-INTERFACE.md) - it currently uses order
+  creation date, not payment date, since the latter isn't tracked separately.
+- **`scan_events.result = 'wrong_game'` is currently unreachable** (D31) - every
+  product this shop sells is valid at every home game, so nothing today produces
+  this result. Kept in the schema only in case a genuinely game-specific product is
+  added later.
+- **`order_rate_limits` has no cleanup job.** Every checkout and scanner-login attempt
+  adds a row, forever. Low volume for a club-scale shop (nowhere near database
+  concern), but a scheduled `delete ... where created_at < now() - interval '7 days'`
+  would be a clean, cheap addition if it's ever worth doing.
+- **Auto-cancel threshold (14 days, D14) is hardcoded** in
+  `auto_cancel_stale_orders()`, not admin-configurable.
+
+## Accounting
+
+- **No real accounting-system integration.** `docs/FIBU-INTERFACE.md` defines the
+  handoff format and an internal export function only, per the brief's explicit
+  instruction not to build against a specific system yet.
+- **No chart-of-accounts mapping** (which product/revenue type posts to which
+  account) - the FIBU export's "Konto" column is left blank for exactly this reason.
+
+## Security / hardening
+
+- **Enable Supabase's "leaked password protection"** (Authentication → Policies →
+  Password security in the dashboard) - flagged by the security advisor, not enabled
+  by default, protects admin account passwords against reused/breached ones. Not a
+  code change, just a toggle Claudio can flip directly.
+- **Rate limiting exists on two endpoints** (`submitOrder`, `/api/scanner/session`),
+  both via the same `order_rate_limits` table/function. No other endpoint has one -
+  revisit if abuse is ever actually observed on, say, the ticket-download routes.
+
+## Explicitly out of scope, not just "later"
+
+- Any accounting-system-specific integration (brief: "do not implement an interface
+  to any specific accounting system").
+- Native scanner apps - the brief calls for a PWA specifically, so no App
+  Store/Play Store builds exist or are planned.
+- Multi-season support beyond the current season constant (`CURRENT_SEASON` in
+  `src/lib/season.ts`) - rolling over to next season is a manual code change today,
+  not a runtime setting.

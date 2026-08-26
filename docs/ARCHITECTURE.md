@@ -135,7 +135,7 @@ against printing `.env` contents.
 | `TURNSTILE_SECRET_KEY` | server-only | Server-side Turnstile verification in the checkout Server Action. Currently the matching test secret — same swap needed |
 | `APPLE_WALLET_PASS_TYPE_ID` | server-only | Apple Wallet pass type identifier |
 | `APPLE_WALLET_TEAM_ID` | server-only | Apple Developer team ID |
-| `APPLE_WALLET_CERTIFICATE` / `_PASSWORD` | server-only | Apple pass-signing certificate, supplied by the club later (Phase 6, see `docs/WALLET-SETUP.md`) |
+| `APPLE_WALLET_CERTIFICATE` / `_PASSWORD` | server-only | Apple pass-signing certificate - not built (D28); `docs/WALLET-SETUP.md` doesn't exist yet and isn't needed unless this work resumes |
 | `APPLE_WALLET_WWDR_CERTIFICATE` | server-only | Apple WWDR intermediate certificate |
 | `GOOGLE_WALLET_SERVICE_ACCOUNT_JSON` | server-only | Google Wallet API service account credentials |
 | `GOOGLE_WALLET_ISSUER_ID` / `_CLASS_ID` | server-only | Google Wallet API identifiers |
@@ -240,7 +240,40 @@ subscribed to the same Realtime channel for the redeemed count and polling every
 (rejections aren't broadcast, only redemptions are, per the brief). "Outstanding" means season-pass
 holders who haven't checked in for *this* game yet, not unsold inventory.
 
-## 9. Open questions — superseded by `docs/DECISIONS.md`
+## 9. Hardening pass (Phase 8)
+
+**Rate limiting** (`src/lib/rate-limit.ts`, `check_order_rate_limit` in Postgres): every
+`submitOrder` call and every `/api/scanner/session` call records an attempt against the client's
+IP (`x-forwarded-for`, Vercel-supplied) before doing any real work, and is rejected outright once
+that IP is over its window's limit - 5 checkout attempts / 10 minutes, 10 scanner-code attempts /
+10 minutes (codes are short human-typed strings, not high-entropy secrets, so brute-forcing them
+without a limit was a real gap). One shared table (`order_rate_limits`) and function serve both,
+distinguished only by a key prefix (`scanner-session:<ip>` vs. bare `<ip>`) - not a second schema
+for what's structurally the same mechanism. The check fails open (allows the request) if the
+database call itself errors, so a transient database issue can never block a legitimate order.
+
+**Secrets-in-bundle check:** confirmed no `"use client"` file references any server-only
+environment variable (`SUPABASE_SERVICE_ROLE_KEY`, `TICKET_TOKEN_SECRET`, `SCANNER_SESSION_SECRET`,
+`TURNSTILE_SECRET_KEY`, `CRON_SECRET`) - the five files that do are a Server Action, two Route
+Handlers, and two server-only libraries (`src/lib/tickets/token.ts`, `src/lib/scanner/session.ts`,
+both built on Node's `crypto`, which doesn't exist in a browser bundle anyway and would fail the
+build outright if ever imported client-side).
+
+**RLS re-verification:** the pgTAP suite grew to 92 assertions, adding coverage for
+`game_scanner_codes` (admin-only, correctly excluded from the public `games` policy) and
+`check_order_rate_limit` (grant-gated like `create_order`, no internal `is_admin()` check needed
+since it's system-only). Also fixed two things the suite hadn't caught until this pass: a
+`scan_events` fixture that predated the Phase 7 `game_id NOT NULL` column, and several Group C
+assertions that had quietly gone from "the only rows in the table" (safe when this was a brand-new
+project) to real undercounts once Claudio's own live testing added genuine customers, orders, and
+an admin account - converted to "at least N" checks, the same fix already applied once before to
+`order_number_sequences` for the same underlying reason.
+
+**Left to the Supabase dashboard** (not reachable via SQL/migration): enabling "leaked password
+protection" for admin logins, and confirming the project's spend cap is still enabled - both
+documented as explicit `docs/OPERATIONS.md` action items rather than silently skipped.
+
+## 10. Open questions — superseded by `docs/DECISIONS.md`
 
 The five items originally listed here (Supabase project/plan, missing design doc, missing price
 list/schedule/Eventfrog links, the HMAC-vs-offline-verification tension, and the brief's mandated

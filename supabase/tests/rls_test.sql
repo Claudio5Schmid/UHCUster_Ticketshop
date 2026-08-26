@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(79);
+select plan(92);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -41,11 +41,21 @@ values ('e0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-0000000
 insert into public.tickets (id, token, order_item_id, product_id, season, holder_name)
 values ('f0000000-0000-0000-0000-000000000001', 'TEST-TOKEN-0001', 'e0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', '2627', 'Test Holder');
 
-insert into public.scan_events (id, scanned_token, ticket_id, result, device_id)
-values ('10000001-0000-0000-0000-000000000001', 'TEST-TOKEN-0001', 'f0000000-0000-0000-0000-000000000001', 'accepted', 'test-device-1');
-
 insert into public.games (id, season, opponent, played_at)
-values ('20000001-0000-0000-0000-000000000001', '2627', 'Test Gegner', now() + interval '30 days');
+values
+  ('20000001-0000-0000-0000-000000000001', '2627', 'Test Gegner', now() + interval '30 days'),
+  ('20000001-0000-0000-0000-000000000002', '2627', 'Test Gegner Zwei', now() + interval '31 days');
+
+-- game_id added in Phase 7 (scan_events is now scoped per game, not per ticket for
+-- life - D31) - this fixture predates that column, so it needs one now too.
+insert into public.scan_events (id, scanned_token, ticket_id, game_id, result, device_id)
+values ('10000001-0000-0000-0000-000000000001', 'TEST-TOKEN-0001', 'f0000000-0000-0000-0000-000000000001', '20000001-0000-0000-0000-000000000001', 'accepted', 'test-device-1');
+
+-- Group I fixture (game_scanner_codes): one game already has a code (for the
+-- anon/non-admin SELECT-denial and admin-update tests), the other doesn't yet
+-- (for the admin-insert test).
+insert into public.game_scanner_codes (game_id, code)
+values ('20000001-0000-0000-0000-000000000001', 'FIXTURE-CODE');
 
 -- Backdated fixtures for the auto-cancel test (D14).
 insert into public.customers (id, name, address_street, address_zip, address_city, email, phone)
@@ -123,11 +133,16 @@ set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
 
 select ok((select exists(select 1 from public.products where slug = 'test-active')), 'admin can see the active test product');
 select ok((select exists(select 1 from public.products where slug = 'test-inactive')), 'admin can also see the inactive test product');
-select is((select count(*) from public.customers)::int, 3, 'admin sees all customers');
-select is((select count(*) from public.orders)::int, 3, 'admin sees all orders');
-select is((select count(*) from public.order_items)::int, 2, 'admin sees order_items');
-select is((select count(*) from public.tickets)::int, 1, 'admin sees tickets');
-select is((select count(*) from public.admin_users)::int, 1, 'admin sees admin_users');
+-- Relative, not absolute (same reasoning as the order-number test below): this
+-- project now has real customers/orders/tickets/admins from Claudio's own live
+-- testing, on top of this file's own fixtures, so "exactly 3" stopped being a
+-- safe assertion the moment real usage started - only "at least the fixtures
+-- this file itself just inserted" is guaranteed.
+select ok((select count(*) from public.customers) >= 3, 'admin sees all customers (at least this file''s own 3 fixtures)');
+select ok((select count(*) from public.orders) >= 3, 'admin sees all orders (at least this file''s own 3 fixtures)');
+select ok((select count(*) from public.order_items) >= 2, 'admin sees order_items (at least this file''s own 2 fixtures)');
+select ok((select count(*) from public.tickets) >= 1, 'admin sees tickets (at least this file''s own 1 fixture)');
+select ok((select count(*) from public.admin_users) >= 1, 'admin sees admin_users (at least this file''s own 1 fixture)');
 
 select lives_ok(
   $$insert into public.games (season, opponent, played_at) values ('2627', 'Admin Gegner', now() + interval '45 days')$$,
@@ -473,6 +488,81 @@ select ok(
 
 reset role;
 reset request.jwt.claim.sub;
+
+-- ============================================================================
+-- Group I: game_scanner_codes (Phase 7/8) - own table, kept off the public
+-- games policy on purpose (D32).
+-- ============================================================================
+
+set local role anon;
+select is((select count(*) from public.game_scanner_codes)::int, 0, 'anon sees no scanner codes');
+select throws_ok(
+  $$insert into public.game_scanner_codes (game_id, code) values ('20000001-0000-0000-0000-000000000002', 'x')$$,
+  '42501',
+  'new row violates row-level security policy for table "game_scanner_codes"',
+  'anon cannot insert a scanner code'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
+select is((select count(*) from public.game_scanner_codes)::int, 0, 'non-admin authenticated sees no scanner codes');
+select throws_ok(
+  $$insert into public.game_scanner_codes (game_id, code) values ('20000001-0000-0000-0000-000000000002', 'x')$$,
+  '42501',
+  'new row violates row-level security policy for table "game_scanner_codes"',
+  'non-admin authenticated cannot insert a scanner code'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+select ok((select count(*) from public.game_scanner_codes) >= 1, 'admin sees at least this file''s own fixture scanner code');
+select lives_ok(
+  $$insert into public.game_scanner_codes (game_id, code) values ('20000001-0000-0000-0000-000000000002', 'NEW-CODE')$$,
+  'admin can insert a scanner code for a game that does not have one yet'
+);
+select lives_ok(
+  $$update public.game_scanner_codes set code = 'UPDATED-CODE' where game_id = '20000001-0000-0000-0000-000000000001'$$,
+  'admin can update an existing scanner code'
+);
+select is(
+  (select code from public.game_scanner_codes where game_id = '20000001-0000-0000-0000-000000000001'),
+  'UPDATED-CODE',
+  'the scanner code was actually updated'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+-- ============================================================================
+-- Group J: check_order_rate_limit (Phase 8) - grant-only gating, no internal
+-- is_admin() check, same shape as create_order's own access control.
+-- ============================================================================
+
+set local role anon;
+select throws_ok(
+  $$select public.check_order_rate_limit('1.2.3.4', 5, 10)$$,
+  '42501',
+  'permission denied for function check_order_rate_limit',
+  'anon cannot call check_order_rate_limit'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
+select throws_ok(
+  $$select public.check_order_rate_limit('1.2.3.4', 5, 10)$$,
+  '42501',
+  'permission denied for function check_order_rate_limit',
+  'non-admin authenticated cannot call check_order_rate_limit either - system-only, like create_order'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+select is(public.check_order_rate_limit('rl-test-ip', 2, 10), true, 'first attempt from a fresh IP is allowed');
+select is(public.check_order_rate_limit('rl-test-ip', 2, 10), true, 'second attempt is still allowed');
+select is(public.check_order_rate_limit('rl-test-ip', 2, 10), false, 'third attempt within the window is blocked');
 
 select * from finish();
 

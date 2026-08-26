@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import { createScannerSessionToken } from "@/lib/scanner/session";
+import { getClientIp, checkOrderRateLimit } from "@/lib/rate-limit";
 
 const SESSION_VALID_MS = 8 * 60 * 60 * 1000; // 8 hours - covers setup, the game, and a buffer
 
 /**
  * Exchanges a per-game scanner code for a short-lived signed session token.
  * No Supabase Auth session involved - helpers are anonymous devices, verified only
- * by knowing the code an admin gave them for this specific game (D32).
+ * by knowing the code an admin gave them for this specific game (D32). Codes are
+ * short, human-typed strings, not high-entropy secrets, so this endpoint is
+ * brute-forceable without a rate limit - reuses the same order_rate_limits
+ * mechanism (a distinct key prefix, not a separate table) rather than allowing
+ * unlimited guesses.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -17,6 +22,12 @@ export async function POST(request: Request) {
 
   if (!gameId || !code || !deviceLabel) {
     return NextResponse.json({ error: "gameId, code, and deviceLabel are required" }, { status: 400 });
+  }
+
+  const clientIp = await getClientIp();
+  const withinLimit = await checkOrderRateLimit(`scanner-session:${clientIp}`, 10, 10);
+  if (!withinLimit) {
+    return NextResponse.json({ error: "Zu viele Versuche. Bitte kurz warten." }, { status: 429 });
   }
 
   const supabase = getSupabaseAdminClient();
