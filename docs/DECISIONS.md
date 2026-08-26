@@ -181,10 +181,17 @@ a real fixture returned by the API: 19 September 2026 vs. Zug United at Buchholz
 the brief's own stated first-home-game date exactly. `games` gained two columns
 (`external_id`, `venue`) for idempotent upserts and to carry the venue Claudio asked for. Sync is a
 Next.js route (`/api/sync/swissunihockey`) on a daily Vercel Cron (`vercel.json`), using the
-service-role key and never touching `eventfrog_url`. **Resolved**, pending two things from Claudio:
-the `SUPABASE_SERVICE_ROLE_KEY` value (still blank, needed to test/run the actual database write —
-the fetch-and-parse half is already verified live), and an actual Vercel deployment, since the cron
-schedule only takes effect once this project is deployed there.
+service-role key and never touching `eventfrog_url`. Claudio asked why the sync needs the
+service-role key at all, given how sensitive it is — answered directly: the `games` table only
+allows writes from an authenticated admin session, and this cron job has no session whatsoever, so
+it needs RLS bypassed the standard way. Claudio set the key in `.env.local` himself (never shared
+with Claude); a live end-to-end run then confirmed 10 real home games synced correctly, including
+the CEST/CET timezone conversion across the season (19 Sept 18:00 local → stored as 16:00 UTC; 16 Jan
+18:00 local → stored as 17:00 UTC) and the landing page's savings calculation now showing real
+figures (e.g. "CHF 200.– wert – du sparst CHF 50.–" for the Erwachsene pass). **Fully resolved and
+verified**, except that the cron schedule itself only actually fires once this project is deployed
+to Vercel — the sync currently only runs when triggered manually (as it was here) or after that
+deployment.
 
 **D22 — Per-game Eventfrog links don't exist yet; only a general search link does.** Claudio gave
 `https://eventfrog.ch/de/events/ch/sport-fitness.html?searchTerm=UHC+Uster` as the current stopgap.
