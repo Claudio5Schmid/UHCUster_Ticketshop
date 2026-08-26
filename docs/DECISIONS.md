@@ -1,0 +1,169 @@
+# Decisions Log — Phase 0.5 and onward
+
+Numbered, dated log. This grows over the project as questions get answered — it is not written once
+at the end. Each entry states the decision, and whether it's fully resolved or still has open
+mechanics.
+
+## 2026-08-26
+
+**D1 — Supabase project.** Resolved. Fourth check (2026-08-26) now shows organization **"UHC Uster"**
+(`bnirgraefcptnihcliag`) with a single project **"UHC Uster - Ticketshop"**
+(`oojixascgoxdxzlwomrt`, ref `oojixascgoxdxzlwomrt`, region `eu-central-1`, Postgres 17,
+`ACTIVE_HEALTHY`, no tables yet — clean slate). The old "Büsnei from CS" org/projects are no longer
+visible through this connection at all, confirming it was a connector-authorization issue, not a
+Supabase-side one. **This is the project Phase 1 migrations will target.**
+
+Follow-up, not blocking: the org's plan is **Free**, not **Pro** as the brief's hard constraints
+assume. Free-tier projects auto-pause after a week of inactivity and have lower resource/backup
+limits (no point-in-time recovery). Doesn't block starting Phase 1 (migrations work identically on
+Free), but should be upgraded before real customer/payment-adjacent data and before 5 September go-
+live, given money and personal data are involved. Flagging for Claudio's awareness; not re-asking as
+a blocking question since Phase 1 can proceed regardless.
+
+**D2 — Design baseline.** `docs/uhcusterdesignanalyse.md` is the design source of truth for Phase 2
+(colours, type scale, spacing). No conflict with the brief's colour mandate. **Resolved.**
+
+**D3 — Red Castle Club pricing.** The 4-tier structure is authoritative: Gold 5000.-, Silber 2500.-,
+Bronze 1000.-, Normal 300.- (benefits as given in the brief's price list, including bundled
+transferable VIP season passes for Gold/Silber/Bronze and a personal, non-transferable pass for
+Normal). The 2-tier figures seen in the screenshot ('normal' 250.-, 'plus' ab 550.-) do not apply —
+per Claudio, the screenshot only ever covered single-entry/season-pass pricing for regular fans, not
+Red Castle Club. **Resolved.**
+
+**D4 — Red Castle Club in scope for MVP self-service.** Yes, all four tiers are purchasable through
+the shop for the MVP — not deferred to later. **Resolved**, mechanics of assigning bundled passes
+still open (see below).
+
+**D5 — Ticket transferability model.** Two classes of ticket:
+- **Non-transferable, personal** season pass — the default for any normal shop order, and for the
+  CSV-imported club member base (D7).
+- **Transferable, multi-holder** season pass — bundled into Red Castle Club Gold/Silber/Bronze
+  orders (3/2/2 passes respectively), and additionally granted to specific members (e.g. trainers,
+  players) on top of their personal CSV-imported pass.
+
+  **Mechanics resolved:** Option B chosen — a transferable pass can be used by any person holding
+  the QR code, no name is collected per pass at checkout. Instead, `holder_name` on a transferable
+  ticket stores the **company/sponsor name shared across the whole batch** (Claudio's example:
+  "Firma Accum"). The scanner/admin view needs to show redemption progress per batch — e.g.
+  "9/10 gescannt — Firma Accum". This falls out of the existing schema for free: all tickets in one
+  Red Castle Club order share an `order_item`, so "X/Y redeemed" is just a count of `tickets` with
+  status `eingelöst` within that `order_item`, grouped/labelled by the shared `holder_name`. No new
+  table needed, just: `holder_name` optional/shared-per-batch instead of always-per-person, and an
+  admin/scanner UI element for batch progress. **Resolved.**
+
+**D6 — Ticket loss / reissue.** Confirmed ("ja das passt"): soft-void the old `tickets` row (status
+`storniert`/`ersetzt`) rather than a hard delete, when a lost pass is reissued. Keeps an audit trail;
+functionally the old QR is dead either way. **Resolved.**
+
+**D7 — Club members (CSV import).** "Mitglieder UHC Uster" do not buy through the shop. They are
+imported in bulk via CSV from the club's existing membership system directly into this database, and
+receive a season pass (a new, non-transferable ticket) through that import rather than a checkout.
+This is scope beyond the brief's original phase list.
+- **Cadence: confirmed one-time import for the MVP** — no recurring sync required for launch.
+- **"Extra transferable passes for certain members" (e.g. trainers/players):** Claudio doesn't yet
+  know the rule for who qualifies or how many ("wie gross spielt das eine rolle? ich weiss es zum
+  jetzigen Zeitpunkt nicht"). Since this is genuinely undecided rather than just unstated, Claude is
+  not hardcoding a role-based rule. Default/assumption: the CSV import format includes a plain
+  numeric column (e.g. `zusatz_pässe_übertragbar`, default 0) that the club office fills in by
+  manual judgement per row at import time. This keeps the decision in the club's hands as data entry,
+  not code, and can be changed at any time without a schema change. Flagged as `TODO(claudio):`
+  assumption in the eventual import code. **Resolved as a default, revisit if a real rule emerges.**
+
+**D8 — "UHC Sponsoren Legi" (free, sponsor apprentices).** Purchasable through the shop like any
+other product (self-declared, CHF 0). Eligibility is enforced physically at the door — when the
+ticket is shown/scanned, staff also check the physical Legi/ID. No backend eligibility verification
+is built. **Resolved.**
+
+**D9 — "Reduzierter Eintritt" and similar ID-gated discount categories.** Same pattern as D8:
+purchasable at the shop's discounted price with no backend proof; enforcement is a manual, physical
+door check against the required ID, per the brief's own footnote on who qualifies. **Resolved.**
+
+**D10 — Playoff-Zuschlag.** Out of scope for this shop entirely — single tickets are sold via
+Eventfrog, which owns any playoff surcharge logic. Nothing built here. **Resolved.**
+
+**D11 — Saisonabo+ (livestream add-on).** Out of scope for the MVP shop. The customer arranges this
+directly on unihockey.swiss; not sold or referenced as a checkout item here. **Resolved.**
+
+**D12 — CSV import format for extra transferable passes.** See D7 above — a plain numeric CSV
+column, office-judged per row, default 0. **Resolved as a default.**
+
+**D13 — Scanning always requires the database; a signature alone is never sufficient.** Confirmed
+with Claudio ("die bereits ausgestellten QR codes müssen einfach gescannt werden können, ich nehme
+an dies funktioniert nicht ohne hinterlegte Datenbank" — correct, it doesn't). Any ticket, however it
+was created (shop order, Red Castle Club bundle, or CSV import), only becomes scannable by existing
+as a row in `tickets`. This resolves the HMAC-vs-offline-verification tension noted in
+`docs/ARCHITECTURE.md` §4: the pre-downloaded local valid-ticket set is authoritative; the signature
+is a pre-filter/tamper-defence on top of it, not a replacement for database-backed state. **Resolved.**
+
+**D14 — Unpaid orders.** An order left in status `neu` is **automatically cancelled (`storniert`)
+after 14 days**. Needs a scheduled job (Vercel Cron or Supabase `pg_cron`, hitting a small server
+route/function daily) — the only background/scheduled process in the MVP. The transition must still
+be logged like any other status change, with the actor recorded as "System" rather than an admin
+user. **Resolved.**
+
+**D15 — Admin access levels.** A single access level for all admins for now — no roles. Explicitly
+deferred, not built preemptively: role differentiation ("can change prices" vs. "can only view
+orders") will be defined later and added via migration when actually needed. `admin_users` stays a
+plain access list for the MVP. Handover process when someone leaves the office is a manual step
+(remove their Supabase Auth access), documented in `docs/OPERATIONS.md` (Phase 8), not a schema
+concern. **Resolved.**
+
+**D16 — Refunds without a payment provider.** Confirmed: a distinct status/flag is needed so the
+office can see which already-`bezahlt` orders still owe a manual bank transfer back. Claudio
+explicitly flagged that this **cannot be automatic** (no payment provider to detect the refund) — it
+is a manually-maintained marker end to end: the office sets it when a refund is owed, and clears it
+by hand once they've actually made the transfer. Nothing about this can be automated in the MVP; the
+UI just needs to make the "still owing a refund" list visible so it doesn't get forgotten (same
+spirit as the `neu`-orders count in Phase 5). **Resolved.**
+
+**D17 — VAT.** Using Claude's proposed default: prices are treated as gross amounts with no separate
+VAT line surfaced anywhere in the shop or its exports; VAT handling is entirely the accounting
+software's concern, downstream of this system. **Resolved.**
+
+**D18 — Holder-name changes on already-issued tickets.** Reversing Claude's default assumption:
+name changes on any ticket (not just Red Castle Club batches) **are allowed** via the admin tool —
+not "non-transferable means no exceptions" as originally assumed. This needs an audit trail (old
+name, new name, admin, timestamp) analogous to order status-transition logging and the reissue flow
+(D6) — exact mechanism (dedicated small history table vs. a general admin-action log covering this
+plus status transitions) to be settled during Phase 1 schema design, not here. **Resolved in
+direction, logging mechanism to be finalized in Phase 1.**
+
+**D19 — Mid-season game cancellation.** A season pass is a flat-rate product for the whole season; a
+single cancelled home game has no effect on existing orders, refunds, or ticket validity. **Resolved.**
+
+**D20 — Customer data retention.** Claudio asked for this to be "DSGVO-konform" — flagging a
+correction before implementing anything: **UHC Uster is a Swiss club, so the directly applicable law
+is the Swiss Federal Act on Data Protection (revDSG, in force since September 2023), not the EU
+GDPR/DSGVO** — the two overlap heavily in principle (purpose limitation, data minimization, right to
+access/deletion) but aren't identical, and GDPR would only apply directly if EU residents' data is
+processed in an EU-market-targeting context. Separately, Swiss commercial law (Obligationenrecht Art.
+958f) requires **10-year retention of accounting-relevant business records** — likely not this
+system's concern directly, since invoices themselves are generated and kept in the club's accounting
+software, not here, but worth the club's accountant confirming that boundary.
+
+Given this is a genuine legal question outside what Claude can authoritatively resolve, the MVP
+approach: no automatic deletion is built. `docs/OPERATIONS.md` (Phase 8) will document
+data-minimization practice (collect only what's listed in the brief, no automatic sharing beyond
+what's needed for pass issuance) and a **recommended, not legally-binding** retention window,
+pending confirmation from the club's own legal/tax advisor. **Resolved for the MVP as
+"document, don't automate, and flag the legal nuance rather than assume."**
+
+## Phase 0.5 status: complete
+
+Every brief-mandated topic has an actual answer or an explicit, owned deferral:
+
+| Deferred item | Owner | Deadline |
+|---|---|---|
+| Supabase org plan: Free → Pro upgrade (D1) | Claudio | Before 5 September go-live (recommended; does not block Phases 1–4) |
+| Audit-log mechanism for holder-name changes / status transitions (D18) | Claude | Resolved during Phase 1 schema design, not deferred to Claudio |
+| Final, legally-confirmed retention period (D20) | Claudio, with the club's accountant/legal advisor | No hard deadline; MVP ships with a documented default in the meantime |
+
+Ready for Claudio's go-ahead to start Phase 1.
+
+## Phase-plan impact note
+
+D4/D5/D7 add real scope not present in the brief's original 9 phases: a CSV member-import path with
+bulk, zero-price ticket issuance, and a transferability flag threaded through the schema, order flow,
+and scanner logic. Flagged to Claudio with a suggestion to sequence CSV import as a "Phase 5b" step
+(after 5 September, before the 19 September first game) rather than blocking the public shop launch,
+since members aren't part of the paying-customer critical path. Awaiting confirmation.

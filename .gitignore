@@ -1,0 +1,29 @@
+# Dependencies
+/node_modules
+
+# Next.js
+/.next/
+/out/
+
+# Vercel
+/.vercel
+
+# Environment
+.env
+.env*.local
+
+# Supabase CLI local state
+/supabase/.branches/
+/supabase/.temp/
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
