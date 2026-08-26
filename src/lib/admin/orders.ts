@@ -90,6 +90,7 @@ export interface OrderDetail {
   refund_owed: boolean;
   total_rappen: number;
   created_at: string;
+  files_handed_over_at: string | null;
   customer: {
     name: string;
     email: string;
@@ -114,7 +115,7 @@ export async function getOrderDetail(orderNumber: string): Promise<OrderDetail |
   const { data: order, error } = await supabase
     .from("orders")
     .select(
-      "id, order_number, status, refund_owed, total_rappen, created_at, customers(name, email, phone, address_street, address_zip, address_city)"
+      "id, order_number, status, refund_owed, total_rappen, created_at, files_handed_over_at, customers(name, email, phone, address_street, address_zip, address_city)"
     )
     .eq("order_number", orderNumber)
     .maybeSingle();
@@ -135,6 +136,7 @@ export async function getOrderDetail(orderNumber: string): Promise<OrderDetail |
     refund_owed: order.refund_owed,
     total_rappen: order.total_rappen,
     created_at: order.created_at,
+    files_handed_over_at: order.files_handed_over_at,
     customer: {
       name: customer?.name ?? "-",
       email: customer?.email ?? "-",

@@ -246,3 +246,38 @@ library existed in the project yet); the `xlsx` skill was invoked first per the 
 its guidance not to hardcode values that should be formulas doesn't apply here since this is a data
 export/dump with no recalculation surface, not a financial model. **Resolved, open to revision** if
 the club office wants different columns once they actually use it.
+
+## 2026-08-26 (Phase 6) — ticket PDFs and wallet passes
+
+**D28 — Neither wallet is built this phase; both are blocked on the same kind of thing.** Claudio's
+call was to skip Apple outright (paid developer program, pass-type-id request, certificate generation
+- too slow for the 5/19 September dates) but at least attempt Google. Investigating Google Wallet
+turned up the same shape of blocker: issuing passes requires a Google Wallet Business Console issuer
+account, which only Claudio can apply for (Claude cannot request, expedite, or fake one), plus a
+service account and a pre-created pass class under that issuer. Without any of that to test against,
+writing the JWT-signing integration now would be unverifiable code shipped on faith - if the object-ID
+format, JWT claim shape, or class-reference assumptions were wrong in some detail, it would look done
+and silently fail the first time it's actually used. So: not built either, same as Apple, but flagged
+as the fast follow-up once Claudio has an issuer account - the hard part (tokens, PDFs, storage,
+admin download flow) is already done, and every ticket already gets a fully functional PDF regardless
+of either wallet's status. **Resolved: neither built. Revisit Google once Claudio has credentials to
+test against.**
+
+**D29 — Red Castle Club PDF tiers get real metal colors; season passes don't.** Reversing the
+website's own rule (D-none, but established in Phase 2: no literal gold/silver/bronze anywhere,
+tier gradation is spacing/shadow/border only) - Claudio explicitly asked for the printed pass itself
+to use real Bronze/Silber/Gold tones matching each Red Castle Club tier's name. Implemented as a pure
+function of `products.type` + `tier_level` (`src/lib/tickets/tier-colors.ts`): tier_level 0-1 (season
+passes, and Red Castle Club "Normal") stay on the site's plain red accent; tier_level 2/3/4 (Bronze/
+Silber/Gold) get a matching metal accent band and tint. Still data-model-driven, not hardcoded to a
+product slug - it just now produces literal metal colors instead of only spacing/shadow changes,
+because a PDF pass has different design conventions than a web page. **Resolved.**
+
+**D30 — PDF typeface: pdf-lib's standard Helvetica, not the website's Inter.** Embedding real Inter
+weights would need actual static-instance TTF files; Google's current font repo only ships Inter as a
+single variable-font file, which pdf-lib/fontkit can only load as one fixed instance - no separate
+bold face, and correctness/licensing of pulling font binaries from a third party mid-session felt like
+the wrong tradeoff for a typeface swap the brief doesn't actually require. Helvetica is one of PDF's
+14 standard fonts (always available, no embedding needed, renders identically everywhere) and reads
+as the same family of clean grotesque sans-serif as Inter - the color palette, spacing, and layout
+carry the visual identity, not the exact typeface. **Resolved.**

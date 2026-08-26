@@ -178,7 +178,28 @@ everything else); schedule management (`games` list, per-row `eventfrog_url` edi
 admin's own session instead of the service-role client); and an XLSX export (`exceljs`, two sheets,
 see `docs/DECISIONS.md` D27).
 
-## 7. Open questions — superseded by `docs/DECISIONS.md`
+## 7. Ticket issuance and PDFs (Phase 6)
+
+On marking an order `bezahlt` (`src/app/admin/(protected)/orders/actions.ts::updateOrderStatus`),
+`src/lib/tickets/issue.ts::issueTicketsForOrder` runs automatically: for every order item, one ticket
+per unit of quantity gets a fresh id and an HMAC-SHA256 token (`src/lib/tickets/token.ts`, Base32,
+26 characters - well under the 40-character budget), a rendered PDF (`src/lib/tickets/pdf.ts`,
+pdf-lib + qrcode), and a path in the private `tickets` Storage bucket. All PDFs upload before any
+database row is written, so a failed upload never leaves a `tickets.pdf_path` pointing at a file that
+doesn't exist; the `issue_tickets_for_order` function additionally refuses a second issuance for an
+order that already has tickets, so retrying after a failure is safe. The admin order-detail page lists
+issued tickets with per-file download links, a "download all as ZIP" link, and the manual
+`files_handed_over_at` marker (`set_files_handed_over`) - nothing is emailed, per the brief; the
+office hands the downloaded PDFs to the customer outside this app.
+
+Red Castle Club tiers 2-4 (Bronze/Silber/Gold) get a real metal accent color on the PDF, driven purely
+by `tier_level` (`src/lib/tickets/tier-colors.ts`, see `docs/DECISIONS.md` D29) - the website itself
+still never uses these colors, only the printed pass does.
+
+Apple Wallet and Google Wallet are both **not built** this phase - see `docs/DECISIONS.md` D28. Every
+ticket already has a fully functional PDF regardless.
+
+## 8. Open questions — superseded by `docs/DECISIONS.md`
 
 The five items originally listed here (Supabase project/plan, missing design doc, missing price
 list/schedule/Eventfrog links, the HMAC-vs-offline-verification tension, and the brief's mandated

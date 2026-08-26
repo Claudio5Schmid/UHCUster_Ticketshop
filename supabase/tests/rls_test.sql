@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(64);
+select plan(79);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -59,6 +59,10 @@ values ('c0000000-0000-0000-0000-000000000003', 'Paid Customer', 'Teststrasse 3'
 
 insert into public.orders (id, order_number, status, customer_id, source, season, created_at)
 values ('d0000000-0000-0000-0000-000000000003', 'TEST-0003', 'bezahlt', 'c0000000-0000-0000-0000-000000000003', 'shop', '2627', now() - interval '15 days');
+
+-- A paid order with no tickets issued yet (Group H: issue_tickets_for_order).
+insert into public.order_items (id, order_id, product_id, product_name_snapshot, unit_price_rappen, quantity, holder_name)
+values ('e0000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000003', 'b0000000-0000-0000-0000-000000000001', 'Test Active Product', 15000, 1, 'Ticket Test Holder');
 
 -- ============================================================================
 -- Group A: anon visibility
@@ -121,7 +125,7 @@ select ok((select exists(select 1 from public.products where slug = 'test-active
 select ok((select exists(select 1 from public.products where slug = 'test-inactive')), 'admin can also see the inactive test product');
 select is((select count(*) from public.customers)::int, 3, 'admin sees all customers');
 select is((select count(*) from public.orders)::int, 3, 'admin sees all orders');
-select is((select count(*) from public.order_items)::int, 1, 'admin sees order_items');
+select is((select count(*) from public.order_items)::int, 2, 'admin sees order_items');
 select is((select count(*) from public.tickets)::int, 1, 'admin sees tickets');
 select is((select count(*) from public.admin_users)::int, 1, 'admin sees admin_users');
 
@@ -339,6 +343,136 @@ select throws_ok(
   'product 99999999-9999-9999-9999-999999999999 is not available',
   'create_order rejects a nonexistent product id'
 );
+
+-- ============================================================================
+-- Group H: issue_tickets_for_order and set_files_handed_over (Phase 6)
+-- ============================================================================
+
+set local role anon;
+select throws_ok(
+  $$select public.issue_tickets_for_order('00000000-0000-0000-0000-000000000000'::uuid, '[]'::jsonb)$$,
+  '42501',
+  'permission denied for function issue_tickets_for_order',
+  'anon cannot call issue_tickets_for_order'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
+select throws_ok(
+  $$select public.issue_tickets_for_order('00000000-0000-0000-0000-000000000000'::uuid, '[]'::jsonb)$$,
+  'P0001',
+  'only admins can issue tickets',
+  'non-admin authenticated cannot call issue_tickets_for_order'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+
+-- d...0001 was flipped to bezahlt in Group C and already has its fixture ticket -
+-- the idempotency guard must reject a second issuance attempt on it.
+select throws_ok(
+  $$select public.issue_tickets_for_order('d0000000-0000-0000-0000-000000000001'::uuid, '[]'::jsonb)$$,
+  'P0001',
+  'tickets have already been issued for order d0000000-0000-0000-0000-000000000001',
+  'issue_tickets_for_order refuses an order that already has a ticket'
+);
+
+-- d...0002 is storniert (auto-cancelled in Group F) - not bezahlt.
+select throws_ok(
+  $$select public.issue_tickets_for_order('d0000000-0000-0000-0000-000000000002'::uuid, '[]'::jsonb)$$,
+  'P0001',
+  'order d0000000-0000-0000-0000-000000000002 is not marked as bezahlt (status: storniert)',
+  'issue_tickets_for_order refuses an order that is not bezahlt'
+);
+
+-- d...0003 is bezahlt with one order_item (e...0002) and no tickets yet.
+select lives_ok(
+  $$select public.issue_tickets_for_order(
+    'd0000000-0000-0000-0000-000000000003'::uuid,
+    jsonb_build_array(jsonb_build_object(
+      'id', 'f0000000-0000-0000-0000-000000000002',
+      'order_item_id', 'e0000000-0000-0000-0000-000000000002',
+      'product_id', 'b0000000-0000-0000-0000-000000000001',
+      'season', '2627',
+      'holder_name', 'Ticket Test Holder',
+      'transferable', false,
+      'token', 'TEST-TOKEN-0003',
+      'pdf_path', '2627/f0000000-0000-0000-0000-000000000002.pdf'
+    ))
+  )$$,
+  'admin can issue a ticket for a paid order with no tickets yet'
+);
+select is(
+  (select token from public.tickets where id = 'f0000000-0000-0000-0000-000000000002'),
+  'TEST-TOKEN-0003',
+  'the issued ticket was actually inserted with the given token'
+);
+select ok(
+  (select exists(select 1 from public.audit_log where entity_type = 'ticket' and entity_id = 'f0000000-0000-0000-0000-000000000002' and action = 'issued')),
+  'ticket issuance was logged to audit_log'
+);
+
+-- Now that d...0003 has a ticket, a second issuance attempt must also be refused.
+select throws_ok(
+  $$select public.issue_tickets_for_order('d0000000-0000-0000-0000-000000000003'::uuid, '[]'::jsonb)$$,
+  'P0001',
+  'tickets have already been issued for order d0000000-0000-0000-0000-000000000003',
+  'issue_tickets_for_order refuses a second issuance for the same order'
+);
+
+reset role;
+reset request.jwt.claim.sub;
+
+set local role anon;
+select throws_ok(
+  $$select public.set_files_handed_over('00000000-0000-0000-0000-000000000000'::uuid, true)$$,
+  '42501',
+  'permission denied for function set_files_handed_over',
+  'anon cannot call set_files_handed_over'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
+select throws_ok(
+  $$select public.set_files_handed_over('00000000-0000-0000-0000-000000000000'::uuid, true)$$,
+  'P0001',
+  'only admins can change the files-handed-over marker',
+  'non-admin authenticated cannot call set_files_handed_over'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+
+select lives_ok(
+  $$select public.set_files_handed_over('d0000000-0000-0000-0000-000000000003', true)$$,
+  'admin can mark files as handed over'
+);
+select ok(
+  (select files_handed_over_at is not null from public.orders where id = 'd0000000-0000-0000-0000-000000000003'),
+  'files_handed_over_at was set'
+);
+
+select lives_ok(
+  $$select public.set_files_handed_over('d0000000-0000-0000-0000-000000000003', false)$$,
+  'admin can unmark files as handed over'
+);
+select ok(
+  (select files_handed_over_at is null from public.orders where id = 'd0000000-0000-0000-0000-000000000003'),
+  'files_handed_over_at was cleared again'
+);
+select ok(
+  (select exists(select 1 from public.audit_log where entity_type = 'order' and entity_id = 'd0000000-0000-0000-0000-000000000003' and action = 'files_handed_over_change')),
+  'the files-handed-over change was logged to audit_log'
+);
+
+reset role;
+reset request.jwt.claim.sub;
 
 select * from finish();
 

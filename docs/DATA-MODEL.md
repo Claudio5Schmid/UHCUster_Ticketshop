@@ -55,11 +55,12 @@ Admin-managed only; no public access, no delete policy.
 ## tickets
 
 One row per issued season pass or membership pass: its scan token, holder name (a real person for
-personal passes, a shared label for transferable Red Castle Club batches), a `transferable` flag, and
-status (`gueltig | eingeloest | storniert | ersetzt`). A lost ticket is never deleted — it's voided
+personal passes, a shared label for transferable Red Castle Club batches), a `transferable` flag,
+status (`gueltig | eingeloest | storniert | ersetzt`), and (Phase 6) `pdf_path` - where its generated
+PDF lives in the private `tickets` Storage bucket. A lost ticket is never deleted — it's voided
 (`ersetzt`) and linked to its replacement via `replaces_ticket_id`, so the reissue chain stays
-auditable. Admin-readable only; holder-name changes, reissues, and (eventually) initial issuance all
-go through logged functions, never a bare write.
+auditable. Admin-readable only; holder-name changes, reissues, and initial issuance
+(`issue_tickets_for_order`, Phase 6) all go through logged functions, never a bare write.
 
 ## scan_events
 
@@ -105,12 +106,18 @@ session instead of waiting for the daily cron.
 
 Every write to `orders`, `tickets`, and non-price fields of `products` goes through one of:
 `transition_order_status`, `set_refund_owed`, `rename_ticket_holder`, `reissue_ticket`,
-`update_product_details`. Each checks `is_admin()` internally, performs its change, and writes the
-matching `audit_log` row atomically. They're callable only by `authenticated` sessions (not `anon`),
-and are meant to be called through the admin's own authenticated session — not a shared service-role
-connection — so that `auth.uid()` correctly attributes each change to the admin who made it. A fifth
-function, `next_order_number`, has no client-facing grant either - it's only ever called from inside
+`update_product_details`, `issue_tickets_for_order` (Phase 6), `set_files_handed_over` (Phase 6). Each
+checks `is_admin()` internally, performs its change, and writes the matching `audit_log` row
+atomically. They're callable only by `authenticated` sessions (not `anon`), and are meant to be called
+through the admin's own authenticated session — not a shared service-role connection — so that
+`auth.uid()` correctly attributes each change to the admin who made it. A further function,
+`next_order_number`, has no client-facing grant either - it's only ever called from inside
 `create_order()`.
+
+`issue_tickets_for_order(order_id, tickets)` takes fully-formed ticket rows (id, token, pdf_path -
+each generated in Node, since the HMAC secret and the rendered PDF both belong there, not in
+Postgres), checks the order is actually `bezahlt`, checks none of its order items already have
+tickets (so it can't be called twice for the same order), and inserts them all in one transaction.
 
 `create_order(customer, lines, season)` (Phase 4) is the entire checkout write path: creates the
 customer and order rows, generates the order number, and for each line resolves the product's

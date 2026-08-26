@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import { getOrderDetail } from "@/lib/admin/orders";
+import { getOrderTickets } from "@/lib/admin/tickets";
 import { formatRappenAsChf } from "@/lib/pricing";
 import { Badge } from "@/components/ui/Badge/Badge";
 import { OrderActions } from "./OrderActions";
+import { TicketsPanel } from "./TicketsPanel";
 import styles from "../../admin.module.css";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ orderNumber: string }> }) {
@@ -12,6 +14,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
   if (!order) {
     notFound();
   }
+
+  const tickets = await getOrderTickets(order.id);
 
   return (
     <div>
@@ -62,6 +66,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
           </div>
         ))}
       </div>
+
+      <TicketsPanel orderId={order.id} orderNumber={order.order_number} tickets={tickets} filesHandedOverAt={order.files_handed_over_at} />
     </div>
   );
 }

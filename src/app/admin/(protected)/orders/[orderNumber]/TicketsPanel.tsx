@@ -1,0 +1,77 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/Button/Button";
+import { Badge } from "@/components/ui/Badge/Badge";
+import { updateFilesHandedOver } from "../actions";
+import type { OrderTicket } from "@/lib/admin/tickets";
+import styles from "../../admin.module.css";
+
+const STATUS_LABELS: Record<OrderTicket["status"], string> = {
+  gueltig: "Gültig",
+  eingeloest: "Eingelöst",
+  storniert: "Storniert",
+  ersetzt: "Ersetzt",
+};
+
+interface TicketsPanelProps {
+  orderId: string;
+  orderNumber: string;
+  tickets: OrderTicket[];
+  filesHandedOverAt: string | null;
+}
+
+export function TicketsPanel({ orderId, orderNumber, tickets, filesHandedOverAt }: TicketsPanelProps) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const handedOver = Boolean(filesHandedOverAt);
+
+  function handleToggle() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await updateFilesHandedOver(orderId, orderNumber, !handedOver);
+      } catch (submitError) {
+        setError(submitError instanceof Error ? submitError.message : "Fehler beim Speichern.");
+      }
+    });
+  }
+
+  if (tickets.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={styles.section}>
+      <h2>Tickets</h2>
+      <div className={styles.copyBlock}>
+        {tickets.map((ticket) => (
+          <div key={ticket.id}>
+            {ticket.product_name_snapshot}
+            {ticket.holder_name ? ` - ${ticket.holder_name}` : ""} -{" "}
+            <Badge variant={ticket.status === "gueltig" ? "accent" : "neutral"}>{STATUS_LABELS[ticket.status]}</Badge>{" "}
+            <a href={`/admin/orders/${orderNumber}/tickets/${ticket.id}`}>PDF herunterladen</a>
+          </div>
+        ))}
+      </div>
+
+      <div className={styles.actions}>
+        <Button as="a" href={`/admin/orders/${orderNumber}/tickets-zip`} variant="secondary">
+          Alle als ZIP herunterladen
+        </Button>
+        <Button onClick={handleToggle} disabled={isPending}>
+          {handedOver ? "Als nicht übergeben markieren" : "Als übergeben markieren"}
+        </Button>
+      </div>
+      {handedOver && filesHandedOverAt && (
+        <p style={{ color: "var(--color-text-secondary)" }}>
+          Übergeben am{" "}
+          {new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", dateStyle: "medium", timeStyle: "short" }).format(
+            new Date(filesHandedOverAt)
+          )}
+        </p>
+      )}
+      {error && <p style={{ color: "var(--color-error-text)" }}>{error}</p>}
+    </div>
+  );
+}
