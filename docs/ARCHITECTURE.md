@@ -142,7 +142,43 @@ against printing `.env` contents.
 
 Not needed, and must never be added: any email/SMTP provider credential, any payment provider key.
 
-## 6. Open questions — superseded by `docs/DECISIONS.md`
+## 6. Admin application layer (Phase 5)
+
+Three distinct Supabase client contexts, each for a different trust/session situation:
+
+- **Public client** (`src/lib/supabase.ts::getSupabaseClient`) - anon/publishable key, used by the
+  public shop's Server Components. Bound by RLS as `anon`.
+- **Service-role client** (`src/lib/supabase.ts::getSupabaseAdminClient`) - bypasses RLS entirely,
+  server-only. Reserved for genuinely session-less system work: the Swiss Unihockey cron sync,
+  `create_order()`'s Server Action, and bootstrapping the very first admin account (no admin session
+  can exist yet to do it any other way).
+- **Session-aware client** (`src/lib/supabase-server.ts`, `src/lib/supabase-browser.ts`, via
+  `@supabase/ssr`) - carries the logged-in admin's own cookie-based session, so `auth.uid()` resolves
+  correctly inside `SECURITY DEFINER` functions and every audit-log row is attributed to the admin who
+  actually made the change, not to a shared service identity. Every admin Server Action and page uses
+  this client, never the service-role one - the service-role client would work (it bypasses RLS) but
+  would silently break attribution.
+
+**Route structure:** `src/app/(shop)/` groups the public site (Header/Footer/Cart/Toast in its own
+layout); `src/app/admin/(auth)/` holds `/admin/login` and `/admin/setup`, reachable without a
+session; `src/app/admin/(protected)/` holds everything else and re-checks both "is there a session"
+(redirects to login) and "does that session's user have an `admin_users` row" (signs out and
+redirects if not - defense in depth beyond `src/proxy.ts`, which only checks for *a* session, not
+admin status specifically, so it can stay a cheap middleware-level check). Route Handlers (e.g. the
+XLSX export's `/admin/export/download`) sit outside any layout, so they repeat the same `is_admin()`
+check directly rather than relying on the layout to have run first.
+
+**Admin surface, all built on the Phase 1 mutation functions:** order overview (filter by status,
+search by order number or customer name - two parallel queries merged client-side, since PostgREST
+can't `OR` a plain column against a joined table's column in one request) and detail with status
+transitions (`transition_order_status`, `set_refund_owed`); price management (`products` list/create/
+edit - a direct `price_rappen` update to trigger `price_history`, plus `update_product_details` for
+everything else); schedule management (`games` list, per-row `eventfrog_url` edit, and a manual
+"sync now" button that runs the same Swiss Unihockey upsert as the daily cron job, just through the
+admin's own session instead of the service-role client); and an XLSX export (`exceljs`, two sheets,
+see `docs/DECISIONS.md` D27).
+
+## 7. Open questions — superseded by `docs/DECISIONS.md`
 
 The five items originally listed here (Supabase project/plan, missing design doc, missing price
 list/schedule/Eventfrog links, the HMAC-vs-offline-verification tension, and the brief's mandated

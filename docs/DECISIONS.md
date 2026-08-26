@@ -225,3 +225,24 @@ yet, so `.env.local` uses Cloudflare's official public test keys (always-pass si
 developers.cloudflare.com/turnstile/troubleshooting/testing) - safe for any domain including
 localhost, but must be swapped for a real site's keys before launch. Flagged as a `TODO(claudio)` in
 `.env.local` and `.env.example`. **Open** until Claudio creates a real Turnstile site.
+
+## 2026-08-26 (Phase 5) — admin area
+
+**D26 — First admin account is self-service, never handled by Claude.** `admin_users` has no seed
+row and no public sign-up path, so someone has to create the first account. Rather than Claude
+running `auth.admin.createUser()` with a password it chose (or asking Claudio for one in chat),
+`/admin/setup` is a one-time form, disabled the moment `admin_users` has any row, where Claudio types
+his own email and password directly into the app - the same boundary already agreed on for the
+Supabase service-role key: Claude designs the flow but never sees or transmits the secret itself.
+**Resolved.**
+
+**D27 — XLSX export columns and layout weren't specified by the brief, so a reasonable default was
+built rather than asked about**, since it's an internal admin convenience, not a price/schedule/link
+decision the brief says never to invent. Two sheets: "Bestellungen" (one row per order - status,
+customer, address, email, total, refund flag, created date) for reconciling against bank transfers,
+and "Bestellpositionen" (one row per order line - product, ticket-holder name, quantity, unit price,
+line total) for per-ticket detail. No VAT column, consistent with D17. Built with `exceljs` (no xlsx
+library existed in the project yet); the `xlsx` skill was invoked first per the brief's mandate, and
+its guidance not to hardcode values that should be formulas doesn't apply here since this is a data
+export/dump with no recalculation surface, not a financial model. **Resolved, open to revision** if
+the club office wants different columns once they actually use it.

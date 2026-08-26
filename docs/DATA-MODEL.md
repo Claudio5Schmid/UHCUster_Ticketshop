@@ -72,9 +72,10 @@ model yet); never updatable or deletable by anyone, enforced by a trigger.
 
 The flat access list for the club office admin area — no role differentiation yet, by design (see
 `docs/DECISIONS.md` D15). Backs the `is_admin()` helper that every other table's RLS policies call.
-**The very first row can't be inserted through the app** — no admin exists yet to satisfy the
-`is_admin()` check on its own insert policy — so it must be added once, manually, via the Supabase
-SQL editor or a service-role connection, before anyone can sign into the admin area at all.
+**The very first row can't be inserted through the app's normal admin session** — no admin exists yet
+to satisfy the `is_admin()` check on its own insert policy — so `/admin/setup` (Phase 5) handles it
+via a one-time Server Action using the service-role client, disabled the moment this table has any
+row at all. See `docs/DECISIONS.md` D26.
 
 ## audit_log
 
@@ -96,7 +97,9 @@ Rows are populated automatically by a daily sync from the public Swiss Unihockey
 (`src/lib/swissunihockey.ts`, `/api/sync/swissunihockey`), not typed in by hand (see
 `docs/DECISIONS.md` D21) — `external_id` is the Swiss Unihockey game id, used to upsert idempotently
 so a postponed game updates in place instead of duplicating. Admins can still add or edit rows
-directly (e.g. to set `eventfrog_url`, which the sync never touches).
+directly (e.g. to set `eventfrog_url`, which the sync never touches) via `/admin/schedule` (Phase 5),
+which also has a manual "sync now" button running the same upsert on demand through the admin's own
+session instead of waiting for the daily cron.
 
 ## Mutation functions (not tables, but part of the data layer)
 

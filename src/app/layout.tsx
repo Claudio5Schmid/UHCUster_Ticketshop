@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Header } from "@/components/layout/Header/Header";
-import { Footer } from "@/components/layout/Footer/Footer";
-import { ToastProvider } from "@/components/ui/Toast/Toast";
-import { CartProvider } from "@/lib/cart";
 import "./globals.css";
 
 const inter = Inter({
@@ -17,18 +13,14 @@ export const metadata: Metadata = {
   description: "Saisonkarten und Red Castle Club für den UHC Uster.",
 };
 
+// Deliberately minimal: the public shop's Header/Footer/Cart/Toast providers live
+// in (shop)/layout.tsx, not here, so the admin area gets its own clean shell
+// (AdminNav, no cart icon or shop navigation) instead of the shop chrome
+// bracketing every admin page.
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="de-CH" className={inter.variable}>
-      <body>
-        <ToastProvider>
-          <CartProvider>
-            <Header />
-            <main>{children}</main>
-            <Footer />
-          </CartProvider>
-        </ToastProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
