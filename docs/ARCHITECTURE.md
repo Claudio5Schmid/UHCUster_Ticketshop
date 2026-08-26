@@ -115,16 +115,18 @@ replacement for it. "Invalid signature" (malformed/forged token) and "not in the
 (well-formed but not authorized, or already synced-out) remain two distinct, both reachable,
 rejection reasons at the scanner.
 
-## 5. Environment variables (anticipated — none exist yet in the repo)
+## 5. Environment variables
 
-No `.env` file exists yet anywhere in the tree; the list below is the anticipated set implied by the
-brief's stack and feature list, to be created in Phase 1 onward. Names only, no values, per the
-brief's rule against printing `.env` contents.
+Set up in Phase 1: `.env.example` (committed, names only) and `.env.local` (gitignored, real
+values — Supabase URL and publishable key populated from the "UHC Uster - Ticketshop" project;
+`SUPABASE_SERVICE_ROLE_KEY` left blank with a `TODO(claudio)` since Claude has no way to fetch that
+secret and shouldn't handle it even if it could). Names only below, no values, per the brief's rule
+against printing `.env` contents.
 
 | Variable | Exposure | Purpose |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | public | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | public | Supabase anon/publishable key, RLS-constrained |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | public | Supabase's modern publishable key (`sb_publishable_...`), RLS-constrained — used instead of the legacy anon JWT per Supabase's current recommendation for new projects |
 | `SUPABASE_SERVICE_ROLE_KEY` | server-only | Server Actions that must bypass RLS (e.g. ticket issuance, admin operations) — usage should stay minimal and audited |
 | `TICKET_TOKEN_SECRET` | server-only | HMAC signing key for ticket tokens (Phase 6) |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | public | Cloudflare Turnstile widget (Phase 4) |
