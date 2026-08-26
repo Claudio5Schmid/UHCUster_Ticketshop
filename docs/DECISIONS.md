@@ -281,3 +281,73 @@ the wrong tradeoff for a typeface swap the brief doesn't actually require. Helve
 14 standard fonts (always available, no embedding needed, renders identically everywhere) and reads
 as the same family of clean grotesque sans-serif as Inter - the color palette, spacing, and layout
 carry the visual identity, not the exact typeface. **Resolved.**
+
+## 2026-08-26 (Phase 7) — scanner PWA
+
+**D31 — Redemption is scoped per game, not per ticket for life.** The Phase 1 schema
+gave `tickets` a single `status` field (`gueltig | eingeloest | ...`), which would only
+make sense for a single-use ticket - but a season pass is explicitly valid at every
+home game all season (that's the entire product). Reversing the implicit "eingeloest
+means used up" assumption: `tickets.status` stays `gueltig` for the whole season and
+only ever moves to `storniert`/`ersetzt` (voided/replaced); "already redeemed" is
+answered per game via `scan_events.game_id` (new column) - has this ticket already
+been scanned as `accepted` for *this* game. `eingeloest` stays in the CHECK constraint
+for forward compatibility (e.g. a future single-game product) but nothing in this
+phase ever sets it. A direct consequence: the `wrong_game` value in
+`scan_events.result` is currently unreachable - every product this shop sells is
+valid at every home game, so there is no ticket that could be "for the wrong game."
+Kept in the schema for the same forward-compatibility reason. **Resolved.**
+
+**D32 — Scanner devices get a per-game access code, not individual accounts.**
+`scan_events.device_id` (Phase 1) was already a free-text label, not a user
+reference - a signal the original design intended devices to identify themselves by
+a label, not a person by login. Match-day helpers are numerous, transient, and
+should not be able to see customer PII or manage prices/orders, so reusing
+`admin_users` (D15's flat, ungraded access model) would be the wrong trust boundary
+for them. Instead: an admin sets one access code per game
+(`game_scanner_codes` - its own table, not a column on `public.games`, so the
+existing public "Anyone can view games" policy can never accidentally leak it); a
+helper exchanges that code for a short-lived signed session token
+(`src/lib/scanner/session.ts`, HMAC, its own `SCANNER_SESSION_SECRET` - a different
+security domain from `TICKET_TOKEN_SECRET`, so the two can never be confused). Route
+Handlers verify that token themselves and act through the service-role client -
+there is no real Supabase Auth session for a scanner device, matching the existing
+pattern of service-role-plus-custom-verification already used by `create_order`
+(Turnstile-verified) and the Swiss Unihockey cron sync (CRON_SECRET-verified).
+**Resolved.**
+
+**D33 — The scanner's client-side "signature check" is a format check, not real
+cryptography.** D13 (Phase 0) already established that the HMAC secret never reaches
+the client, so "verify the signature locally, offline" (the brief's Phase 7.2
+wording) cannot mean actual signature verification - there is nothing to verify
+with. What the client *can* check without the secret: whether a scanned string has
+the right shape at all (26 Base32 characters, `src/lib/scanner/format.ts`) - a cheap
+filter against garbage QR codes (a business card, a random poster) before even
+touching the local ticket set. A well-formed but unauthorized token still gets
+caught by the next check (not in the local valid set), same as D13 already said.
+Documented explicitly so a future reader doesn't assume real cryptographic
+verification is happening client-side. **Resolved.**
+
+**D34 — The scanner's full-screen feedback uses real green, breaking the site's own
+"no green" rule.** `src/styles/tokens.css` documents a deliberate Phase 2 choice: no
+color beyond white/red/black/grey anywhere, success states use text weight instead
+of green. The Phase 7 brief overrides that for this one surface, explicitly:
+"full-screen green or red." A fast door-scanning tool needs an instant, unambiguous,
+universally-understood go/no-go signal for volunteers who won't have time to read
+text in bright or dark venue lighting - the same reasoning already used for Red
+Castle Club's metal PDF colors (D29): a different surface, with a different
+explicit instruction, gets a different treatment. Scoped to
+`src/app/scanner/scanner.module.css` only; the rest of the site is untouched.
+**Resolved.**
+
+**D35 — A device restarting mid-game, or a ticket issued after this device's
+download, are both handled by falling back to the network rather than trusting a
+possibly-stale local "not found."** The brief's offline-first design optimizes for
+speed by deciding locally - but for a token this device has *never seen at all*
+(not "seen and rejected", just absent from its map), showing an instant, confident
+"not found" risks wrongly turning away a customer who bought a pass minutes before
+kickoff, after this device's one-time download. For that specific case only, the
+client shows a brief "wird geprüft" state and asks the server first, falling back to
+a local "not found" only if the network genuinely doesn't answer. Every other
+decision (accepted, already redeemed, voided, malformed) stays instant and fully
+local, per the brief. **Resolved.**

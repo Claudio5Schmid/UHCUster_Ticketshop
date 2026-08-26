@@ -21,6 +21,21 @@ export async function setGameEventfrogUrl(gameId: string, eventfrogUrl: string) 
   revalidatePath("/");
 }
 
+export async function setGameScannerCode(gameId: string, code: string) {
+  const supabase = await getSupabaseServerClient();
+  const trimmed = code.trim();
+
+  if (!trimmed) {
+    const { error } = await supabase.from("game_scanner_codes").delete().eq("game_id", gameId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from("game_scanner_codes").upsert({ game_id: gameId, code: trimmed });
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath("/admin/schedule");
+}
+
 /**
  * Same sync as /api/sync/swissunihockey, but triggered by an admin from the UI -
  * uses the admin's own session (RLS + is_admin()) instead of the service-role

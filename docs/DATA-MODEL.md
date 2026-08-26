@@ -65,9 +65,28 @@ auditable. Admin-readable only; holder-name changes, reissues, and initial issua
 ## scan_events
 
 An append-only record of every scan attempt at the door, whether or not it resolved to a real ticket
-(`ticket_id` is nullable for exactly that reason), including the device and the accept/reject reason.
-Admin-readable, admin-insertable (provisional — Phase 7 hasn't designed the real scanner-device auth
-model yet); never updatable or deletable by anyone, enforced by a trigger.
+(`ticket_id` is nullable for exactly that reason), including the device, which game (`game_id`, Phase
+7 — not nullable, every scan happens at a specific game), and the accept/reject reason. Admin-readable
+via the existing `is_admin()`-gated policy; scanner devices never get a real Supabase Auth session at
+all (D32), so their writes go through the service-role client from `/api/scanner/scan` after that
+route verifies a signed scanner-session token itself — RLS on this table is unchanged from Phase 1,
+since service-role bypasses it entirely and that's fine here (the route's own token check is the real
+gate). Never updatable or deletable by anyone, enforced by a trigger — including via the service-role
+client, which is exactly the point of a database-level (not just RLS-level) append-only guarantee.
+
+"Already redeemed" is scoped per `(ticket_id, game_id)`, not per ticket for life (D31) — a season pass
+is valid at every home game, so `tickets.status` never actually reaches `'eingeloest'` in this phase;
+a partial unique index (`scan_events_one_accept_per_ticket_per_game`, on `(ticket_id, game_id) where
+result = 'accepted'`) is the real, database-enforced answer to "has this been scanned already", not
+application logic — it's also what settles the race between two devices scanning the same ticket
+near-simultaneously.
+
+## game_scanner_codes
+
+One access code per game (Phase 7), so match-day helpers can start the `/scanner` PWA without an
+admin account (D32). Deliberately its own table rather than a column on `games`, so the existing
+public "Anyone can view games" policy can never accidentally expose it — only admins (their own
+session) and the `/api/scanner/session` Route Handler (service-role) ever read it.
 
 ## admin_users
 
@@ -132,11 +151,17 @@ at all, since it's a system job, not an admin action.
 
 ## RLS verification
 
-`supabase/tests/rls_test.sql` is a 64-assertion pgTAP suite (run via the Supabase SQL editor or
+`supabase/tests/rls_test.sql` is a 79-assertion pgTAP suite (run via the Supabase SQL editor or
 `execute_sql`, wrapped in a rolled-back transaction) covering: the public/admin product split, full
 lockout of `anon` and non-admin `authenticated` sessions across every other table, that bare
 writes to `orders`/`tickets` have no effect while the dedicated functions succeed and log correctly,
 that the three append-only tables reject direct mutation even at owner level, order-number
-generation, the auto-cancel job, and `create_order()` (system-only access, and that a tampered price
-injected into a line is silently ignored in favour of the real product price). All 64 pass as of
-this writing.
+generation, the auto-cancel job, `create_order()` (system-only access, and that a tampered price
+injected into a line is silently ignored in favour of the real product price), and Phase 6's
+`issue_tickets_for_order`/`set_files_handed_over`. All 79 pass as of this writing.
+
+Phase 7's scanner writes aren't in this suite: they don't go through a `SECURITY DEFINER` Postgres
+function at all (see D32) — `/api/scanner/scan` verifies its own signed session token and writes via
+the service-role client, so there's no RLS/function boundary here for pgTAP to exercise. That flow was
+instead verified by hand against the real dev server and database (session exchange, all five scan
+outcomes, the live-stats counts) — see the Phase 7 summary in the session log for what was checked.

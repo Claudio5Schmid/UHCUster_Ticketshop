@@ -21,7 +21,7 @@ export default async function AdminSchedulePage() {
     { key: "played_at", header: "Datum", render: (game) => dateFormatter.format(new Date(game.played_at)) },
     { key: "opponent", header: "Gegner", render: (game) => game.opponent },
     { key: "venue", header: "Ort", render: (game) => game.venue ?? "–" },
-    { key: "eventfrog", header: "Eventfrog-Link", render: (game) => <GameRow game={game} /> },
+    { key: "eventfrog", header: "Eventfrog-Link / Scanner-Code", render: (game) => <GameRow game={game} /> },
   ];
 
   return (
@@ -32,7 +32,8 @@ export default async function AdminSchedulePage() {
       </div>
       <p style={{ color: "var(--color-text-secondary)", marginBottom: "var(--space-6)" }}>
         Heimspiele werden automatisch von Swiss Unihockey übernommen (Datum, Zeit, Ort, Gegner). Der Eventfrog-Link
-        muss manuell pro Spiel eingetragen werden.
+        muss manuell pro Spiel eingetragen werden. Der Scanner-Code wird den Helfern am Spieltag gegeben, damit sie
+        sich unter /scanner anmelden können.
       </p>
       <Table caption="Heimspiele" columns={columns} rows={games} getRowKey={(game) => game.id} />
     </div>

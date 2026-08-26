@@ -130,6 +130,7 @@ against printing `.env` contents.
 | `SUPABASE_SERVICE_ROLE_KEY` | server-only | Set by Claudio directly in `.env.local`. Used by the Swiss Unihockey sync and by `create_order()`'s Server Action — both session-less server contexts, never a shared client used elsewhere |
 | `CRON_SECRET` | server-only | Set once deployed to Vercel; Vercel sends it back as `Authorization: Bearer …` on scheduled requests, which `/api/sync/swissunihockey` checks so the sync can't be triggered by an arbitrary public GET |
 | `TICKET_TOKEN_SECRET` | server-only | HMAC signing key for ticket tokens (Phase 6) |
+| `SCANNER_SESSION_SECRET` | server-only | HMAC signing key for scanner-device session tokens (Phase 7) — a separate secret from `TICKET_TOKEN_SECRET` on purpose, different security domain |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | public | Cloudflare Turnstile widget on `/kasse`. Currently Cloudflare's public always-pass test key (`docs/DECISIONS.md` D25) — swap for a real Turnstile site's key before launch |
 | `TURNSTILE_SECRET_KEY` | server-only | Server-side Turnstile verification in the checkout Server Action. Currently the matching test secret — same swap needed |
 | `APPLE_WALLET_PASS_TYPE_ID` | server-only | Apple Wallet pass type identifier |
@@ -199,7 +200,47 @@ still never uses these colors, only the printed pass does.
 Apple Wallet and Google Wallet are both **not built** this phase - see `docs/DECISIONS.md` D28. Every
 ticket already has a fully functional PDF regardless.
 
-## 8. Open questions — superseded by `docs/DECISIONS.md`
+## 8. Scanner PWA (Phase 7)
+
+A standalone PWA at `/scanner`, outside both `(shop)` and `admin` (its own root shell, no site
+Header/Footer/Cart/AdminNav) - installable via `public/manifest.json` + `public/sw.js` (app-shell
+caching only; the actual validation logic never depends on the network once the ticket set is
+downloaded).
+
+**Access model (D32):** helpers are not admin users. `/scanner` exchanges a per-game code
+(`game_scanner_codes`, admin-set on `/admin/schedule`) for a short-lived signed session token
+(`src/lib/scanner/session.ts`), stored client-side and sent as a Bearer token to three Route
+Handlers under `/api/scanner/*` - `session` (code → token), `tickets` (the one-time download),
+`scan` (per-scan server round trip). All three verify the token themselves and act via the
+service-role client; there is no real Supabase Auth session involved, matching the same
+"service-role plus custom verification" shape already used by `create_order` and the cron sync.
+
+**Offline-first validation (`src/lib/scanner/useScannerEngine.ts`):** before doors open, the device
+downloads every ticket for the season (not just currently-valid ones, so a voided ticket resolves
+to "voided" locally instead of a generic "not found") into an in-memory map. Every scan after that
+is decided locally and instantly - format check first (`src/lib/scanner/format.ts` - shape only,
+D33), then a map lookup - with the server call happening in the background purely to log the
+attempt and settle the one real race condition: two devices scanning the same ticket a few
+milliseconds apart. A partial unique index (`scan_events (ticket_id, game_id) where result =
+'accepted'`) is what actually decides that race, not application code - a concurrent second
+acceptance fails the constraint and the route reports `already_redeemed` instead. The one exception
+to "always instant, always local" is a token this device has never seen at all (D35): that one
+case waits on the network rather than risking a false "not found" for a ticket issued minutes
+before kickoff.
+
+**Multi-device sync:** an accepted scan is broadcast over a Supabase Realtime channel scoped to
+the game (`scan-game-{gameId}`, anon key only, no RLS needed - channel name plus game UUID is
+sufficient scoping for a non-sensitive "this ticket got redeemed" signal), so other devices update
+their local map without a server round trip. If a device's network drops, it keeps validating
+independently and reconciles later - a known, documented residual double-scan risk
+(`docs/OPERATIONS.md`), not something perfectly preventable in an offline-first design.
+
+**Live view:** `/admin/live/[gameId]` shows redeemed / outstanding / rejections for a game,
+subscribed to the same Realtime channel for the redeemed count and polling every 20s for the rest
+(rejections aren't broadcast, only redemptions are, per the brief). "Outstanding" means season-pass
+holders who haven't checked in for *this* game yet, not unsold inventory.
+
+## 9. Open questions — superseded by `docs/DECISIONS.md`
 
 The five items originally listed here (Supabase project/plan, missing design doc, missing price
 list/schedule/Eventfrog links, the HMAC-vs-offline-verification tension, and the brief's mandated
