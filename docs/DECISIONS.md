@@ -167,3 +167,27 @@ bulk, zero-price ticket issuance, and a transferability flag threaded through th
 and scanner logic. Flagged to Claudio with a suggestion to sequence CSV import as a "Phase 5b" step
 (after 5 September, before the 19 September first game) rather than blocking the public shop launch,
 since members aren't part of the paying-customer critical path. Awaiting confirmation.
+
+## 2026-08-26 (Phase 3, continued) — schedule sync
+
+**D21 — Home games sync automatically from Swiss Unihockey, not manual entry.** Claudio asked for
+date/time/venue/opponent to update automatically from swissunihockey.ch rather than being typed in by
+an admin. Researched rather than assumed: the public REST API at `api.swissunihockey.ch/rest/v1.0`
+works for these reads with no registration, despite its own docs mentioning an `apikey` parameter.
+Identified UHC Uster's club id (**430**) and, critically, the specific team whose home games this
+shop is actually about: id **428535**, "Herren Aktive GF L-UPL" — confirmed by name (it's the exact
+team named in the Red Castle Club benefits, "Heimspiele des L-UPL-Teams") and cross-checked against
+a real fixture returned by the API: 19 September 2026 vs. Zug United at Buchholz (Uster), matching
+the brief's own stated first-home-game date exactly. `games` gained two columns
+(`external_id`, `venue`) for idempotent upserts and to carry the venue Claudio asked for. Sync is a
+Next.js route (`/api/sync/swissunihockey`) on a daily Vercel Cron (`vercel.json`), using the
+service-role key and never touching `eventfrog_url`. **Resolved**, pending two things from Claudio:
+the `SUPABASE_SERVICE_ROLE_KEY` value (still blank, needed to test/run the actual database write —
+the fetch-and-parse half is already verified live), and an actual Vercel deployment, since the cron
+schedule only takes effect once this project is deployed there.
+
+**D22 — Per-game Eventfrog links don't exist yet; only a general search link does.** Claudio gave
+`https://eventfrog.ch/de/events/ch/sport-fitness.html?searchTerm=UHC+Uster` as the current stopgap.
+Per-game buttons stay disabled until a specific link is configured (never a dead link, per the
+brief) — but the schedule page now also shows the general search link as a clearly-labelled
+fallback, so customers aren't left with nothing before per-game links exist. **Resolved.**

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/sync/swissunihockey",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import { Container } from "@/components/layout/Container/Container";
 import { GameRow } from "@/components/shop/GameRow/GameRow";
 import { getUpcomingGamesForSeason } from "@/lib/games";
 import { CURRENT_SEASON, CURRENT_SEASON_LABEL } from "@/lib/season";
+import { EVENTFROG_UHC_USTER_SEARCH_URL } from "@/lib/eventfrog";
 import styles from "../home.module.css";
 
 export const metadata = {
@@ -41,6 +42,14 @@ export default async function SpielplanPage() {
               veröffentlicht.
             </p>
           )}
+          <p className={styles.emptyState}>
+            Noch nicht jedes Spiel hat einen eigenen Ticket-Link. Alle Spiele des UHC
+            Uster sind gesammelt auf{" "}
+            <a href={EVENTFROG_UHC_USTER_SEARCH_URL} target="_blank" rel="noopener noreferrer">
+              Eventfrog
+            </a>{" "}
+            zu finden.
+          </p>
         </Container>
       </section>
     </div>

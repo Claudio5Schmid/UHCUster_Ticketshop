@@ -87,8 +87,14 @@ populated exclusively by the `SECURITY DEFINER` mutation functions and the auto-
 
 Added in Phase 3, not Phase 1 — the brief's Phase 1 table list didn't include a schedule table, but
 the public shop's individual-games list and the landing page's savings calculation both need one.
-Home games only (date, opponent, optional Eventfrog link) for a season; publicly readable, same as
-active products, since a schedule isn't sensitive. Only admins can add or edit rows.
+Home games only (date, time, venue, opponent, optional Eventfrog link) for a season; publicly
+readable, same as active products, since a schedule isn't sensitive.
+
+Rows are populated automatically by a daily sync from the public Swiss Unihockey API
+(`src/lib/swissunihockey.ts`, `/api/sync/swissunihockey`), not typed in by hand (see
+`docs/DECISIONS.md` D21) — `external_id` is the Swiss Unihockey game id, used to upsert idempotently
+so a postponed game updates in place instead of duplicating. Admins can still add or edit rows
+directly (e.g. to set `eventfrog_url`, which the sync never touches).
 
 ## Mutation functions (not tables, but part of the data layer)
 

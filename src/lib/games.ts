@@ -5,6 +5,7 @@ export interface Game {
   season: string;
   opponent: string;
   played_at: string;
+  venue: string | null;
   eventfrog_url: string | null;
 }
 
@@ -12,7 +13,7 @@ export async function getGamesForSeason(season: string): Promise<Game[]> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("games")
-    .select("id, season, opponent, played_at, eventfrog_url")
+    .select("id, season, opponent, played_at, venue, eventfrog_url")
     .eq("season", season)
     .order("played_at", { ascending: true });
 

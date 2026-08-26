@@ -17,3 +17,23 @@ export function getSupabaseClient() {
 
   return createClient(url, key);
 }
+
+/**
+ * Service-role client - bypasses RLS entirely. Only ever import this from
+ * server-only code that has no end-user session (scheduled jobs like the Swiss
+ * Unihockey sync), never from anything reachable with a customer's or admin's own
+ * request context. Per docs/ARCHITECTURE.md's actor-attribution note, admin-driven
+ * mutations should go through the admin's own authenticated session instead, so
+ * audit_log's auth.uid() attribution keeps working - this client is specifically
+ * for session-less system operations.
+ */
+export function getSupabaseAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.");
+  }
+
+  return createClient(url, key);
+}

@@ -127,7 +127,8 @@ against printing `.env` contents.
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | public | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | public | Supabase's modern publishable key (`sb_publishable_...`), RLS-constrained — used instead of the legacy anon JWT per Supabase's current recommendation for new projects |
-| `SUPABASE_SERVICE_ROLE_KEY` | server-only | Server Actions that must bypass RLS (e.g. ticket issuance, admin operations) — usage should stay minimal and audited |
+| `SUPABASE_SERVICE_ROLE_KEY` | server-only | Server Actions that must bypass RLS (e.g. ticket issuance, admin operations) — usage should stay minimal and audited. Also needed by the Swiss Unihockey games sync (Phase 3) — still blank, see `docs/DECISIONS.md` |
+| `CRON_SECRET` | server-only | Set once deployed to Vercel; Vercel sends it back as `Authorization: Bearer …` on scheduled requests, which `/api/sync/swissunihockey` checks so the sync can't be triggered by an arbitrary public GET |
 | `TICKET_TOKEN_SECRET` | server-only | HMAC signing key for ticket tokens (Phase 6) |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | public | Cloudflare Turnstile widget (Phase 4) |
 | `TURNSTILE_SECRET_KEY` | server-only | Server-side Turnstile verification |
