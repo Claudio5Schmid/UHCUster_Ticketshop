@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/Card/Card";
-import { Button } from "@/components/ui/Button/Button";
+import { AddToCartButton } from "@/components/shop/AddToCartButton/AddToCartButton";
 import type { Product } from "@/lib/products";
 import { calculateSavings, formatRappenAsChf } from "@/lib/pricing";
 import styles from "./ProductCard.module.css";
@@ -14,6 +14,8 @@ interface ProductCardProps {
 export function ProductCard({ product, gameCount, eyebrow }: ProductCardProps) {
   const highlights = product.benefits?.highlights ?? [];
   const savings = calculateSavings(product.price_rappen, product.benefits?.single_ticket_price_rappen, gameCount);
+  const includedPasses = product.benefits?.included_passes ?? 1;
+  const transferable = product.benefits?.transferable ?? false;
 
   return (
     <Card
@@ -34,7 +36,12 @@ export function ProductCard({ product, gameCount, eyebrow }: ProductCardProps) {
               </span>
             )}
           </div>
-          <Button size="sm">Auswählen</Button>
+          <AddToCartButton
+            productId={product.id}
+            productName={product.name}
+            priceRappen={product.price_rappen}
+            transferable={transferable}
+          />
         </>
       }
     >
@@ -45,6 +52,11 @@ export function ProductCard({ product, gameCount, eyebrow }: ProductCardProps) {
             <li key={highlight}>{highlight}</li>
           ))}
         </ul>
+      )}
+      {transferable && includedPasses > 1 && (
+        <p className={styles.bundleNote}>
+          Im Checkout hinterlegst du einen Namen (z.B. eure Firma) für alle {includedPasses} Karten.
+        </p>
       )}
     </Card>
   );

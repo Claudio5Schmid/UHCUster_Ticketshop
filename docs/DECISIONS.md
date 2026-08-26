@@ -198,3 +198,30 @@ deployment.
 Per-game buttons stay disabled until a specific link is configured (never a dead link, per the
 brief) — but the schedule page now also shows the general search link as a clearly-labelled
 fallback, so customers aren't left with nothing before per-game links exist. **Resolved.**
+
+## 2026-08-26 (Phase 4) — order flow architecture
+
+**D23 — Confirmation page shows data returned directly from checkout, not re-fetched.** There is no
+customer login in this system, so there is no safe way to let an anonymous visitor look up an
+arbitrary order by number afterwards without either exposing other customers' names/addresses via a
+guessable order number, or building a whole auth system the brief doesn't ask for. Resolved by never
+creating that lookup path at all: `create_order()` returns the full confirmation payload (order
+number, line items, total) in its single response, and the checkout page renders that directly in
+place (no route change, no PII in a URL, no public `orders` SELECT policy needed). The tradeoff:
+refreshing the confirmation loses it - "print this page" / screenshotting the order number (both
+things the brief already asks for) are what's available instead of a durable link. **Resolved.**
+
+**D24 — Cart line shape: one line per pass, shared label for Red Castle Club bundles.** Consistent
+with D5 - a normal season pass is one cart line with one holder name; a Red Castle Club purchase is
+also one cart line, but its single "holder name" field is labelled as a company/group name and
+becomes the shared `holder_name` on however many tickets `included_passes` says it produces. This
+needed `included_passes`/`transferable` added to each Red Castle Club product's `benefits` (Normal:
+1/false: Bronze & Silber: 2/true; Gold: 3/true) so `create_order()` has a machine-readable source for
+ticket count, instead of parsing the free-text benefit bullets. **Resolved.**
+
+**D25 — Cloudflare Turnstile test keys used for now.** Claudio hasn't set up a real Turnstile site
+yet, so `.env.local` uses Cloudflare's official public test keys (always-pass site key
+`1x00000000000000000000AA` / secret `1x0000...0AA`, documented at
+developers.cloudflare.com/turnstile/troubleshooting/testing) - safe for any domain including
+localhost, but must be swapped for a real site's keys before launch. Flagged as a `TODO(claudio)` in
+`.env.local` and `.env.example`. **Open** until Claudio creates a real Turnstile site.

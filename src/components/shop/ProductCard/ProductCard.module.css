@@ -49,3 +49,9 @@
   color: var(--color-accent);
   font-weight: 600;
 }
+
+.bundleNote {
+  font-size: var(--text-micro-size);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}

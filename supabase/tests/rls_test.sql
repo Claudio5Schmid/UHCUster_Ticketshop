@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(58);
+select plan(64);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -78,7 +78,7 @@ select is((select count(*) from public.scan_events)::int, 0, 'anon sees no scan_
 select is((select count(*) from public.price_history)::int, 0, 'anon sees no price_history');
 select is((select count(*) from public.admin_users)::int, 0, 'anon sees no admin_users');
 select is((select count(*) from public.audit_log)::int, 0, 'anon sees no audit_log');
-select is((select count(*) from public.games)::int, 1, 'anon can see games - schedule is public information');
+select ok((select exists(select 1 from public.games where id = '20000001-0000-0000-0000-000000000001')), 'anon can see games - schedule is public information');
 
 reset role;
 
@@ -129,7 +129,10 @@ select lives_ok(
   $$insert into public.games (season, opponent, played_at) values ('2627', 'Admin Gegner', now() + interval '45 days')$$,
   'admin can insert a game'
 );
-select is((select count(*) from public.games)::int, 2, 'the admin-inserted game is now visible too');
+select ok(
+  (select exists(select 1 from public.games where season = '2627' and opponent = 'Admin Gegner')),
+  'the admin-inserted game is now visible too'
+);
 
 -- Bare writes to orders/tickets are structurally blocked (no insert/update policy) -
 -- silently affect 0 rows under RLS, not an exception.
@@ -244,8 +247,23 @@ select throws_ok($$delete from public.audit_log where true$$, 'P0001', 'audit_lo
 -- Group E: order numbering
 -- ============================================================================
 
-select is(public.next_order_number('2627'), 'UHCU-2627-0001', 'first order number for a fresh season');
-select is(public.next_order_number('2627'), 'UHCU-2627-0002', 'second order number increments');
+-- Relative, not absolute: order_number_sequences persists across real usage (this
+-- project already has real orders from manual testing), so a fresh test run can't
+-- assume it starts at 0001 - only that the format is right and consecutive calls
+-- increment by exactly one.
+select ok(public.next_order_number('2627') ~ '^UHCU-2627-[0-9]{4}$', 'next_order_number returns the expected format');
+select ok(
+  (
+    with first_call as (select public.next_order_number('2627') as num),
+         second_call as (select public.next_order_number('2627') as num)
+    select abs(
+      (regexp_match(second_call.num, '([0-9]{4})$'))[1]::int
+      - (regexp_match(first_call.num, '([0-9]{4})$'))[1]::int
+    ) = 1
+    from first_call, second_call
+  ),
+  'two consecutive calls differ by exactly one'
+);
 
 -- ============================================================================
 -- Group F: auto-cancel stale orders (D14)
@@ -260,6 +278,67 @@ select is(
   'the auto-cancellation is logged with actor_type system'
 );
 select is((select status from public.orders where id = 'd0000000-0000-0000-0000-000000000003'), 'bezahlt', 'a 15-day-old bezahlt order is left untouched');
+
+-- ============================================================================
+-- Group G: create_order (Phase 4) - server-side price resolution
+-- ============================================================================
+
+set local role anon;
+select throws_ok(
+  $$select public.create_order('{}'::jsonb, '[]'::jsonb, '2627')$$,
+  '42501',
+  'permission denied for function create_order',
+  'anon cannot call create_order directly'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
+select throws_ok(
+  $$select public.create_order('{}'::jsonb, '[]'::jsonb, '2627')$$,
+  '42501',
+  'permission denied for function create_order',
+  'non-admin authenticated cannot call create_order either - system-only, like auto_cancel_stale_orders'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+-- Owner-level call (simulating the service-role connection the checkout Server
+-- Action uses) with a tampered price injected into the line - must be ignored.
+select lives_ok(
+  $$select public.create_order(
+    '{"name":"Test Customer","address_street":"Teststrasse 9","address_zip":"8610","address_city":"Uster","email":"order-test@example.com","phone":"0791234567"}'::jsonb,
+    jsonb_build_array(jsonb_build_object('product_id', 'b0000000-0000-0000-0000-000000000001', 'holder_name', 'Test Holder', 'price_rappen', 1, 'unit_price_rappen', 1)),
+    '2627'
+  )$$,
+  'create_order succeeds for a valid product, even with extra tampered fields in the line'
+);
+
+select is(
+  (select oi.unit_price_rappen from public.order_items oi
+   join public.orders o on o.id = oi.order_id
+   join public.customers c on c.id = o.customer_id
+   where c.email = 'order-test@example.com'),
+  15500,
+  'the tampered price_rappen/unit_price_rappen in the request is ignored - the real current product price is charged'
+);
+
+select is(
+  (select o.total_rappen from public.orders o join public.customers c on c.id = o.customer_id where c.email = 'order-test@example.com'),
+  15500,
+  'orders.total_rappen reflects the real price via the trigger, not the tampered one'
+);
+
+select throws_ok(
+  $$select public.create_order(
+    '{"name":"Test","address_street":"X","address_zip":"1","address_city":"X","email":"x@example.com","phone":"1"}'::jsonb,
+    jsonb_build_array(jsonb_build_object('product_id', '99999999-9999-9999-9999-999999999999', 'holder_name', 'X')),
+    '2627'
+  )$$,
+  'P0001',
+  'product 99999999-9999-9999-9999-999999999999 is not available',
+  'create_order rejects a nonexistent product id'
+);
 
 select * from finish();
 

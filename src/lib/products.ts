@@ -7,6 +7,12 @@ export interface ProductBenefits {
    * the brief: "show the equivalent single-ticket value and the saving... calculated,
    * not maintained as text"). */
   single_ticket_price_rappen?: number;
+  /** How many tickets one purchase produces (Red Castle Club bundles > 1, D5/D22).
+   * Defaults to 1 when absent - see create_order() in the database. */
+  included_passes?: number;
+  /** Whether the resulting ticket(s) can be handed to anyone (a shared company/group
+   * label) rather than requiring one named holder per pass. Defaults to false. */
+  transferable?: boolean;
 }
 
 export interface Product {

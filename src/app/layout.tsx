@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { Header } from "@/components/layout/Header/Header";
 import { Footer } from "@/components/layout/Footer/Footer";
 import { ToastProvider } from "@/components/ui/Toast/Toast";
+import { CartProvider } from "@/lib/cart";
 import "./globals.css";
 
 const inter = Inter({
@@ -21,9 +22,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="de-CH" className={inter.variable}>
       <body>
         <ToastProvider>
-          <Header />
-          <main>{children}</main>
-          <Footer />
+          <CartProvider>
+            <Header />
+            <main>{children}</main>
+            <Footer />
+          </CartProvider>
         </ToastProvider>
       </body>
     </html>

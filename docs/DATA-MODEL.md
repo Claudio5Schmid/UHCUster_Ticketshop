@@ -8,10 +8,12 @@ what each table is for, not how to build it — read the migrations for exact co
 
 Season-pass variants and Red Castle Club memberships shown in the shop; `tier_level` drives the
 price-dependent visual treatment (Phase 2/3), and `benefits` (jsonb) holds the free-text/structured
-perks per tier — including an optional `single_ticket_price_rappen` on plain season passes, the
-reference figure the landing page uses to calculate (never hand-type) the "you save" amount.
-Publicly readable where `active = true`; every other read/write is admin-only, and products are
-deactivated rather than deleted so historical orders always resolve to a real row.
+perks per tier — including an optional `single_ticket_price_rappen` on plain season passes (the
+reference figure the landing page uses to calculate, never hand-type, the "you save" amount), and
+`included_passes`/`transferable` on Red Castle Club tiers (Phase 4), which `create_order()` reads to
+decide how many tickets a purchase produces and whether they share one holder label. Publicly
+readable where `active = true`; every other read/write is admin-only, and products are deactivated
+rather than deleted so historical orders always resolve to a real row.
 
 ## price_history
 
@@ -104,17 +106,27 @@ Every write to `orders`, `tickets`, and non-price fields of `products` goes thro
 matching `audit_log` row atomically. They're callable only by `authenticated` sessions (not `anon`),
 and are meant to be called through the admin's own authenticated session — not a shared service-role
 connection — so that `auth.uid()` correctly attributes each change to the admin who made it. A fifth
-function, `next_order_number`, isn't yet granted to any client role: it's reserved for the future
-checkout flow (Phase 4), which will call it from a trusted server-side context.
+function, `next_order_number`, has no client-facing grant either - it's only ever called from inside
+`create_order()`.
+
+`create_order(customer, lines, season)` (Phase 4) is the entire checkout write path: creates the
+customer and order rows, generates the order number, and for each line resolves the product's
+*current* price and quantity itself - the caller only ever supplies a product id and a holder name,
+never a price, so there is nothing for a tampered request to override. System-only, like
+`auto_cancel_stale_orders`: no grant to `anon` or `authenticated`, callable only via a service-role
+connection from the checkout Server Action, which verifies Cloudflare Turnstile first (Postgres has
+no good synchronous way to do that itself).
 
 `auto_cancel_stale_orders()` runs only via a daily `pg_cron` schedule; it has no client-facing grant
 at all, since it's a system job, not an admin action.
 
 ## RLS verification
 
-`supabase/tests/rls_test.sql` is a 53-assertion pgTAP suite (run via the Supabase SQL editor or
+`supabase/tests/rls_test.sql` is a 64-assertion pgTAP suite (run via the Supabase SQL editor or
 `execute_sql`, wrapped in a rolled-back transaction) covering: the public/admin product split, full
 lockout of `anon` and non-admin `authenticated` sessions across every other table, that bare
 writes to `orders`/`tickets` have no effect while the dedicated functions succeed and log correctly,
 that the three append-only tables reject direct mutation even at owner level, order-number
-generation, and the auto-cancel job. All 53 pass as of this writing.
+generation, the auto-cancel job, and `create_order()` (system-only access, and that a tampered price
+injected into a line is silently ignored in favour of the real product price). All 64 pass as of
+this writing.
