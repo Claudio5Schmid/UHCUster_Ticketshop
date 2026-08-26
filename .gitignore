@@ -1,23 +1,34 @@
 # Dependencies
 /node_modules
+/.pnp
+.pnp.*
+
+# Testing
+/coverage
 
 # Next.js
 /.next/
 /out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Production
+/build
 
 # Vercel
 /.vercel
-
-# Environment
-.env
-.env*.local
 
 # Supabase CLI local state
 /supabase/.branches/
 /supabase/.temp/
 
+# Environment
+.env
+.env*.local
+
 # OS
 .DS_Store
+*.pem
 
 # Editor
 .vscode/
@@ -27,3 +38,4 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
