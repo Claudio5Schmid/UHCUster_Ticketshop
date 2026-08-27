@@ -9,6 +9,7 @@ import {
   type CsvImportResult,
   type SendCardsResult,
 } from "@/lib/admin/members";
+import type { CsvColumnMapping } from "@/lib/csv/memberCsv";
 
 const SEND_CONFIRMATION_PHRASE = "Versenden";
 
@@ -17,8 +18,8 @@ export async function createMemberAction(input: MemberInput) {
   revalidatePath("/admin/members");
 }
 
-export async function importCsvAction(csvContent: string): Promise<CsvImportResult> {
-  const result = await importMembersFromCsv(csvContent);
+export async function importCsvAction(csvContent: string, mapping: CsvColumnMapping): Promise<CsvImportResult> {
+  const result = await importMembersFromCsv(csvContent, mapping);
   revalidatePath("/admin/members");
   return result;
 }

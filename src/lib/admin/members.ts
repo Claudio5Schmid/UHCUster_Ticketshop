@@ -3,6 +3,7 @@ import { issueTicketsForOrder } from "@/lib/tickets/issue";
 import { getOrderTickets } from "@/lib/admin/tickets";
 import { sendCardEmail } from "@/lib/email/ses";
 import { CURRENT_SEASON } from "@/lib/season";
+import { parseMemberCsvRows, type CsvColumnMapping } from "@/lib/csv/memberCsv";
 
 export interface MemberInput {
   vorname: string;
@@ -99,97 +100,8 @@ export interface CsvImportResult {
   failed: Array<{ row: number; reason: string }>;
 }
 
-interface CsvRow {
-  vorname: string;
-  nachname: string;
-  email: string;
-  kategorie: string | null;
-  mitgliederkarte: boolean;
-  transferableCodeCount: number;
-}
-
-const HEADER_ALIASES: Record<string, keyof CsvRow | "skip"> = {
-  vorname: "vorname",
-  nachname: "nachname",
-  name: "nachname",
-  email: "email",
-  "e-mail": "email",
-  kategorie: "kategorie",
-  mitgliederkarte: "mitgliederkarte",
-  "anzahl übertragbare codes": "transferableCodeCount",
-  "übertragbare codes": "transferableCodeCount",
-  "wie viele übertragbare codes": "transferableCodeCount",
-};
-
-function parseBoolean(value: string): boolean {
-  const normalized = value.trim().toLowerCase();
-  return normalized === "ja" || normalized === "yes" || normalized === "true" || normalized === "1";
-}
-
-/** Semicolon- or comma-separated, tolerant of quoted fields - matches typical
- * Swiss/German Excel CSV exports (semicolon) without requiring a specific one. */
-function parseCsv(content: string): string[][] {
-  const delimiter = content.includes(";") ? ";" : ",";
-  const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  return lines.map((line) => {
-    const cells: string[] = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === delimiter && !inQuotes) {
-        cells.push(current.trim());
-        current = "";
-      } else {
-        current += char;
-      }
-    }
-    cells.push(current.trim());
-    return cells;
-  });
-}
-
-export function parseMemberCsv(content: string): { rows: CsvRow[]; errors: string[] } {
-  const table = parseCsv(content);
-  if (table.length === 0) {
-    return { rows: [], errors: ["Die Datei ist leer."] };
-  }
-
-  const headerRow = table[0].map((h) => h.toLowerCase().trim());
-  const columnMap = headerRow.map((h) => HEADER_ALIASES[h] ?? "skip");
-
-  const rows: CsvRow[] = [];
-  const errors: string[] = [];
-
-  for (let i = 1; i < table.length; i++) {
-    const raw: Partial<Record<keyof CsvRow, string>> = {};
-    table[i].forEach((cell, colIndex) => {
-      const key = columnMap[colIndex];
-      if (key !== "skip") raw[key] = cell;
-    });
-
-    if (!raw.email || !raw.nachname) {
-      errors.push(`Zeile ${i + 1}: Name und E-Mail sind erforderlich - übersprungen.`);
-      continue;
-    }
-
-    rows.push({
-      vorname: raw.vorname ?? "",
-      nachname: raw.nachname,
-      email: raw.email,
-      kategorie: raw.kategorie || null,
-      mitgliederkarte: raw.mitgliederkarte ? parseBoolean(raw.mitgliederkarte) : false,
-      transferableCodeCount: raw.transferableCodeCount ? parseInt(raw.transferableCodeCount, 10) || 0 : 0,
-    });
-  }
-
-  return { rows, errors };
-}
-
-export async function importMembersFromCsv(content: string): Promise<CsvImportResult> {
-  const { rows, errors } = parseMemberCsv(content);
+export async function importMembersFromCsv(content: string, mapping: CsvColumnMapping): Promise<CsvImportResult> {
+  const { rows, errors } = parseMemberCsvRows(content, mapping);
   const failed: Array<{ row: number; reason: string }> = errors.map((reason, index) => ({ row: index, reason }));
 
   let imported = 0;
