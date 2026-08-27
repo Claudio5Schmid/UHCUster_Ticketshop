@@ -240,6 +240,17 @@ export async function sendPendingMemberCards(
       });
 
       await supabase.from("members").update({ cards_sent_at: new Date().toISOString() }).eq("id", member.id);
+
+      // Emailing the card is the handover for a member order - counts as
+      // "files handed over" automatically, same as if handed over in person.
+      // Best-effort: the email already went out, so a failure here shouldn't
+      // turn a successful send into a reported failure.
+      try {
+        await supabase.rpc("set_files_handed_over", { p_order_id: member.order_id, p_handed_over: true });
+      } catch {
+        // non-fatal - the admin can still set this manually from the order page
+      }
+
       sent++;
     } catch (sendError) {
       failed.push({ email: member.email, reason: sendError instanceof Error ? sendError.message : "Unbekannter Fehler" });

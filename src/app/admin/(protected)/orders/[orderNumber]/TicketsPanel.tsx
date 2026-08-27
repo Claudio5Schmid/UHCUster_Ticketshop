@@ -48,7 +48,7 @@ export function TicketsPanel({ orderId, orderNumber, tickets, filesHandedOverAt,
     <div className={styles.section}>
       <div className={styles.header}>
         <h2>Tickets</h2>
-        {cardsSentAt && <Badge variant="neutral">Tickets versendet {dateFormatter.format(new Date(cardsSentAt))}</Badge>}
+        {cardsSentAt && <Badge variant="accent">Tickets versendet {dateFormatter.format(new Date(cardsSentAt))}</Badge>}
       </div>
       <div className={styles.copyBlock}>
         {tickets.map((ticket) => (
@@ -61,17 +61,22 @@ export function TicketsPanel({ orderId, orderNumber, tickets, filesHandedOverAt,
         ))}
       </div>
 
-      <div className={styles.actions}>
+      <div className={styles.actions} style={{ alignItems: "center" }}>
         <Button as="a" href={`/admin/orders/${orderNumber}/tickets-zip`} variant="secondary">
           Alle als ZIP herunterladen
         </Button>
-        <Button onClick={handleToggle} disabled={isPending}>
-          {handedOver ? "Als nicht übergeben markieren" : "Als übergeben markieren"}
-        </Button>
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={isPending}
+          style={{ all: "unset", cursor: isPending ? "default" : "pointer" }}
+          aria-label={handedOver ? "Als nicht übergeben markieren" : "Als übergeben markieren"}
+        >
+          <Badge variant={handedOver ? "accent" : "outline"}>
+            {handedOver && filesHandedOverAt ? `Übergeben ${dateFormatter.format(new Date(filesHandedOverAt))}` : "Nicht übergeben"}
+          </Badge>
+        </button>
       </div>
-      {handedOver && filesHandedOverAt && (
-        <p style={{ color: "var(--color-text-secondary)" }}>Übergeben am {dateFormatter.format(new Date(filesHandedOverAt))}</p>
-      )}
       {error && <p style={{ color: "var(--color-error-text)" }}>{error}</p>}
     </div>
   );
