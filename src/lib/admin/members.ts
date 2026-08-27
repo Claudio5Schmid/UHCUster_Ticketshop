@@ -23,15 +23,31 @@ export interface Member {
   mitgliederkarte: boolean;
   transferable_code_count: number;
   order_id: string | null;
+  // Only populated by getAllMembers (joins orders for the admin order-detail
+  // link) - other functions here return a bare members row and don't need it.
+  order_number?: string | null;
   cards_sent_at: string | null;
   created_at: string;
 }
 
+interface MemberRow extends Omit<Member, "order_number"> {
+  orders: { order_number: string } | null;
+}
+
+/** So the member list can link straight to /admin/orders/<order_number> -
+ * that page already shows the generated ticket PDFs (view/download/zip),
+ * and isn't filtered by order source, so it works for member orders too. */
 export async function getAllMembers(): Promise<Member[]> {
   const supabase = await getSupabaseServerClient();
-  const { data, error } = await supabase.from("members").select("*").order("nachname", { ascending: true });
+  const { data, error } = await supabase
+    .from("members")
+    .select("*, orders(order_number)")
+    .order("nachname", { ascending: true });
   if (error) throw new Error(`Failed to load members: ${error.message}`);
-  return data ?? [];
+  return ((data ?? []) as MemberRow[]).map(({ orders, ...member }) => ({
+    ...member,
+    order_number: orders?.order_number ?? null,
+  }));
 }
 
 export async function updateMemberKategorie(memberId: string, kategorie: string | null): Promise<Member> {
@@ -166,15 +182,25 @@ function applyTemplate(template: string, member: Pick<Member, "vorname" | "nachn
  * The one place this whole system sends email. Only touches members that
  * actually have an order (cards were generated) and haven't been sent yet -
  * safe to call again after a partial failure, since already-sent members are
- * automatically skipped rather than re-emailed.
+ * automatically skipped rather than re-emailed. Pass memberIds to restrict
+ * the send to specific members (e.g. an admin-picked selection) instead of
+ * every pending member.
  */
-export async function sendPendingMemberCards(subjectTemplate: string, bodyTemplate: string): Promise<SendCardsResult> {
+export async function sendPendingMemberCards(
+  subjectTemplate: string,
+  bodyTemplate: string,
+  memberIds?: string[]
+): Promise<SendCardsResult> {
   const supabase = await getSupabaseServerClient();
-  const { data: pending, error } = await supabase
+  let query = supabase
     .from("members")
     .select("id, vorname, nachname, email, order_id")
     .not("order_id", "is", null)
     .is("cards_sent_at", null);
+  if (memberIds && memberIds.length > 0) {
+    query = query.in("id", memberIds);
+  }
+  const { data: pending, error } = await query;
 
   if (error) throw new Error(`Failed to load pending members: ${error.message}`);
 

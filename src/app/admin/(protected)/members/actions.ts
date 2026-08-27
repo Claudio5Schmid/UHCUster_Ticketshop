@@ -38,20 +38,23 @@ export async function deleteMembersAction(memberIds: string[]) {
 }
 
 /**
- * The one send-everything action in the whole system. Gated on the admin
- * literally typing the confirmation phrase - not real authentication (they're
- * already an authenticated admin), just a deliberate "are you sure" step for an
- * action that can't be undone once real emails go out.
+ * The one send-everything (or send-to-a-picked-subset) action in the whole
+ * system. Gated on the admin literally typing the confirmation phrase - not
+ * real authentication (they're already an authenticated admin), just a
+ * deliberate "are you sure" step for an action that can't be undone once real
+ * emails go out. memberIds restricts the send to a specific selection; omit
+ * it to send to every pending member.
  */
 export async function sendPendingCardsAction(
   subject: string,
   body: string,
-  confirmationPhrase: string
+  confirmationPhrase: string,
+  memberIds?: string[]
 ): Promise<SendCardsResult> {
   if (confirmationPhrase !== SEND_CONFIRMATION_PHRASE) {
     throw new Error(`Bitte "${SEND_CONFIRMATION_PHRASE}" eingeben, um den Versand zu bestätigen.`);
   }
-  const result = await sendPendingMemberCards(subject, body);
+  const result = await sendPendingMemberCards(subject, body, memberIds);
   revalidatePath("/admin/members");
   return result;
 }

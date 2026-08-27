@@ -60,11 +60,13 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
   const [csvMapping, setCsvMapping] = useState<CsvColumnMapping>({});
   const [csvResultMessage, setCsvResultMessage] = useState<string | null>(null);
 
-  // Batch send
+  // Batch send - sendTarget null means "every pending member" (the collapsed
+  // button's count); a specific id list means "just this selection".
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [body, setBody] = useState(DEFAULT_BODY);
   const [confirmation, setConfirmation] = useState("");
   const [sendResultMessage, setSendResultMessage] = useState<string | null>(null);
+  const [sendTarget, setSendTarget] = useState<string[] | null>(null);
 
   // Member list: search, sort, select, delete - mainly for finding/cleaning up test entries
   const [search, setSearch] = useState("");
@@ -146,13 +148,15 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
     setSendResultMessage(null);
     startTransition(async () => {
       try {
-        const result = await sendPendingCardsAction(subject, body, confirmation);
+        const result = await sendPendingCardsAction(subject, body, confirmation, sendTarget ?? undefined);
         setSendResultMessage(
           `${result.sent} E-Mails versendet.` +
             (result.failed.length > 0 ? ` ${result.failed.length} fehlgeschlagen: ${result.failed.map((f) => `${f.email} (${f.reason})`).join("; ")}` : "")
         );
         setConfirmation("");
         setShowSendForm(false);
+        setSendTarget(null);
+        setSelectedIds(new Set());
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "Fehler beim Versand.");
       }
@@ -210,6 +214,8 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
       return next;
     });
   }
+
+  const selectedPendingIds = members.filter((m) => selectedIds.has(m.id) && m.order_id && !m.cards_sent_at).map((m) => m.id);
 
   const allVisibleSelected = visibleMembers.length > 0 && visibleMembers.every((m) => selectedIds.has(m.id));
   const someVisibleSelected = visibleMembers.some((m) => selectedIds.has(m.id));
@@ -275,6 +281,8 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
     );
   }
 
+  const sendCount = sendTarget ? sendTarget.length : pendingCount;
+
   const columns: TableColumn<Member>[] = [
     {
       key: "select",
@@ -318,6 +326,18 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
         const status = statusFor(m);
         return <Badge variant={status.variant}>{status.label}</Badge>;
       },
+    },
+    {
+      key: "dateien",
+      header: "Dateien",
+      render: (m) =>
+        m.order_number ? (
+          <a href={`/admin/orders/${m.order_number}`} target="_blank" rel="noopener noreferrer" className={styles.orderLink}>
+            Ansehen
+          </a>
+        ) : (
+          "–"
+        ),
     },
   ];
 
@@ -384,6 +404,17 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
         {selectedIds.size > 0 && (
           <div className={styles.selectionBar}>
             <span>{selectedIds.size} ausgewählt</span>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={selectedPendingIds.length === 0}
+              onClick={() => {
+                setSendTarget(selectedPendingIds);
+                setShowSendForm(true);
+              }}
+            >
+              An Ausgewählte senden ({selectedPendingIds.length})
+            </Button>
             <Button type="button" variant="secondary" onClick={() => setShowDeleteConfirm(true)}>
               Löschen
             </Button>
@@ -452,7 +483,15 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
         <div className={styles.header}>
           <h2>Karten versenden</h2>
           {!showSendForm && (
-            <Button type="button" variant="secondary" onClick={() => setShowSendForm(true)} disabled={pendingCount === 0}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setSendTarget(null);
+                setShowSendForm(true);
+              }}
+              disabled={pendingCount === 0}
+            >
               {pendingCount} Karte(n) versenden
             </Button>
           )}
@@ -460,8 +499,11 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
         {showSendForm && (
           <div className={styles.form}>
             <p style={{ color: "var(--color-text-secondary)" }}>
-              {pendingCount} Mitglieder warten auf den Versand ihrer Karte(n). Nachricht kann vor dem Versand angepasst werden -
-              Platzhalter <code>{"{{vorname}}"}</code> und <code>{"{{nachname}}"}</code> stehen zur Verfügung.
+              {sendTarget
+                ? `${sendCount} ausgewählte Mitglieder warten auf den Versand ihrer Karte(n).`
+                : `${sendCount} Mitglieder warten auf den Versand ihrer Karte(n).`}{" "}
+              Nachricht kann vor dem Versand angepasst werden - Platzhalter <code>{"{{vorname}}"}</code> und{" "}
+              <code>{"{{nachname}}"}</code> stehen zur Verfügung.
             </p>
             <Input label="Betreff" value={subject} onChange={(e) => setSubject(e.target.value)} />
             <label>
@@ -479,10 +521,17 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
               onChange={(e) => setConfirmation(e.target.value)}
             />
             <div className={styles.actions}>
-              <Button onClick={handleSend} disabled={isPending || confirmation !== "Versenden" || pendingCount === 0}>
-                {pendingCount} Karte(n) jetzt versenden
+              <Button onClick={handleSend} disabled={isPending || confirmation !== "Versenden" || sendCount === 0}>
+                {sendCount} Karte(n) jetzt versenden
               </Button>
-              <Button type="button" variant="secondary" onClick={() => setShowSendForm(false)}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setShowSendForm(false);
+                  setSendTarget(null);
+                }}
+              >
                 Abbrechen
               </Button>
             </div>
