@@ -159,6 +159,15 @@ export async function importMembersFromCsv(content: string, mapping: CsvColumnMa
   return { imported, failed };
 }
 
+/** For the order-detail page's ticket panel: null for every regular shop
+ * order (they were never a member roster entry to begin with), the actual
+ * send timestamp once this member's card email has gone out. */
+export async function getMemberCardsSentAtForOrder(orderId: string): Promise<string | null> {
+  const supabase = await getSupabaseServerClient();
+  const { data } = await supabase.from("members").select("cards_sent_at").eq("order_id", orderId).maybeSingle();
+  return data?.cards_sent_at ?? null;
+}
+
 export async function getPendingSendCount(): Promise<number> {
   const supabase = await getSupabaseServerClient();
   const { count } = await supabase

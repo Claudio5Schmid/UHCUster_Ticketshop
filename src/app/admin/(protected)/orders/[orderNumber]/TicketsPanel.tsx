@@ -19,9 +19,12 @@ interface TicketsPanelProps {
   orderNumber: string;
   tickets: OrderTicket[];
   filesHandedOverAt: string | null;
+  cardsSentAt: string | null;
 }
 
-export function TicketsPanel({ orderId, orderNumber, tickets, filesHandedOverAt }: TicketsPanelProps) {
+const dateFormatter = new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", dateStyle: "medium", timeStyle: "short" });
+
+export function TicketsPanel({ orderId, orderNumber, tickets, filesHandedOverAt, cardsSentAt }: TicketsPanelProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const handedOver = Boolean(filesHandedOverAt);
@@ -43,7 +46,10 @@ export function TicketsPanel({ orderId, orderNumber, tickets, filesHandedOverAt 
 
   return (
     <div className={styles.section}>
-      <h2>Tickets</h2>
+      <div className={styles.header}>
+        <h2>Tickets</h2>
+        {cardsSentAt && <Badge variant="neutral">Tickets versendet {dateFormatter.format(new Date(cardsSentAt))}</Badge>}
+      </div>
       <div className={styles.copyBlock}>
         {tickets.map((ticket) => (
           <div key={ticket.id}>
@@ -64,12 +70,7 @@ export function TicketsPanel({ orderId, orderNumber, tickets, filesHandedOverAt 
         </Button>
       </div>
       {handedOver && filesHandedOverAt && (
-        <p style={{ color: "var(--color-text-secondary)" }}>
-          Übergeben am{" "}
-          {new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", dateStyle: "medium", timeStyle: "short" }).format(
-            new Date(filesHandedOverAt)
-          )}
-        </p>
+        <p style={{ color: "var(--color-text-secondary)" }}>Übergeben am {dateFormatter.format(new Date(filesHandedOverAt))}</p>
       )}
       {error && <p style={{ color: "var(--color-error-text)" }}>{error}</p>}
     </div>
