@@ -34,6 +34,25 @@ export async function getAllMembers(): Promise<Member[]> {
   return data ?? [];
 }
 
+export async function updateMemberKategorie(memberId: string, kategorie: string | null): Promise<Member> {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase.from("members").update({ kategorie }).eq("id", memberId).select().single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to update Kategorie");
+  return data;
+}
+
+/**
+ * Removes roster rows only - a member's order and any already-issued tickets
+ * (if cards were generated) are untouched, same as everywhere else in this
+ * schema treats orders as permanent. Mainly for cleaning up test entries.
+ */
+export async function deleteMembers(memberIds: string[]): Promise<void> {
+  if (memberIds.length === 0) return;
+  const supabase = await getSupabaseServerClient();
+  const { error } = await supabase.from("members").delete().in("id", memberIds);
+  if (error) throw new Error(`Failed to delete members: ${error.message}`);
+}
+
 /**
  * Inserts the roster row, and - if this member is actually getting a card -
  * creates the order and issues tickets through the exact same pipeline a real

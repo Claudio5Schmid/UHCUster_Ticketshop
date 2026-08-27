@@ -107,3 +107,29 @@
   gap: var(--space-3);
   align-items: flex-end;
 }
+
+.inlineEdit {
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  width: 100%;
+}
+
+.inlineEdit:hover {
+  border-color: var(--color-border);
+}
+
+.inlineEdit:focus {
+  border-color: var(--color-accent);
+  outline: none;
+}
+
+.selectionBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}

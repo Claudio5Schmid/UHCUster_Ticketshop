@@ -5,6 +5,8 @@ import {
   createMemberAndIssueCards,
   importMembersFromCsv,
   sendPendingMemberCards,
+  updateMemberKategorie,
+  deleteMembers,
   type MemberInput,
   type CsvImportResult,
   type SendCardsResult,
@@ -22,6 +24,17 @@ export async function importCsvAction(csvContent: string, mapping: CsvColumnMapp
   const result = await importMembersFromCsv(csvContent, mapping);
   revalidatePath("/admin/members");
   return result;
+}
+
+export async function updateMemberKategorieAction(memberId: string, kategorie: string | null) {
+  const updated = await updateMemberKategorie(memberId, kategorie);
+  revalidatePath("/admin/members");
+  return updated;
+}
+
+export async function deleteMembersAction(memberIds: string[]) {
+  await deleteMembers(memberIds);
+  revalidatePath("/admin/members");
 }
 
 /**

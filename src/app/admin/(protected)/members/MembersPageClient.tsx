@@ -1,15 +1,24 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Input } from "@/components/ui/Input/Input";
 import { Select } from "@/components/ui/Select/Select";
 import { Button } from "@/components/ui/Button/Button";
 import { Badge } from "@/components/ui/Badge/Badge";
+import { Modal } from "@/components/ui/Modal/Modal";
 import { Table, type TableColumn } from "@/components/ui/Table/Table";
-import { createMemberAction, importCsvAction, sendPendingCardsAction } from "./actions";
+import {
+  createMemberAction,
+  importCsvAction,
+  sendPendingCardsAction,
+  updateMemberKategorieAction,
+  deleteMembersAction,
+} from "./actions";
 import type { Member } from "@/lib/admin/members";
 import { CSV_FIELDS, parseCsvHeader, detectColumnMapping, type CsvColumnMapping, type CsvField } from "@/lib/csv/memberCsv";
 import styles from "../admin.module.css";
+
+type SortKey = "name" | "email" | "kategorie" | "karte" | "uebertragbar";
 
 const dateFormatter = new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", dateStyle: "medium", timeStyle: "short" });
 
@@ -56,6 +65,14 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
   const [body, setBody] = useState(DEFAULT_BODY);
   const [confirmation, setConfirmation] = useState("");
   const [sendResultMessage, setSendResultMessage] = useState<string | null>(null);
+
+  // Member list: search, sort, select, delete - mainly for finding/cleaning up test entries
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   function handleCreateMember(event: React.FormEvent) {
     event.preventDefault();
@@ -142,12 +159,158 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
     });
   }
 
+  function handleSortClick(key: SortKey) {
+    if (sortKey === key) {
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  }
+
+  function sortValue(member: Member, key: SortKey): string | number {
+    switch (key) {
+      case "name":
+        return `${member.nachname} ${member.vorname}`.toLowerCase();
+      case "email":
+        return member.email.toLowerCase();
+      case "kategorie":
+        return (member.kategorie ?? "").toLowerCase();
+      case "karte":
+        return member.mitgliederkarte ? 1 : 0;
+      case "uebertragbar":
+        return member.transferable_code_count;
+    }
+  }
+
+  const visibleMembers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    let result = members;
+    if (query) {
+      result = result.filter((m) =>
+        `${m.vorname} ${m.nachname} ${m.email} ${m.kategorie ?? ""}`.toLowerCase().includes(query)
+      );
+    }
+    if (sortKey) {
+      result = [...result].sort((a, b) => {
+        const av = sortValue(a, sortKey);
+        const bv = sortValue(b, sortKey);
+        const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+        return sortDirection === "asc" ? cmp : -cmp;
+      });
+    }
+    return result;
+  }, [members, search, sortKey, sortDirection]);
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const allVisibleSelected = visibleMembers.length > 0 && visibleMembers.every((m) => selectedIds.has(m.id));
+  const someVisibleSelected = visibleMembers.some((m) => selectedIds.has(m.id));
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
+    }
+  }, [someVisibleSelected, allVisibleSelected]);
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      if (allVisibleSelected) {
+        const next = new Set(prev);
+        visibleMembers.forEach((m) => next.delete(m.id));
+        return next;
+      }
+      const next = new Set(prev);
+      visibleMembers.forEach((m) => next.add(m.id));
+      return next;
+    });
+  }
+
+  function handleKategorieBlur(member: Member, event: React.FocusEvent<HTMLInputElement>) {
+    const value = event.target.value.trim();
+    const kategorie = value || null;
+    if (kategorie === member.kategorie) return;
+    startTransition(async () => {
+      try {
+        await updateMemberKategorieAction(member.id, kategorie);
+      } catch (submitError) {
+        setError(submitError instanceof Error ? submitError.message : "Fehler beim Ändern der Kategorie.");
+      }
+    });
+  }
+
+  function handleDeleteSelected() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await deleteMembersAction([...selectedIds]);
+        setSelectedIds(new Set());
+        setShowDeleteConfirm(false);
+      } catch (submitError) {
+        setError(submitError instanceof Error ? submitError.message : "Fehler beim Löschen.");
+        setShowDeleteConfirm(false);
+      }
+    });
+  }
+
+  const sortIndicator = (key: SortKey) => (sortKey === key ? (sortDirection === "asc" ? " ▲" : " ▼") : "");
+
+  function sortableHeader(label: string, key: SortKey) {
+    return (
+      <button
+        type="button"
+        onClick={() => handleSortClick(key)}
+        style={{ all: "unset", cursor: "pointer", display: "inline-flex", alignItems: "center" }}
+      >
+        {label}
+        {sortIndicator(key)}
+      </button>
+    );
+  }
+
   const columns: TableColumn<Member>[] = [
-    { key: "name", header: "Name", render: (m) => `${m.vorname} ${m.nachname}` },
-    { key: "email", header: "E-Mail", render: (m) => m.email },
-    { key: "kategorie", header: "Kategorie", render: (m) => m.kategorie ?? "–" },
-    { key: "karte", header: "Karte", render: (m) => (m.mitgliederkarte ? "Ja" : "Nein") },
-    { key: "uebertragbar", header: "Übertragbar", render: (m) => m.transferable_code_count },
+    {
+      key: "select",
+      header: (
+        <input
+          ref={selectAllRef}
+          type="checkbox"
+          checked={allVisibleSelected}
+          onChange={toggleSelectAll}
+          aria-label="Alle auswählen"
+        />
+      ),
+      render: (m) => <input type="checkbox" checked={selectedIds.has(m.id)} onChange={() => toggleSelect(m.id)} aria-label={`${m.vorname} ${m.nachname} auswählen`} />,
+    },
+    { key: "name", header: sortableHeader("Name", "name"), render: (m) => `${m.vorname} ${m.nachname}` },
+    { key: "email", header: sortableHeader("E-Mail", "email"), render: (m) => m.email },
+    {
+      key: "kategorie",
+      header: sortableHeader("Kategorie", "kategorie"),
+      render: (m) => (
+        <input
+          key={m.id}
+          type="text"
+          defaultValue={m.kategorie ?? ""}
+          placeholder="–"
+          onBlur={(e) => handleKategorieBlur(m, e)}
+          className={styles.inlineEdit}
+        />
+      ),
+    },
+    { key: "karte", header: sortableHeader("Karte", "karte"), render: (m) => (m.mitgliederkarte ? "Ja" : "Nein") },
+    {
+      key: "uebertragbar",
+      header: sortableHeader("Übertragbar", "uebertragbar"),
+      render: (m) => m.transferable_code_count,
+    },
     {
       key: "status",
       header: "Status",
@@ -215,8 +378,37 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
 
       <div className={styles.section}>
         <h2>Mitgliederliste</h2>
-        <Table caption="Mitglieder" columns={columns} rows={members} getRowKey={(m) => m.id} />
+        <div className={styles.searchField} style={{ marginBottom: "var(--space-4)" }}>
+          <Input label="Suche" placeholder="Name, E-Mail oder Kategorie" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        {selectedIds.size > 0 && (
+          <div className={styles.selectionBar}>
+            <span>{selectedIds.size} ausgewählt</span>
+            <Button type="button" variant="secondary" onClick={() => setShowDeleteConfirm(true)}>
+              Löschen
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setSelectedIds(new Set())}>
+              Auswahl aufheben
+            </Button>
+          </div>
+        )}
+        <Table caption="Mitglieder" columns={columns} rows={visibleMembers} getRowKey={(m) => m.id} />
       </div>
+
+      <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Mitglieder löschen">
+        <p style={{ marginBottom: "var(--space-5)" }}>
+          {selectedIds.size} {selectedIds.size === 1 ? "Mitglied" : "Mitglieder"} aus der Liste löschen? Bereits
+          erstellte Bestellungen und Tickets bleiben davon unberührt - es wird nur der Mitglieder-Eintrag entfernt.
+        </p>
+        <div className={styles.actions}>
+          <Button type="button" onClick={handleDeleteSelected} disabled={isPending}>
+            Löschen
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => setShowDeleteConfirm(false)}>
+            Abbrechen
+          </Button>
+        </div>
+      </Modal>
 
       <div className={styles.section}>
         <div className={styles.header}>
