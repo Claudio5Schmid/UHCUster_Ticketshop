@@ -1,6 +1,6 @@
 .nav {
-  background: var(--color-dark);
-  color: var(--color-dark-text);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .bar {
@@ -10,8 +10,34 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-5);
   padding-block: var(--space-4);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-decoration: none;
+}
+
+.logo {
+  height: 28px;
+  width: auto;
+}
+
+.divider {
+  width: 1px;
+  height: 22px;
+  background: var(--color-border-strong);
+}
+
+.brandLabel {
+  font-size: var(--text-small-size);
+  font-weight: 700;
+  color: var(--color-accent);
+  white-space: nowrap;
 }
 
 .links {
@@ -22,25 +48,27 @@
 }
 
 .links a {
-  color: var(--color-dark-text-secondary);
+  color: var(--color-text-secondary);
   text-decoration: none;
   font-size: var(--text-small-size);
   font-weight: 600;
+  transition: color var(--duration-fast) var(--easing-standard);
 }
 
 .links a:hover {
-  color: var(--color-dark-text);
+  color: var(--color-accent);
 }
 
 .logoutButton {
   background: none;
   border: none;
-  color: var(--color-dark-text-secondary);
+  color: var(--color-text-secondary);
   font-size: var(--text-small-size);
   cursor: pointer;
   text-decoration: underline;
+  transition: color var(--duration-fast) var(--easing-standard);
 }
 
 .logoutButton:hover {
-  color: var(--color-dark-text);
+  color: var(--color-accent);
 }
