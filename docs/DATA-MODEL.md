@@ -121,6 +121,19 @@ directly (e.g. to set `eventfrog_url`, which the sync never touches) via `/admin
 which also has a manual "sync now" button running the same upsert on demand through the admin's own
 session instead of waiting for the daily cron.
 
+## members
+
+Added post-Phase-8 for distributing membership cards to existing club members going forward — not a
+migration of any pre-existing QR codes (explicitly deferred, see `docs/BACKLOG.md`). One row per
+member: `vorname`/`nachname`/`email`, `kategorie` (free-text label only, no product-tier mapping — see
+`docs/DECISIONS.md` D38), `mitgliederkarte` (boolean — personal, non-transferable card), and
+`transferable_code_count` (how many additional transferable codes they get; the two are independent
+and can combine on the same member). `order_id` links to the `orders` row created for them once cards
+are generated (nullable until then); `cards_sent_at` is set once their email actually goes out, and is
+the sole marker of "already sent" — re-running an import or re-clicking "add member" never
+double-sends. Admin-only RLS (select/insert/update, no delete — matches every other admin-managed
+table in this schema).
+
 ## Mutation functions (not tables, but part of the data layer)
 
 Every write to `orders`, `tickets`, and non-price fields of `products` goes through one of:
@@ -149,16 +162,28 @@ no good synchronous way to do that itself).
 `auto_cancel_stale_orders()` runs only via a daily `pg_cron` schedule; it has no client-facing grant
 at all, since it's a system job, not an admin action.
 
+`create_member_order(customer_name, email, include_personal, transferable_count, season)`
+(post-Phase-8) mirrors `create_order()`'s shape but for admin-initiated member card grants rather than
+a paid checkout: creates the customer and an already-`bezahlt` order (there's no payment to wait for),
+then inserts one `order_item` for the personal card product (`mitglieder-uhc-uster`, qty 1) if
+requested and/or one for the transferable product (`mitglieder-uhc-uster-uebertragbar`, qty N) if
+`transferable_count > 0` — reusing the existing Phase 6 `issue_tickets_for_order`/PDF pipeline
+unchanged, since to that code a member-card order looks exactly like any other paid order (see
+`docs/DECISIONS.md` D38). Admin-only (`is_admin()` check, `authenticated`-only grant), same pattern as
+every other mutation function above.
+
 ## RLS verification
 
-`supabase/tests/rls_test.sql` is a 79-assertion pgTAP suite (run via the Supabase SQL editor or
+`supabase/tests/rls_test.sql` is a 105-assertion pgTAP suite (run via the Supabase SQL editor or
 `execute_sql`, wrapped in a rolled-back transaction) covering: the public/admin product split, full
 lockout of `anon` and non-admin `authenticated` sessions across every other table, that bare
 writes to `orders`/`tickets` have no effect while the dedicated functions succeed and log correctly,
 that the three append-only tables reject direct mutation even at owner level, order-number
 generation, the auto-cancel job, `create_order()` (system-only access, and that a tampered price
-injected into a line is silently ignored in favour of the real product price), and Phase 6's
-`issue_tickets_for_order`/`set_files_handed_over`. All 79 pass as of this writing.
+injected into a line is silently ignored in favour of the real product price), Phase 6's
+`issue_tickets_for_order`/`set_files_handed_over`, Phase 7/8's `game_scanner_codes` and
+`check_order_rate_limit`, and the post-Phase-8 member-import additions (`create_member_order` access
+control and output shape, `members` table RLS). All 105 pass as of this writing.
 
 Phase 7's scanner writes aren't in this suite: they don't go through a `SECURITY DEFINER` Postgres
 function at all (see D32) — `/api/scanner/scan` verifies its own signed session token and writes via

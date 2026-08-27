@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(92);
+select plan(105);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -563,6 +563,92 @@ reset request.jwt.claim.sub;
 select is(public.check_order_rate_limit('rl-test-ip', 2, 10), true, 'first attempt from a fresh IP is allowed');
 select is(public.check_order_rate_limit('rl-test-ip', 2, 10), true, 'second attempt is still allowed');
 select is(public.check_order_rate_limit('rl-test-ip', 2, 10), false, 'third attempt within the window is blocked');
+
+-- ============================================================================
+-- Group K: member import (create_member_order, members RLS)
+-- ============================================================================
+
+set local role anon;
+select throws_ok(
+  $$select public.create_member_order('X', 'x@example.com', true, 0, '2627')$$,
+  '42501',
+  'permission denied for function create_member_order',
+  'anon cannot call create_member_order'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
+select throws_ok(
+  $$select public.create_member_order('X', 'x@example.com', true, 0, '2627')$$,
+  'P0001',
+  'only admins can create member orders',
+  'non-admin authenticated cannot call create_member_order'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+
+select lives_ok(
+  $$select public.create_member_order('Test Member', 'member-test@example.com', true, 2, '2627')$$,
+  'admin can call create_member_order'
+);
+select is(
+  (select count(*) from public.order_items oi join public.orders o on o.id = oi.order_id join public.customers c on c.id = o.customer_id where c.email = 'member-test@example.com'),
+  2::bigint,
+  'exactly two order_items were created (personal + transferable)'
+);
+select is(
+  (select oi.quantity from public.order_items oi join public.orders o on o.id = oi.order_id join public.customers c on c.id = o.customer_id join public.products p on p.id = oi.product_id where c.email = 'member-test@example.com' and p.slug = 'mitglieder-uhc-uster-uebertragbar'),
+  2,
+  'the transferable order_item has the requested quantity'
+);
+select is(
+  (select o.status from public.orders o join public.customers c on c.id = o.customer_id where c.email = 'member-test@example.com'),
+  'bezahlt',
+  'the member order is immediately bezahlt - no payment to wait for'
+);
+
+reset role;
+reset request.jwt.claim.sub;
+
+set local role anon;
+select is((select count(*) from public.members)::int, 0, 'anon sees no members');
+select throws_ok(
+  $$insert into public.members (vorname, nachname, email) values ('X', 'Y', 'x@example.com')$$,
+  '42501',
+  'new row violates row-level security policy for table "members"',
+  'anon cannot insert a member'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
+select is((select count(*) from public.members)::int, 0, 'non-admin authenticated sees no members');
+select throws_ok(
+  $$insert into public.members (vorname, nachname, email) values ('X', 'Y', 'x@example.com')$$,
+  '42501',
+  'new row violates row-level security policy for table "members"',
+  'non-admin authenticated cannot insert a member'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+select lives_ok(
+  $$insert into public.members (vorname, nachname, email, mitgliederkarte) values ('Admin', 'Inserted', 'admin-member@example.com', true)$$,
+  'admin can insert a member'
+);
+select ok((select count(*) from public.members) >= 1, 'admin sees at least the member just inserted');
+select lives_ok(
+  $$update public.members set kategorie = 'Vorstand' where email = 'admin-member@example.com'$$,
+  'admin can update a member'
+);
+reset role;
+reset request.jwt.claim.sub;
 
 select * from finish();
 

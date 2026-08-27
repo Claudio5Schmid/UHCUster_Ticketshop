@@ -381,3 +381,54 @@ schedules; (3) the date column uses `orders.created_at`, since there is no separ
 "paid on" timestamp in the schema (`orders` only has `created_at`/`updated_at`) -
 flagged in `docs/BACKLOG.md` as a gap to close if the eventual accounting system
 specifically needs the payment date. **Resolved.**
+
+## 2026-08-27 (post-Phase-8) — member card distribution
+
+**D38 — A scoped, explicit reversal of the project's "no email, ever" rule, for exactly one
+feature.** From the very start of this project the brief and every subsequent decision assumed no
+outbound email anywhere: no order confirmations, no admin notifications, no send button of any kind
+- checkout confirmations are shown inline, tickets are handed over as PDFs, nothing is automated.
+Claudio then asked for a bulk "send every member their card by email" feature for distributing
+membership cards to existing club members going forward. Rather than quietly building around the
+original rule or silently ignoring it, this conflict was surfaced directly; Claudio confirmed
+**real email sending, reversing the no-email rule, scoped only to this feature** - nothing else in
+the system sends email. Provider: **Amazon SES** (`src/lib/email/ses.ts`, via nodemailer's SES
+transport on `@aws-sdk/client-sesv2` - the v1 `@aws-sdk/client-ses` SDK doesn't match the request
+shape nodemailer's transport actually builds). Sending domain still undecided by Claudio as of this
+writing - `SES_FROM_EMAIL` stays unset in `.env.example` until he has one. **Note for whoever adds the
+real AWS credentials:** a fresh SES account starts in **sandbox mode** and can only send to
+individually-verified recipient addresses until production access is requested from AWS - this will
+block even the ~10-board-member test batch if not requested ahead of time. **Resolved** (feature
+built; blocked only on Claudio supplying AWS credentials/domain and the real member list).
+
+**D39 — Personal card and transferable codes combine on one member, rather than being mutually
+exclusive.** The CSV/import spec has two independent fields (`mitgliederkarte: ja/nein`, "wie viele
+übertragbare Codes") that read as if they could be alternatives. Claudio confirmed they combine: a
+single member can have both their own non-transferable card *and* N transferable codes on top.
+Modeled as two separate `products` (`mitglieder-uhc-uster` / `mitglieder-uhc-uster-uebertragbar`,
+the latter's `benefits.transferable = true`) so `create_member_order()` inserts zero, one, or two
+`order_items` per member depending on which fields are set - deliberately reusing the existing
+per-order-item transferability pattern from D5/D6 rather than adding a new column or code path.
+**Resolved.**
+
+**D40 — `kategorie` (Funktionär, Spieler, Gönner, etc.) is a free-text label only for now, no
+product-tier mapping.** Claudio marked the category list itself "tbd" and confirmed, when asked,
+that it shouldn't yet drive which product/benefits a member receives - every member gets the same two
+possible products (personal card, transferable codes) regardless of category. Stored as a plain
+nullable `text` column on `members`, displayed in the admin list, otherwise inert. Revisit only if a
+real category-to-benefit mapping is ever specified. **Resolved, revisit later.**
+
+**D41 — No migration of pre-existing/legacy QR codes.** Claudio's original question ("what do we do
+with existing QR codes from before this system existed?") led to this feature, but the final spec
+explicitly excludes those ~300 legacy codes from scope ("also heisst noch keine migration von alten
+codes") - this feature only ever generates new codes for members going forward. Legacy code migration
+remains a fully open, unscoped problem, tracked in `docs/BACKLOG.md`. **Deferred, not resolved.**
+
+**D42 — Batch send requires an editable message and a typed confirmation phrase, no automatic
+send-on-create.** Adding a single member (or a CSV row) immediately generates their order and
+ticket PDFs, but never emails them - email only goes out when an admin explicitly reviews the
+editable subject/body and types the confirmation phrase (placeholder: `"Versenden"`, Claudio's own
+literal instruction) into `/admin/members`'s send button. Prevents an accidental bulk-send to real
+members' inboxes from a stray click, and keeps a human review step between "codes generated" and
+"emails sent" given this is the one feature in the whole system that talks to the outside world.
+**Resolved.**

@@ -273,7 +273,23 @@ an admin account - converted to "at least N" checks, the same fix already applie
 protection" for admin logins, and confirming the project's spend cap is still enabled - both
 documented as explicit `docs/OPERATIONS.md` action items rather than silently skipped.
 
-## 10. Open questions — superseded by `docs/DECISIONS.md`
+## 10. Member card distribution (post-Phase-8)
+
+A new `/admin/members` area (`src/app/admin/(protected)/members/`) for distributing membership cards
+to existing club members going forward — CSV import or single-member entry generates a personal card
+and/or N transferable codes per member (two `products`, see `docs/DATA-MODEL.md`), reusing the
+existing Phase 6 `issue_tickets_for_order` PDF pipeline unchanged. This is the one deliberate, scoped
+exception to the project's original "no email anywhere" rule (`docs/DECISIONS.md` D38): a batch
+"send" button emails each member their card PDF(s) via Amazon SES (`src/lib/email/ses.ts`, nodemailer
++ `@aws-sdk/client-sesv2`), gated behind an editable subject/body and a typed confirmation phrase
+(D42) so nothing goes out without an explicit human step. `create_member_order()` (Postgres,
+`SECURITY DEFINER`, admin-only) creates an already-`bezahlt` order per member — there's no payment to
+wait for — so ticket issuance and PDF generation work exactly as they do for a real checkout.
+
+Not built: any migration of pre-existing/legacy member QR codes (D41, explicitly out of scope for
+now), and a `kategorie`-to-product mapping (D40, category is currently a display-only label).
+
+## 11. Open questions — superseded by `docs/DECISIONS.md`
 
 The five items originally listed here (Supabase project/plan, missing design doc, missing price
 list/schedule/Eventfrog links, the HMAC-vs-offline-verification tension, and the brief's mandated

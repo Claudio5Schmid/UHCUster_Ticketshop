@@ -10,6 +10,7 @@ export function AdminNav() {
           <Link href="/admin">Bestellungen</Link>
           <Link href="/admin/products">Preise</Link>
           <Link href="/admin/schedule">Spielplan</Link>
+          <Link href="/admin/members">Mitglieder</Link>
           <Link href="/admin/live">Live</Link>
           <Link href="/admin/export">Export</Link>
         </div>
