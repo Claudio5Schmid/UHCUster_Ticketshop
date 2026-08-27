@@ -235,7 +235,7 @@ their local map without a server round trip. If a device's network drops, it kee
 independently and reconciles later - a known, documented residual double-scan risk
 (`docs/OPERATIONS.md`), not something perfectly preventable in an offline-first design.
 
-**Live view:** `/admin/live/[gameId]` shows redeemed / outstanding / rejections for a game,
+**Live view:** `/admin/dashboard/[gameId]` (renamed from `/admin/live/[gameId]`, see §12) shows redeemed / outstanding / rejections for a game,
 subscribed to the same Realtime channel for the redeemed count and polling every 20s for the rest
 (rejections aren't broadcast, only redemptions are, per the brief). "Outstanding" means season-pass
 holders who haven't checked in for *this* game yet, not unsold inventory.
@@ -289,7 +289,21 @@ wait for — so ticket issuance and PDF generation work exactly as they do for a
 Not built: any migration of pre-existing/legacy member QR codes (D41, explicitly out of scope for
 now), and a `kategorie`-to-product mapping (D40, category is currently a display-only label).
 
-## 11. Open questions — superseded by `docs/DECISIONS.md`
+## 12. Admin nav restyle and attendance dashboard (post-Phase-8)
+
+The admin bar (`src/components/admin/AdminNav`) now matches the shop's own branding - club logo,
+divider, "Admin Bereich" label in the site's one accent red, centered nav links (CSS grid, so
+centering doesn't depend on the brand/logout blocks' widths) - instead of the plain dark strip from
+Phase 5. `/admin/live` was renamed to `/admin/dashboard`: the old plain game-list landing page is now
+a multi-game attendance overview (`src/lib/admin/dashboard.ts`'s `getAttendanceReport`), and the
+single-game Realtime live-scan monitor from Phase 7 moved to `/admin/dashboard/[gameId]` unchanged.
+Attendance is counted from `scan_events` (`result = 'accepted'`, scoped per game per D31) joined
+through `tickets` to `products.name` - not from tickets sold, and not a hardcoded category list (see
+`docs/DECISIONS.md` D44). The member-card send form in `/admin/members` moved from an inline
+expanding section into the shared `Modal` component (D45), so it can't go unnoticed the way the
+inline version could.
+
+## 13. Open questions — superseded by `docs/DECISIONS.md`
 
 The five items originally listed here (Supabase project/plan, missing design doc, missing price
 list/schedule/Eventfrog links, the HMAC-vs-offline-verification tension, and the brief's mandated

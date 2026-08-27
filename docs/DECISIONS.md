@@ -432,3 +432,41 @@ literal instruction) into `/admin/members`'s send button. Prevents an accidental
 members' inboxes from a stray click, and keeps a human review step between "codes generated" and
 "emails sent" given this is the one feature in the whole system that talks to the outside world.
 **Resolved.**
+
+## 2026-08-28 — admin redesign and attendance dashboard
+
+**D43 — `/admin/live` renamed to `/admin/dashboard`, and its former plain game-list landing page
+became a multi-game attendance overview; the single-game Realtime scan monitor moved to
+`/admin/dashboard/[gameId]` unchanged.** Claudio asked for the "Live" nav item to become "Dashboard",
+described in the same message as an overview where he picks any number of games (all, one, or a
+subset) and sees how many of each ticket category attended - i.e. two related but distinct jobs
+sharing one nav entry: match-day live monitoring (already built, Phase 7) and after-the-fact
+attendance reporting (new). Nesting the unchanged live view under the renamed parent folder was the
+lowest-risk option - only two hardcoded `/admin/live` strings existed in the whole codebase (the nav
+link and the old page's own internal link), confirmed by search before renaming. **Resolved.**
+
+**D44 — Attendance is counted from accepted scans (`scan_events`), not tickets sold, and grouped by
+`products.name` rather than a fixed category list.** "How many Erwachsene/Mitglieder/Studenten
+attended this game" only has a sensible answer via actual door scans - a season pass is valid at
+every home game (D31), so "tickets sold" says nothing about which specific game someone attended,
+only `scan_events.game_id` + `result = 'accepted'` does. Grouping by the product's real name (not a
+hardcoded "Erwachsene/Mitglieder/Studenten" enum) was chosen after checking the live product catalog
+(`saisonkarte-erwachsener`, `saisonkarte-reduziert`, `mitglieder-uhc-uster(-uebertragbar)`, four Red
+Castle Club tiers, `sponsoren-legi`) - a fixed list would either miss real categories or need
+updating by hand every time the catalog changes; deriving it from whatever products actually appear
+in the selected games' scans stays correct automatically. Rejected/duplicate scan counts are shown
+per game too (`scan_events.result != 'accepted'`) - a cheap, genuinely useful operational KPI (spot a
+game with unusual forged-ticket or duplicate-scan activity) that falls out of the same query.
+**Resolved.**
+
+**D45 — Admin nav restyled to match the shop's own red/logo branding, and the send-cards form moved
+from an inline expanding section into a real modal.** Claudio: the admin area's plain dark bar didn't
+feel connected to the rest of the site, and the inline "Karten versenden" section was easy to miss
+after clicking its toggle button ("so habe ich gar nicht gemerkt, dass es aufgegangen ist"). Fixed by
+(1) giving the nav the club logo + a red (`--color-accent` - the one accent color this whole project
+uses, no new color introduced) "Admin Bereich" label top-left, a light background instead of dark
+(needed anyway since the logo file has a solid white background), and CSS-grid centering for the nav
+links so they're centered regardless of the brand/logout blocks' widths either side; (2) reusing the
+existing `Modal` component (already built for delete-confirmation, previously unused anywhere else in
+admin) for the send-cards form, which can't be scrolled past unnoticed the way an inline expand could.
+**Resolved.**

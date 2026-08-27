@@ -482,63 +482,69 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
       <div className={styles.section}>
         <div className={styles.header}>
           <h2>Karten versenden</h2>
-          {!showSendForm && (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setSendTarget(null);
+              setShowSendForm(true);
+            }}
+            disabled={pendingCount === 0}
+          >
+            {pendingCount} Karte(n) versenden
+          </Button>
+        </div>
+        {sendResultMessage && <p style={{ color: "var(--color-text-secondary)" }}>{sendResultMessage}</p>}
+      </div>
+
+      <Modal
+        open={showSendForm}
+        onClose={() => {
+          setShowSendForm(false);
+          setSendTarget(null);
+        }}
+        title="Karten versenden"
+      >
+        <div className={styles.form}>
+          <p style={{ color: "var(--color-text-secondary)" }}>
+            {sendTarget
+              ? `${sendCount} ausgewählte Mitglieder warten auf den Versand ihrer Karte(n).`
+              : `${sendCount} Mitglieder warten auf den Versand ihrer Karte(n).`}{" "}
+            Nachricht kann vor dem Versand angepasst werden - Platzhalter <code>{"{{vorname}}"}</code> und{" "}
+            <code>{"{{nachname}}"}</code> stehen zur Verfügung.
+          </p>
+          <Input label="Betreff" value={subject} onChange={(e) => setSubject(e.target.value)} />
+          <label>
+            Nachricht
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={8}
+              style={{ width: "100%", fontFamily: "var(--font-sans)", padding: "var(--space-3)" }}
+            />
+          </label>
+          <Input
+            label='Zum Bestätigen "Versenden" eingeben'
+            value={confirmation}
+            onChange={(e) => setConfirmation(e.target.value)}
+          />
+          <div className={styles.actions}>
+            <Button onClick={handleSend} disabled={isPending || confirmation !== "Versenden" || sendCount === 0}>
+              {sendCount} Karte(n) jetzt versenden
+            </Button>
             <Button
               type="button"
               variant="secondary"
               onClick={() => {
+                setShowSendForm(false);
                 setSendTarget(null);
-                setShowSendForm(true);
               }}
-              disabled={pendingCount === 0}
             >
-              {pendingCount} Karte(n) versenden
+              Abbrechen
             </Button>
-          )}
-        </div>
-        {showSendForm && (
-          <div className={styles.form}>
-            <p style={{ color: "var(--color-text-secondary)" }}>
-              {sendTarget
-                ? `${sendCount} ausgewählte Mitglieder warten auf den Versand ihrer Karte(n).`
-                : `${sendCount} Mitglieder warten auf den Versand ihrer Karte(n).`}{" "}
-              Nachricht kann vor dem Versand angepasst werden - Platzhalter <code>{"{{vorname}}"}</code> und{" "}
-              <code>{"{{nachname}}"}</code> stehen zur Verfügung.
-            </p>
-            <Input label="Betreff" value={subject} onChange={(e) => setSubject(e.target.value)} />
-            <label>
-              Nachricht
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={8}
-                style={{ width: "100%", fontFamily: "var(--font-sans)", padding: "var(--space-3)" }}
-              />
-            </label>
-            <Input
-              label='Zum Bestätigen "Versenden" eingeben'
-              value={confirmation}
-              onChange={(e) => setConfirmation(e.target.value)}
-            />
-            <div className={styles.actions}>
-              <Button onClick={handleSend} disabled={isPending || confirmation !== "Versenden" || sendCount === 0}>
-                {sendCount} Karte(n) jetzt versenden
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setShowSendForm(false);
-                  setSendTarget(null);
-                }}
-              >
-                Abbrechen
-              </Button>
-            </div>
           </div>
-        )}
-        {sendResultMessage && <p style={{ color: "var(--color-text-secondary)" }}>{sendResultMessage}</p>}
-      </div>
+        </div>
+      </Modal>
     </div>
   );
 }

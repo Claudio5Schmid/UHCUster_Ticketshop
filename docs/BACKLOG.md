@@ -45,7 +45,7 @@ any of this - just an honest inventory so nothing is quietly forgotten.
   replacement" - relevant if a cancelled order already had tickets issued.
 - **Viewing raw `scan_events`.** No admin UI lists them; investigating a suspected
   double-scan today means querying the table directly. The live view
-  (`/admin/live`) shows aggregate counts, not the individual log.
+  (`/admin/dashboard/[gameId]`) shows aggregate counts, not the individual log.
 - **Renaming a ticket holder from the admin UI.** `rename_ticket_holder()` (D18)
   exists and is tested, but nothing in the admin UI calls it yet.
 
