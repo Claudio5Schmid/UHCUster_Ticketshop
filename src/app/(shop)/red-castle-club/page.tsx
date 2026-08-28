@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Container } from "@/components/layout/Container/Container";
 import { ProductCard } from "@/components/shop/ProductCard/ProductCard";
 import { getActiveProducts } from "@/lib/products";
@@ -23,6 +24,14 @@ export default async function RedCastleClubPage() {
     <div>
       <section className={styles.hero}>
         <Container>
+          <Image
+            src="/red-castle-club-logo.png"
+            alt="Red Castle Club"
+            width={660}
+            height={164}
+            className={styles.heroLogo}
+            priority
+          />
           <span className={styles.heroEyebrow}>Saison {CURRENT_SEASON_LABEL}</span>
           <h1>Red Castle Club</h1>
           <p className={styles.heroLead}>

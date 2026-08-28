@@ -2,6 +2,12 @@
   padding-block: var(--space-8);
 }
 
+.heroLogo {
+  height: 72px;
+  width: auto;
+  margin-bottom: var(--space-5);
+}
+
 .heroEyebrow {
   font-size: var(--text-micro-size);
   font-weight: 600;
@@ -66,6 +72,24 @@
   max-width: 48ch;
   color: var(--color-text-secondary);
   margin-top: var(--space-2);
+}
+
+.teaserContent {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.teaserIcon {
+  height: 84px;
+  width: auto;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .teaserIcon {
+    height: 56px;
+  }
 }
 
 .gamesList {

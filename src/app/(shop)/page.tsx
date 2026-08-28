@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Container } from "@/components/layout/Container/Container";
 import { Button } from "@/components/ui/Button/Button";
 import { ProductCard } from "@/components/shop/ProductCard/ProductCard";
@@ -64,14 +65,23 @@ export default async function Home() {
         <section className={styles.section}>
           <Container>
             <div className={styles.teaser}>
-              <div>
-                <span className={styles.sectionEyebrow}>Red Castle Club</span>
-                <h2>Mehr als eine Saisonkarte</h2>
-                <p className={styles.teaserText}>
-                  Vier Stufen, von der persönlichen Saisonkarte bis zu übertragbaren
-                  VIP-Karten mit Gastro-Leistungen an den Heimspielen des
-                  L-UPL-Teams.
-                </p>
+              <div className={styles.teaserContent}>
+                <Image
+                  src="/red-castle-club-icon.png"
+                  alt=""
+                  width={240}
+                  height={164}
+                  className={styles.teaserIcon}
+                />
+                <div>
+                  <span className={styles.sectionEyebrow}>Red Castle Club</span>
+                  <h2>Mehr als eine Saisonkarte</h2>
+                  <p className={styles.teaserText}>
+                    Vier Stufen, von der persönlichen Saisonkarte bis zu übertragbaren
+                    VIP-Karten mit Gastro-Leistungen an den Heimspielen des
+                    L-UPL-Teams.
+                  </p>
+                </div>
               </div>
               <Button as="a" href="/red-castle-club" variant="secondary">
                 Red Castle Club entdecken
