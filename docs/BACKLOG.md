@@ -30,24 +30,24 @@ any of this - just an honest inventory so nothing is quietly forgotten.
   program enrollment and certificates; Google needs a Business Console issuer account.
   Every ticket already has a fully functional PDF regardless - revisit Google first
   once Claudio has an issuer account to actually test against.
-- **Real Turnstile keys.** `.env.local` and Vercel were on Cloudflare's public always-
-  pass test keys through most of development; Claudio was mid-way through swapping in
-  a real Turnstile site's keys as of this writing (docs/DECISIONS.md D25). Confirm
-  it's finished before relying on real spam protection at launch.
+- **Real Turnstile keys — confirmed live.** Checked directly against the production
+  site (2026-08-28): the checkout page serves a real Cloudflare-issued sitekey
+  (`0x4AAAAAAE...` format), not one of the three known always-pass/always-block test
+  keys. No longer open.
 
-## Admin tooling gaps (all currently possible only via direct SQL)
+## Admin tooling gaps — closed 2026-08-28 (see docs/DECISIONS.md D46)
 
-- **Adding a second admin account.** `/admin/setup` is intentionally one-time (D26) -
-  there's no in-app way to add further admins yet. Needs either an "invite admin"
-  flow or, at minimum, documented SQL steps for whoever holds database access.
-- **Voiding a single ticket without replacing it.** `reissue_ticket()` exists (voids +
-  replaces), but there's no function or UI for "just cancel this one ticket, no
-  replacement" - relevant if a cancelled order already had tickets issued.
-- **Viewing raw `scan_events`.** No admin UI lists them; investigating a suspected
-  double-scan today means querying the table directly. The live view
-  (`/admin/dashboard/[gameId]`) shows aggregate counts, not the individual log.
-- **Renaming a ticket holder from the admin UI.** `rename_ticket_holder()` (D18)
-  exists and is tested, but nothing in the admin UI calls it yet.
+All four items below are now built:
+
+- ~~Adding a second admin account~~ — `/admin/admins` (in-app, gated on being an
+  existing admin - `/admin/setup` (D26) stays one-time-only for the very first one).
+- ~~Voiding a single ticket without replacing it~~ — `void_ticket()` (new function,
+  distinct from `reissue_ticket()`) + a "Stornieren" action per ticket on the order
+  detail page.
+- ~~Viewing raw `scan_events`~~ — a scan log table on `/admin/dashboard/[gameId]`,
+  below the existing aggregate live-stats.
+- ~~Renaming a ticket holder from the admin UI~~ — inline-editable on the order
+  detail page's ticket rows, calling the already-existing `rename_ticket_holder()`.
 
 ## Data model gaps
 

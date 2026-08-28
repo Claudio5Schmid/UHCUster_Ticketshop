@@ -97,6 +97,12 @@ to satisfy the `is_admin()` check on its own insert policy — so `/admin/setup`
 via a one-time Server Action using the service-role client, disabled the moment this table has any
 row at all. See `docs/DECISIONS.md` D26.
 
+Every admin after the first goes through `/admin/admins` instead (D46) — still creates the Auth user
+via the service-role client (unavoidable, that's a service-role-only operation), but the `admin_users`
+insert itself goes through the caller's own session, so it's gated by the real "Admins can insert
+admin_users" RLS policy rather than only the function's own `is_admin()` check. Removing an admin
+there only deletes the `admin_users` row, never the Auth account.
+
 ## audit_log
 
 A generic, append-only trail covering order status/refund-owed transitions (including the automatic
@@ -172,9 +178,14 @@ unchanged, since to that code a member-card order looks exactly like any other p
 `docs/DECISIONS.md` D38). Admin-only (`is_admin()` check, `authenticated`-only grant), same pattern as
 every other mutation function above.
 
+`void_ticket(p_ticket_id)` (post-Phase-8, D46) sets a ticket's status to `storniert` with nothing
+issued in its place - distinct from `reissue_ticket()`, which always creates a replacement. Same
+shape as `rename_ticket_holder()`: `is_admin()` check, row-locked read, `audit_log` write, refuses a
+ticket that's already `storniert` or `ersetzt`.
+
 ## RLS verification
 
-`supabase/tests/rls_test.sql` is a 105-assertion pgTAP suite (run via the Supabase SQL editor or
+`supabase/tests/rls_test.sql` is a 111-assertion pgTAP suite (run via the Supabase SQL editor or
 `execute_sql`, wrapped in a rolled-back transaction) covering: the public/admin product split, full
 lockout of `anon` and non-admin `authenticated` sessions across every other table, that bare
 writes to `orders`/`tickets` have no effect while the dedicated functions succeed and log correctly,
@@ -182,8 +193,9 @@ that the three append-only tables reject direct mutation even at owner level, or
 generation, the auto-cancel job, `create_order()` (system-only access, and that a tampered price
 injected into a line is silently ignored in favour of the real product price), Phase 6's
 `issue_tickets_for_order`/`set_files_handed_over`, Phase 7/8's `game_scanner_codes` and
-`check_order_rate_limit`, and the post-Phase-8 member-import additions (`create_member_order` access
-control and output shape, `members` table RLS). All 105 pass as of this writing.
+`check_order_rate_limit`, the post-Phase-8 member-import additions (`create_member_order` access
+control and output shape, `members` table RLS), and `void_ticket` (D46). All 111 pass as of this
+writing.
 
 Phase 7's scanner writes aren't in this suite: they don't go through a `SECURITY DEFINER` Postgres
 function at all (see D32) — `/api/scanner/scan` verifies its own signed session token and writes via

@@ -303,7 +303,18 @@ through `tickets` to `products.name` - not from tickets sold, and not a hardcode
 expanding section into the shared `Modal` component (D45), so it can't go unnoticed the way the
 inline version could.
 
-## 13. Open questions — superseded by `docs/DECISIONS.md`
+## 13. Admin tooling gaps closed (post-Phase-8, D46)
+
+All four gaps `docs/BACKLOG.md` had tracked as "admin tooling, currently SQL-only" are built: a new
+`/admin/admins` page for adding/removing admin accounts in-app (real Supabase Auth users via the
+service-role client, same mechanism as `/admin/setup`'s one-time bootstrap); `void_ticket()` plus a
+"Stornieren" action on the order detail page's ticket rows, for voiding a single ticket with no
+replacement issued (distinct from `reissue_ticket()`); inline-editable ticket holder names on the
+same page, finally calling the already-existing `rename_ticket_holder()`; and a per-game scan log
+table on `/admin/dashboard/[gameId]`, below the aggregate live stats, for investigating a suspected
+double-scan or a run of rejections without querying `scan_events` directly.
+
+## 14. Open questions — superseded by `docs/DECISIONS.md`
 
 The five items originally listed here (Supabase project/plan, missing design doc, missing price
 list/schedule/Eventfrog links, the HMAC-vs-offline-verification tension, and the brief's mandated

@@ -470,3 +470,24 @@ links so they're centered regardless of the brand/logout blocks' widths either s
 existing `Modal` component (already built for delete-confirmation, previously unused anywhere else in
 admin) for the send-cards form, which can't be scrolled past unnoticed the way an inline expand could.
 **Resolved.**
+
+**D46 — Closed all four `docs/BACKLOG.md` admin tooling gaps in one pass, per Claudio's explicit
+"admin lücken bitte schliessen".** Each follows an existing, already-tested pattern rather than
+inventing a new one:
+- `void_ticket(p_ticket_id)` mirrors `rename_ticket_holder()`'s exact shape (same admin check, same
+  `for update` row lock, same `audit_log` write) - distinct from `reissue_ticket()`, which always
+  creates a replacement; this one just sets `status = 'storniert'` with nothing issued in its place.
+  Covered by 6 new pgTAP assertions (Group L, `supabase/tests/rls_test.sql`, 111 total now).
+- Ticket holder rename moved from "function exists, nothing calls it" to an inline-editable field on
+  the order detail page's ticket rows - same blur-to-save pattern already used for `members.kategorie`.
+- The scan log (`getScanLogForGame`, `src/lib/admin/live.ts`) is a plain per-game table below the
+  existing aggregate live stats - newest scan first, so a suspected double-scan or a run of rejections
+  right after they happen is the common case it's built for.
+- `/admin/admins` creates real Supabase Auth users via the service-role client (mirrors
+  `bootstrapFirstAdmin`'s own mechanism exactly - `/admin/setup` (D26) stays permanently one-time-only
+  for the very first admin), but the `admin_users` insert itself goes through the caller's own
+  session so it stays gated by the real RLS policy, not just the function's own `is_admin()` check.
+  Removing an admin only deletes the `admin_users` row, never the underlying Auth account (a mistaken
+  removal is recoverable without recreating login credentials) - guarded against removing yourself or
+  the last remaining admin.
+**Resolved.**

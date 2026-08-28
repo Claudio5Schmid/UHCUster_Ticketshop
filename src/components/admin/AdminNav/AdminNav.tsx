@@ -19,6 +19,7 @@ export function AdminNav() {
           <Link href="/admin/schedule">Spielplan</Link>
           <Link href="/admin/dashboard">Dashboard</Link>
           <Link href="/admin/export">Export</Link>
+          <Link href="/admin/admins">Admins</Link>
         </div>
         <form action={logout} className={styles.logoutForm}>
           <button type="submit" className={styles.logoutButton}>

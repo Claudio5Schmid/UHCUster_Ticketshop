@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(105);
+select plan(111);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -646,6 +646,54 @@ select ok((select count(*) from public.members) >= 1, 'admin sees at least the m
 select lives_ok(
   $$update public.members set kategorie = 'Vorstand' where email = 'admin-member@example.com'$$,
   'admin can update a member'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+-- ============================================================================
+-- Group L: void_ticket (admin tooling gap - void a ticket with no replacement)
+-- ============================================================================
+
+set local role anon;
+select throws_ok(
+  $$select public.void_ticket('f0000000-0000-0000-0000-000000000002')$$,
+  '42501',
+  'permission denied for function void_ticket',
+  'anon cannot call void_ticket'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
+select throws_ok(
+  $$select public.void_ticket('f0000000-0000-0000-0000-000000000002')$$,
+  'P0001',
+  'only admins can void tickets',
+  'non-admin authenticated cannot call void_ticket'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+select lives_ok(
+  $$select public.void_ticket('f0000000-0000-0000-0000-000000000002')$$,
+  'admin can void a valid ticket'
+);
+select is(
+  (select status from public.tickets where id = 'f0000000-0000-0000-0000-000000000002'),
+  'storniert',
+  'the voided ticket now has status storniert'
+);
+select ok(
+  (select exists(select 1 from public.audit_log where entity_type = 'ticket' and entity_id = 'f0000000-0000-0000-0000-000000000002' and action = 'voided')),
+  'the void was logged to audit_log'
+);
+select throws_ok(
+  $$select public.void_ticket('f0000000-0000-0000-0000-000000000002')$$,
+  'P0001',
+  'ticket f0000000-0000-0000-0000-000000000002 is already storniert and cannot be voided again',
+  'void_ticket refuses a ticket that is already voided'
 );
 reset role;
 reset request.jwt.claim.sub;
