@@ -39,6 +39,10 @@ export default async function AdminProductsPage() {
           Neues Produkt
         </Button>
       </div>
+      <p style={{ color: "var(--color-text-secondary)", marginBottom: "var(--space-6)" }}>
+        Die folgenden Preise werden so auf der Webseite angezeigt. Klicke auf ein Angebot, um es zu bearbeiten. Der
+        Status zeigt, ob das jeweilige Angebot auf der Webseite sichtbar ist.
+      </p>
       <Table caption="Produkte" columns={columns} rows={products} getRowKey={(product) => product.id} />
     </div>
   );
