@@ -491,3 +491,21 @@ inventing a new one:
   removal is recoverable without recreating login credentials) - guarded against removing yourself or
   the last remaining admin.
 **Resolved.**
+
+**D47 — Red Castle Club shop cards get real metal colors too, reversing the website's own
+"no literal gold/silver/bronze" rule from Phase 2 (D29) - scoped to exactly the Bronze/Silber/Gold
+tiers, the same scope D29 already used for the PDF passes.** Claudio, looking at the actual card
+grid, asked to color the tiles "in die entsprechende Farbe" so they visually stand out more than the
+plain white cards did. Rather than inventing a second set of gold/silver/bronze tones, `src/lib/tier
+-colors.ts` (moved from `src/lib/tickets/` to `src/lib/` since it's no longer PDF-only, sibling to
+`src/lib/tier.ts`) now also exports each color as a web-usable hex string - the literal same accent
+Claudio already approved for the printed pass now shows up on the web card too (eyebrow label,
+border, and a soft background tint - the same three elements a Bronze/Silber/Gold PDF pass uses).
+Tier 0-1 (season passes, and the Red Castle Club "Normal" tier) are completely unaffected - `Card`'s
+new `accentColor`/`tintColor` props are only ever set when `getTicketAccentColor` returns a real
+metal (i.e. `metalName !== null`), so the existing "quiet gradation via spacing/shadow" system
+(`tier.ts`) keeps running underneath for everything else, restrained as before. Also loosened
+`.cardGrid`'s `minmax` from 280px to 240px, per Claudio's "4 Kacheln in einer Reihe wenn möglich" -
+now fits all four Red Castle Club tiers on one row at normal desktop widths, while still degrading
+gracefully to fewer columns (confirmed down to a single column at mobile width) since it's still
+`auto-fit`, not a hardcoded 4-column grid. **Resolved.**

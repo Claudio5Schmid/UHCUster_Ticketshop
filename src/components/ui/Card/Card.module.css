@@ -1,12 +1,12 @@
 .card {
-  background: var(--color-surface);
+  background: var(--card-tint, var(--color-surface));
   border-radius: var(--radius-lg);
   padding: var(--tier-padding, var(--space-6));
   display: flex;
   flex-direction: column;
   gap: var(--tier-gap, var(--space-4));
   box-shadow: 0 1px 3px rgba(0, 0, 0, var(--tier-shadow-opacity, 0.06));
-  border: 1px solid rgba(17, 17, 17, var(--tier-border-opacity, 0.08));
+  border: 1px solid var(--card-accent, rgba(17, 17, 17, var(--tier-border-opacity, 0.08)));
 }
 
 .image {
@@ -21,8 +21,10 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  /* Accent presence fades as tier rises - restraint reads as premium. */
-  color: color-mix(in srgb, var(--color-accent) calc(var(--tier-accent-intensity, 1) * 100%), var(--color-text-secondary));
+  /* Accent presence fades as tier rises - restraint reads as premium - unless a
+   * literal accent color (e.g. a Red Castle Club metal tone) is set, which always
+   * shows at full strength since it's the whole point of setting it. */
+  color: var(--card-accent, color-mix(in srgb, var(--color-accent) calc(var(--tier-accent-intensity, 1) * 100%), var(--color-text-secondary)));
 }
 
 .title {

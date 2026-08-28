@@ -2,7 +2,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 import QRCode from "qrcode";
 import { readFile } from "fs/promises";
 import path from "path";
-import { getTicketAccentColor } from "./tier-colors";
+import { getTicketAccentColor } from "@/lib/tier-colors";
 import { CURRENT_SEASON_LABEL } from "@/lib/season";
 import type { ProductBenefits } from "@/lib/products";
 

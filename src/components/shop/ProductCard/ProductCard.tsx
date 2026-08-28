@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/Card/Card";
 import { AddToCartButton } from "@/components/shop/AddToCartButton/AddToCartButton";
 import type { Product } from "@/lib/products";
 import { calculateSavings, formatRappenAsChf } from "@/lib/pricing";
+import { getTicketAccentColor } from "@/lib/tier-colors";
 import styles from "./ProductCard.module.css";
 
 interface ProductCardProps {
@@ -16,10 +17,13 @@ export function ProductCard({ product, gameCount, eyebrow }: ProductCardProps) {
   const savings = calculateSavings(product.price_rappen, product.benefits?.single_ticket_price_rappen, gameCount);
   const includedPasses = product.benefits?.included_passes ?? 1;
   const transferable = product.benefits?.transferable ?? false;
+  const { accentHex, tintHex, metalName } = getTicketAccentColor(product.type, product.tier_level);
 
   return (
     <Card
       tier={product.tier_level}
+      accentColor={metalName ? accentHex : undefined}
+      tintColor={metalName ? tintHex : undefined}
       eyebrow={eyebrow ?? (product.type === "membership" ? "Red Castle Club" : "Saisonkarte")}
       title={product.name}
       footer={
