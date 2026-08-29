@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:local": "playwright test --config=playwright.config.local.ts",
+    "test:preview": "playwright test --config=playwright.config.preview.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1119.0",
@@ -25,6 +27,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",
     "@types/qrcode": "^1.5.6",
