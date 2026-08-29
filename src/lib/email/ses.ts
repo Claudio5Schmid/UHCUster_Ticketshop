@@ -57,12 +57,23 @@ export function isUndeliverableAddress(email: string): boolean {
 
 /** Returns true if the message was handed to SES, false if the address was skipped
  * as structurally undeliverable (see isUndeliverableAddress). Throws only on a real
- * send failure. */
+ * send failure.
+ *
+ * Note that SES accepting a message says nothing about it being delivered: if the
+ * From domain can't pass SPF/DKIM alignment for the sending path, receivers drop it
+ * silently after SES has already reported success. SES_FROM_EMAIL therefore has to be
+ * an address on a domain verified in SES with DKIM enabled - never a free-mail address
+ * like gmail.com, whose DNS the club cannot authorise SES in.
+ */
 export async function sendEmail(input: SendEmailInput): Promise<boolean> {
   const fromEmail = process.env.SES_FROM_EMAIL;
   if (!fromEmail) {
     throw new Error("SES_FROM_EMAIL must be set to send email.");
   }
+
+  // Lets the From be a no-reply address on the club's own domain while replies still
+  // reach a mailbox someone reads - the confirmation invites the customer to reply.
+  const replyTo = process.env.SES_REPLY_TO?.trim() || undefined;
 
   if (isUndeliverableAddress(input.to)) {
     console.warn(`[email] Skipped ${input.subject} to a reserved-TLD address - would hard-bounce.`);
@@ -73,6 +84,7 @@ export async function sendEmail(input: SendEmailInput): Promise<boolean> {
   await transporter.sendMail({
     from: fromEmail,
     to: input.to,
+    ...(replyTo ? { replyTo } : {}),
     subject: input.subject,
     text: input.bodyText,
     ...(input.bodyHtml ? { html: input.bodyHtml } : {}),

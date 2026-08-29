@@ -575,3 +575,33 @@ sandbox mode. The IAM user (`uhcuster-ticketshop-smtp`) is correctly send-only a
 `GetAccount`, so this could not be checked from here. In sandbox, SES silently accepts sends only
 to *verified* addresses - meaning real customers would receive nothing while the app records every
 send as successful. This must be confirmed in the AWS console before 5 September.
+
+**D50 — The order confirmation could not be delivered because SES_FROM_EMAIL is a gmail.com
+address; sending must move to the club's own domain.** The first real test send (to a
+Google-verified recipient, account still in SES sandbox) was accepted by SES - `sendEmail` returned
+true with no error - and never arrived. Cause, confirmed by DNS rather than assumed: the configured
+From address is on `gmail.com`. Mail sent through SES claiming that From can never pass SPF
+alignment (gmail.com's SPF does not authorise AWS SES, and the club obviously cannot change
+Google's DNS) nor DKIM alignment (that needs DNS control over the From domain). Receiving mail
+servers - Gmail above all, which is deliberately strict about mail claiming `@gmail.com` arriving
+from a non-Google host - therefore drop it silently *after* SES has already reported success. This
+is why "SES accepted it" is not evidence of delivery, and the code now says so at the call site.
+
+The fix is DNS work outside this repo, on `uhcuster.ch` (currently `v=spf1 mx include:spf.zynex.ch
+-all`, and no DMARC record at all):
+  1. Verify `uhcuster.ch` as a **domain identity** in SES in `eu-central-1` and enable Easy DKIM,
+     adding the three CNAME records SES issues.
+  2. Add SES to the SPF record: `v=spf1 mx include:spf.zynex.ch include:amazonses.com -all`. The
+     existing `-all` is a hard fail, so without this SES-sent mail is explicitly rejected.
+  3. Set `SES_FROM_EMAIL` to an address on that domain (e.g. `tickets@uhcuster.ch`).
+  4. Optionally publish a DMARC record once 1-2 are in place.
+
+`SES_REPLY_TO` was added for the case where the From becomes a no-reply address - the confirmation
+invites the customer to reply, so that invitation has to reach a real mailbox.
+
+Note this equally affects the **member card emails** (D40), which have been sending from the same
+gmail.com address all along - anything that appeared to work there was luck or a lenient receiver,
+not a working setup. Separately, and independently of all of the above, the account is still in the
+**SES sandbox** (confirmed by Claudio), so only verified recipients get anything at all until
+production access is granted - AWS takes up to 24 hours to approve. **Both must be resolved before
+5 September.**
