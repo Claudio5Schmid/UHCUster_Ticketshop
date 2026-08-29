@@ -23,26 +23,36 @@
   background: var(--color-accent);
 }
 
+/* The price sits on one line with its suffix (never wrapping under the button, which
+   is what previously knocked the rows out of alignment), and the savings line always
+   reserves its height even when a product has no savings to show - so a "Gratis" card
+   and a CHF 150.- card put their button on exactly the same line. */
 .priceBlock {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  align-items: baseline;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  min-height: 2rem;
 }
 
 .price {
   font-size: var(--text-h3-size);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .priceSuffix {
   font-size: var(--text-small-size);
   font-weight: 400;
   color: var(--color-text-secondary);
+  white-space: nowrap;
 }
 
 .savings {
   font-size: var(--text-micro-size);
+  line-height: 1.4;
   color: var(--color-text-secondary);
+  min-height: 1.4em;
 }
 
 .savingsValue {

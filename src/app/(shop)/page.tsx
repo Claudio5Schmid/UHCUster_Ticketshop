@@ -28,14 +28,14 @@ export default async function Home() {
       <section className={styles.hero}>
         <Container>
           <span className={styles.heroEyebrow}>Saison {CURRENT_SEASON_LABEL}</span>
-          <h1>Deine Saisonkarte für den UHC Uster</h1>
+          <h1>Sichere dir jetzt deinen Platz</h1>
           <p className={styles.heroLead}>
             Ein Ticket für die ganze Saison: alle Heimspiele des UHC Uster, ohne
             Einzelkauf. Einzeleintritte für einzelne Spiele gibt es weiterhin über
             Eventfrog.
           </p>
           <div className={styles.heroActions}>
-            <Button as="a" href="#saisonkarten">
+            <Button as="a" href="#saisonkarten" variant="accent">
               Saisonkarte sichern
             </Button>
             <Button as="a" href="/spielplan" variant="secondary">

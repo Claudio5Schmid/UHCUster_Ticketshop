@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Container } from "@/components/layout/Container/Container";
 import { CartButton } from "@/components/shop/CartButton/CartButton";
+import { MobileNav } from "./MobileNav";
 import styles from "./Header.module.css";
 
 export function Header() {
@@ -26,6 +27,7 @@ export function Header() {
           </nav>
           <div className={styles.right}>
             <CartButton />
+            <MobileNav />
           </div>
         </div>
       </Container>

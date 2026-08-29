@@ -1,0 +1,114 @@
+/* Mirrors the desktop nav's breakpoint exactly: this control exists only below
+   768px, where .nav in Header.module.css is display:none. */
+.wrapper {
+  display: flex;
+  align-items: center;
+}
+
+@media (min-width: 768px) {
+  .wrapper {
+    display: none;
+  }
+}
+
+.toggle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  padding: 0 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.bar {
+  display: block;
+  height: 2px;
+  width: 100%;
+  background: var(--color-text);
+  border-radius: 1px;
+  transition: transform var(--duration-fast) var(--easing-standard),
+    opacity var(--duration-fast) var(--easing-standard);
+}
+
+/* Collapses the three bars into an X while the panel is open. */
+.barTopOpen {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.barMiddleOpen {
+  opacity: 0;
+}
+
+.barBottomOpen {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  /* Sits below the sticky header (z-index 50) so the toggle stays tappable to close. */
+  z-index: 40;
+  background: rgba(17, 17, 17, 0.32);
+}
+
+.panel {
+  position: fixed;
+  top: 64px;
+  left: 0;
+  right: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow-modal);
+  padding: var(--space-2) var(--container-padding-mobile) var(--space-4);
+}
+
+.panelOpen {
+  animation: slideDown var(--duration-base) var(--easing-standard);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panelOpen {
+    animation: none;
+  }
+}
+
+.link {
+  padding: var(--space-4) 0;
+  font-size: var(--text-body-size);
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.link:last-child {
+  border-bottom: none;
+}
+
+.link:active {
+  color: var(--color-accent);
+}

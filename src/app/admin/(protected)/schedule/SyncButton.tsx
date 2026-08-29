@@ -15,7 +15,11 @@ export function SyncButton() {
     startTransition(async () => {
       try {
         const result = await syncGamesNow();
-        setMessage(`${result.synced} Spiele von Swiss Unihockey synchronisiert.`);
+        setMessage(
+          result.skipped > 0
+            ? `${result.synced} Spiele synchronisiert, ${result.skipped} von Hand angepasste übersprungen.`
+            : `${result.synced} Spiele von Swiss Unihockey synchronisiert.`
+        );
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "Fehler bei der Synchronisierung.");
       }

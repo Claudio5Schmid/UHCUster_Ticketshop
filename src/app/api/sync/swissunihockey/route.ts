@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase";
-import { fetchUpcomingHomeGames } from "@/lib/swissunihockey";
-import { CURRENT_SEASON, CURRENT_SEASON_START_YEAR } from "@/lib/season";
+import { syncGamesFromSwissUnihockey } from "@/lib/sync-games";
 
 /**
  * Scheduled sync: pulls UHC Uster's L-UPL home games (date, time, venue, opponent)
@@ -20,23 +19,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const games = await fetchUpcomingHomeGames(CURRENT_SEASON_START_YEAR);
-  const supabase = getSupabaseAdminClient();
-
-  const { error } = await supabase.from("games").upsert(
-    games.map((game) => ({
-      external_id: game.externalId,
-      season: CURRENT_SEASON,
-      opponent: game.opponent,
-      played_at: game.playedAt.toISOString(),
-      venue: game.venue,
-    })),
-    { onConflict: "external_id" }
-  );
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    const result = await syncGamesFromSwissUnihockey(getSupabaseAdminClient());
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Sync failed" }, { status: 500 });
   }
-
-  return NextResponse.json({ synced: games.length });
 }

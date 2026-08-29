@@ -15,13 +15,23 @@ export interface AttendanceReport {
   grandTotalByProduct: Record<string, number>;
   grandTotal: number;
   grandTotalRejected: number;
+  /** Accepted scans split by product *type* ("Saisonkarten" vs "Red Castle Club"),
+   * the split the club actually reports on, which product names alone don't give. */
+  grandTotalByCategory: Record<string, number>;
 }
+
+type ProductRef = { name: string; type: string } | { name: string; type: string }[] | null;
 
 interface ScanEventRow {
   game_id: string;
   result: string;
-  tickets: { products: { name: string } | { name: string }[] | null } | { products: { name: string } | { name: string }[] | null }[] | null;
+  tickets: { products: ProductRef } | { products: ProductRef }[] | null;
 }
+
+const CATEGORY_LABELS: Record<string, string> = {
+  season_pass: "Saisonkarten",
+  membership: "Red Castle Club",
+};
 
 function firstOf<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value;
@@ -37,7 +47,14 @@ function firstOf<T>(value: T | T[] | null): T | null {
  */
 export async function getAttendanceReport(gameIds: string[]): Promise<AttendanceReport> {
   if (gameIds.length === 0) {
-    return { games: [], productNames: [], grandTotalByProduct: {}, grandTotal: 0, grandTotalRejected: 0 };
+    return {
+      games: [],
+      productNames: [],
+      grandTotalByProduct: {},
+      grandTotal: 0,
+      grandTotalRejected: 0,
+      grandTotalByCategory: {},
+    };
   }
 
   const supabase = await getSupabaseServerClient();
@@ -51,10 +68,11 @@ export async function getAttendanceReport(gameIds: string[]): Promise<Attendance
 
   const { data: scans, error: scansError } = await supabase
     .from("scan_events")
-    .select("game_id, result, tickets(products(name))")
+    .select("game_id, result, tickets(products(name, type))")
     .in("game_id", gameIds);
   if (scansError) throw new Error(`Failed to load scan events: ${scansError.message}`);
 
+  const grandTotalByCategory: Record<string, number> = {};
   const productNamesSet = new Set<string>();
   const byGame = new Map<string, { totalAccepted: number; totalRejected: number; byProduct: Map<string, number> }>();
   for (const id of gameIds) {
@@ -76,6 +94,9 @@ export async function getAttendanceReport(gameIds: string[]): Promise<Attendance
     const productName = product?.name ?? "Unbekannt";
     productNamesSet.add(productName);
     bucket.byProduct.set(productName, (bucket.byProduct.get(productName) ?? 0) + 1);
+
+    const categoryLabel = product?.type ? (CATEGORY_LABELS[product.type] ?? product.type) : "Unbekannt";
+    grandTotalByCategory[categoryLabel] = (grandTotalByCategory[categoryLabel] ?? 0) + 1;
   }
 
   const productNames = [...productNamesSet].sort();
@@ -105,5 +126,6 @@ export async function getAttendanceReport(gameIds: string[]): Promise<Attendance
     grandTotalByProduct,
     grandTotal: gameRows.reduce((sum, g) => sum + g.totalAccepted, 0),
     grandTotalRejected: gameRows.reduce((sum, g) => sum + g.totalRejected, 0),
+    grandTotalByCategory,
   };
 }

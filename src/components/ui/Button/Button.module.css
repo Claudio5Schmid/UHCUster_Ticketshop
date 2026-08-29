@@ -43,6 +43,18 @@
   color: var(--color-accent);
 }
 
+/* Solid red - the single loudest call to action on a page (e.g. the hero's
+   "Saisonkarte sichern"). Deliberately rare: if every button is red, none of
+   them reads as the primary next step. */
+.accent {
+  background: var(--color-accent);
+  color: var(--color-dark-text);
+}
+
+.accent:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
 .sizeMd {
   padding: var(--space-3) var(--space-5);
 }

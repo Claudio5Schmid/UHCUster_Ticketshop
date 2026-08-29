@@ -19,12 +19,66 @@
   padding: var(--space-2) var(--space-4);
 }
 
+/* Compact summary of the whole pipeline, so the office reads the state of the shop
+   before reading any single row. */
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.summaryTile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.summaryTile[data-tone="accent"] {
+  border-color: var(--color-accent);
+  background: var(--color-error-bg);
+}
+
+.summaryTile[data-tone="success"] {
+  border-color: var(--color-success-border);
+  background: var(--color-success-bg);
+}
+
+.summaryTile[data-tone="info"] {
+  border-color: var(--color-info-border);
+  background: var(--color-info-bg);
+}
+
+.summaryValue {
+  font-size: var(--text-h3-size);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.summaryLabel {
+  font-size: var(--text-micro-size);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 .filters {
   display: flex;
   gap: var(--space-4);
   flex-wrap: wrap;
   align-items: flex-end;
   margin-bottom: var(--space-6);
+  transition: opacity var(--duration-fast) var(--easing-standard);
+}
+
+/* Dims while a filter navigation is in flight, so an auto-applied filter still gives
+   the feedback the removed "Filtern" button used to provide. */
+.filters[data-pending="true"] {
+  opacity: 0.6;
 }
 
 .filters > * {
@@ -34,6 +88,57 @@
 .searchField {
   flex: 1;
   min-width: 240px;
+}
+
+.statusCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.emptyState {
+  padding: var(--space-7) var(--space-5);
+  text-align: center;
+  color: var(--color-text-secondary);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.dashboardToolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-6);
+}
+
+.gameSelect {
+  min-width: 320px;
+}
+
+.liveLink {
+  color: var(--color-accent);
+  font-size: var(--text-small-size);
+  font-weight: 600;
+  text-decoration: none;
+  padding-bottom: var(--space-3);
+}
+
+.liveLink:hover {
+  text-decoration: underline;
+}
+
+.chartGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--space-5);
+  margin-bottom: var(--space-8);
+  transition: opacity var(--duration-fast) var(--easing-standard);
+}
+
+.chartGrid[data-pending="true"] {
+  opacity: 0.6;
 }
 
 .orderLink {

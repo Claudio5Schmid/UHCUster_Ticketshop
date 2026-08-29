@@ -25,6 +25,44 @@ export async function getNewOrderCount(): Promise<number> {
   return count ?? 0;
 }
 
+export interface OrderStatusCounts {
+  neu: number;
+  rechnung_versendet: number;
+  bezahlt: number;
+  storniert: number;
+  alle: number;
+  offener_betrag_rappen: number;
+}
+
+/** Drives the summary tiles above the orders list, so the office can see the shape of
+ * the pipeline (and how much money is still outstanding) without reading every row. */
+export async function getOrderStatusCounts(): Promise<OrderStatusCounts> {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase.from("orders").select("status, total_rappen");
+  if (error) throw new Error(`Failed to load order counts: ${error.message}`);
+
+  const counts: OrderStatusCounts = {
+    neu: 0,
+    rechnung_versendet: 0,
+    bezahlt: 0,
+    storniert: 0,
+    alle: 0,
+    offener_betrag_rappen: 0,
+  };
+
+  for (const row of data ?? []) {
+    const status = row.status as OrderStatus;
+    if (status in counts) counts[status] += 1;
+    counts.alle += 1;
+    // Outstanding = invoiced or awaiting invoice, but not yet paid and not cancelled.
+    if (status === "neu" || status === "rechnung_versendet") {
+      counts.offener_betrag_rappen += row.total_rappen ?? 0;
+    }
+  }
+
+  return counts;
+}
+
 const ORDER_COLUMNS = "id, order_number, status, refund_owed, total_rappen, created_at, customers(name)";
 
 export async function getOrders(filters: OrderFilters): Promise<OrderListItem[]> {

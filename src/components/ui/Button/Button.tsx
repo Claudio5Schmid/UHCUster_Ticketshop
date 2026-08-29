@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, AnchorHTMLAttributes, ReactNode } from "react";
 import styles from "./Button.module.css";
 
-type Variant = "primary" | "secondary";
+type Variant = "primary" | "secondary" | "accent";
 type Size = "sm" | "md";
 
 interface CommonProps {
@@ -37,7 +37,7 @@ export function Button(props: ButtonProps) {
 
   const classes = classNames(
     styles.button,
-    variant === "primary" ? styles.primary : styles.secondary,
+    styles[variant],
     size === "sm" ? styles.sizeSm : styles.sizeMd,
     fullWidth && styles.fullWidth,
     className

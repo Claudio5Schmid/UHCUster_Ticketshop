@@ -9,15 +9,17 @@ interface AddToCartButtonProps {
   productName: string;
   priceRappen: number;
   transferable: boolean;
+  fullWidth?: boolean;
 }
 
-export function AddToCartButton({ productId, productName, priceRappen, transferable }: AddToCartButtonProps) {
+export function AddToCartButton({ productId, productName, priceRappen, transferable, fullWidth }: AddToCartButtonProps) {
   const { addLine } = useCart();
   const { showToast } = useToast();
 
   return (
     <Button
       size="sm"
+      fullWidth={fullWidth}
       onClick={() => {
         addLine({ id: productId, name: productName, priceRappen, transferable });
         showToast(`${productName} zum Warenkorb hinzugefügt.`);

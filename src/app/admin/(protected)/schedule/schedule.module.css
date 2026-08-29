@@ -1,0 +1,102 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.opponent {
+  font-size: var(--text-h3-size);
+  font-weight: var(--text-h3-weight);
+  line-height: 1.2;
+}
+
+.meta {
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-1);
+}
+
+.badges {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Compact single row of small fields rather than one stacked form per attribute -
+   eleven games have to stay scannable on one screen. */
+.fieldRow {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.fieldRow > *:not(button) {
+  flex: 1;
+  min-width: 200px;
+}
+
+.detailsEditor {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.detailActions {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.linkButton {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-small-size);
+  font-weight: 600;
+  color: var(--color-accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.linkButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hint {
+  font-size: var(--text-micro-size);
+  color: var(--color-text-secondary);
+}
+
+.success {
+  font-size: var(--text-small-size);
+  color: var(--color-success-text);
+}
+
+.error {
+  font-size: var(--text-small-size);
+  color: var(--color-error-text);
+}

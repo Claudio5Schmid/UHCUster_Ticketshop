@@ -20,13 +20,38 @@
   --color-border-strong: #d4d4d4;
   --color-surface: #ffffff;
 
-  /* Feedback colors stay within the neutral+accent palette: red already covers
-     "error/urgent"; success/positive states use text-primary weight instead of
-     introducing green, per "no other colours beyond neutral greys." */
-  --color-success-text: #111111;
-  --color-success-bg: #fafafa;
+  /* Feedback colors. The original rule kept success states neutral ("no other
+     colours beyond neutral greys"); that is deliberately reversed here, scoped to
+     genuine status semantics only - the same kind of scoped exception already made
+     for the Red Castle Club metal tones. A paid order reading the same flat black
+     as an unpaid one made the admin lists hard to scan at a glance, which is the
+     one place in this app where status has to be readable in a half-second.
+     Green is only ever a *status* color: never a button, border, or heading. */
+  --color-success-text: #0f7a3d;
+  --color-success-bg: #eaf7ef;
+  --color-success-border: #b5e3c6;
   --color-error-text: #e4032e;
   --color-error-bg: #fdf0f1;
+  --color-warning-text: #8a5a00;
+  --color-warning-bg: #fdf5e6;
+  --color-warning-border: #f0dcae;
+  --color-info-text: #1f5f8b;
+  --color-info-bg: #eef5fa;
+  --color-info-border: #c3ddec;
+
+  /* Categorical chart palette. Data visualisation is the one context where the
+     neutral+red rule genuinely cannot work - a pie of six categories needs six
+     tellable-apart colors. Anchored on the brand red so charts still read as UHC
+     Uster, then spaced around the wheel at similar lightness so no single slice
+     dominates by accident. Order matters: series 1 is the most important slice. */
+  --chart-1: #e4032e;
+  --chart-2: #1f4e79;
+  --chart-3: #0f9d58;
+  --chart-4: #f2a900;
+  --chart-5: #6b3fa0;
+  --chart-6: #00868b;
+  --chart-7: #c2185b;
+  --chart-8: #5d6d7e;
 
   /* Type family: one grotesk throughout (docs/uhcusterdesignanalyse.md #2) */
   --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;

@@ -31,13 +31,12 @@ export function ProductCard({ product, gameCount, eyebrow }: ProductCardProps) {
           <div className={styles.priceBlock}>
             <span className={styles.price}>
               {product.price_rappen === 0 ? "Gratis" : formatRappenAsChf(product.price_rappen)}
-              {product.price_rappen > 0 && <span className={styles.priceSuffix}> / Saison</span>}
             </span>
+            {product.price_rappen > 0 && <span className={styles.priceSuffix}>/ Saison</span>}
+          </div>
+          <div className={styles.savings}>
             {savings && (
-              <span className={styles.savings}>
-                Einzeleintritte wären {formatRappenAsChf(savings.equivalentValueRappen)} wert -{" "}
-                <span className={styles.savingsValue}>du sparst {formatRappenAsChf(savings.savingsRappen)}</span>
-              </span>
+              <span className={styles.savingsValue}>du sparst {formatRappenAsChf(savings.savingsRappen)}</span>
             )}
           </div>
           <AddToCartButton
@@ -45,6 +44,7 @@ export function ProductCard({ product, gameCount, eyebrow }: ProductCardProps) {
             productName={product.name}
             priceRappen={product.price_rappen}
             transferable={transferable}
+            fullWidth
           />
         </>
       }

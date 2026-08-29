@@ -1,11 +1,15 @@
 import Link from "next/link";
-import { Select } from "@/components/ui/Select/Select";
-import { Input } from "@/components/ui/Input/Input";
-import { Button } from "@/components/ui/Button/Button";
 import { Badge } from "@/components/ui/Badge/Badge";
 import { Table, type TableColumn } from "@/components/ui/Table/Table";
-import { getNewOrderCount, getOrders, type OrderListItem, type OrderStatus } from "@/lib/admin/orders";
+import {
+  getNewOrderCount,
+  getOrderStatusCounts,
+  getOrders,
+  type OrderListItem,
+  type OrderStatus,
+} from "@/lib/admin/orders";
 import { formatRappenAsChf } from "@/lib/pricing";
+import { OrderFilters } from "./OrderFilters";
 import styles from "./admin.module.css";
 
 export async function generateMetadata() {
@@ -22,9 +26,12 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
   storniert: "storniert",
 };
 
+/** Paid is the one genuinely "done" state, so it's the only green one. New orders are
+ * the ones needing action (accent), invoiced is in-flight (info), cancelled is inert. */
 function statusBadgeVariant(status: OrderStatus) {
-  if (status === "bezahlt") return "accent" as const;
-  if (status === "storniert") return "outline" as const;
+  if (status === "bezahlt") return "success" as const;
+  if (status === "neu") return "accent" as const;
+  if (status === "rechnung_versendet") return "info" as const;
   return "neutral" as const;
 }
 
@@ -46,7 +53,14 @@ export default async function AdminOrdersPage({
   const status = (params.status as OrderStatus | "alle" | undefined) ?? "neu";
   const search = params.search ?? "";
 
-  const [newCount, orders] = await Promise.all([getNewOrderCount(), getOrders({ status, search })]);
+  const [counts, orders] = await Promise.all([getOrderStatusCounts(), getOrders({ status, search })]);
+
+  const summaryTiles = [
+    { key: "neu", label: "Neu", value: String(counts.neu), tone: counts.neu > 0 ? "accent" : "muted" },
+    { key: "rechnung_versendet", label: "Rechnung versendet", value: String(counts.rechnung_versendet), tone: "info" },
+    { key: "bezahlt", label: "Bezahlt", value: String(counts.bezahlt), tone: "success" },
+    { key: "offen", label: "Offener Betrag", value: formatRappenAsChf(counts.offener_betrag_rappen), tone: "muted" },
+  ] as const;
 
   const columns: TableColumn<OrderListItem>[] = [
     {
@@ -68,14 +82,10 @@ export default async function AdminOrdersPage({
       key: "status",
       header: "Status",
       render: (order) => (
-        <>
+        <div className={styles.statusCell}>
           <Badge variant={statusBadgeVariant(order.status)}>{STATUS_LABELS[order.status]}</Badge>
-          {order.refund_owed && (
-            <span style={{ marginLeft: "var(--space-2)" }}>
-              <Badge variant="outline">Rückerstattung offen</Badge>
-            </span>
-          )}
-        </>
+          {order.refund_owed && <Badge variant="warning">Rückerstattung offen</Badge>}
+        </div>
       ),
     },
     { key: "total", header: "Betrag", render: (order) => formatRappenAsChf(order.total_rappen) },
@@ -85,26 +95,27 @@ export default async function AdminOrdersPage({
     <div>
       <div className={styles.header}>
         <h1>Bestellungen</h1>
-        {newCount > 0 && <span className={styles.newCount}>{newCount} neu</span>}
+        {counts.neu > 0 && <span className={styles.newCount}>{counts.neu} neu</span>}
       </div>
 
-      <form className={styles.filters} method="get">
-        <Select name="status" label="Status" defaultValue={status}>
-          <option value="neu">Neu</option>
-          <option value="rechnung_versendet">Rechnung versendet</option>
-          <option value="bezahlt">Bezahlt</option>
-          <option value="storniert">Storniert</option>
-          <option value="alle">Alle</option>
-        </Select>
-        <div className={styles.searchField}>
-          <Input name="search" label="Suche" placeholder="Name oder Bestellnummer" defaultValue={search} />
-        </div>
-        <Button type="submit" variant="secondary">
-          Filtern
-        </Button>
-      </form>
+      <div className={styles.summaryGrid}>
+        {summaryTiles.map((tile) => (
+          <div key={tile.key} className={styles.summaryTile} data-tone={tile.tone}>
+            <span className={styles.summaryValue}>{tile.value}</span>
+            <span className={styles.summaryLabel}>{tile.label}</span>
+          </div>
+        ))}
+      </div>
 
-      <Table caption="Bestellungen" columns={columns} rows={orders} getRowKey={(order) => order.id} />
+      <OrderFilters status={status} search={search} />
+
+      {orders.length === 0 ? (
+        <p className={styles.emptyState}>
+          Keine Bestellungen für diese Auswahl. Andere Status wählen oder die Suche leeren.
+        </p>
+      ) : (
+        <Table caption="Bestellungen" columns={columns} rows={orders} getRowKey={(order) => order.id} />
+      )}
     </div>
   );
 }
