@@ -1,8 +1,15 @@
 "use server";
 
+import { after } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import { CURRENT_SEASON } from "@/lib/season";
 import { getClientIp, checkOrderRateLimit } from "@/lib/rate-limit";
+import { sendEmail } from "@/lib/email/ses";
+import {
+  orderConfirmationSubject,
+  orderConfirmationText,
+  orderConfirmationHtml,
+} from "@/lib/email/order-confirmation";
 
 export interface OrderLineInput {
   productId: string;
@@ -96,11 +103,46 @@ export async function submitOrder(
     throw new Error(error.message);
   }
 
-  return {
+  const confirmation: OrderConfirmation = {
     orderNumber: data.order_number,
     customerName: data.customer_name,
     customerEmail: data.customer_email,
     totalRappen: data.total_rappen,
     items: data.items,
   };
+
+  // Runs after the response is flushed, so a slow or failing SES never delays the
+  // customer's confirmation screen - and, critically, never fails an order that is
+  // already committed. The order is the thing that matters; the email is a courtesy
+  // copy of it. Failures are logged and left visible as a null
+  // orders.confirmation_email_sent_at for the office.
+  after(async () => {
+    await sendOrderConfirmationEmail(confirmation);
+  });
+
+  return confirmation;
+}
+
+async function sendOrderConfirmationEmail(confirmation: OrderConfirmation): Promise<void> {
+  try {
+    const sent = await sendEmail({
+      to: confirmation.customerEmail,
+      subject: orderConfirmationSubject(confirmation.orderNumber),
+      bodyText: orderConfirmationText(confirmation),
+      bodyHtml: orderConfirmationHtml(confirmation),
+    });
+
+    if (!sent) return;
+
+    const supabase = getSupabaseAdminClient();
+    await supabase
+      .from("orders")
+      .update({ confirmation_email_sent_at: new Date().toISOString() })
+      .eq("order_number", confirmation.orderNumber);
+  } catch (emailError) {
+    console.error(
+      `[order-confirmation] Failed to send confirmation for ${confirmation.orderNumber}:`,
+      emailError instanceof Error ? emailError.message : emailError
+    );
+  }
 }

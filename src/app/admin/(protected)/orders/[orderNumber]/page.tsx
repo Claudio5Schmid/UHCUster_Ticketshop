@@ -54,6 +54,22 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
           <dd>{formatRappenAsChf(order.total_rappen)}</dd>
           <dt>Rückerstattung ausstehend</dt>
           <dd>{order.refund_owed ? "Ja" : "Nein"}</dd>
+          {/* Answers "der Kunde sagt, er habe nichts bekommen" without digging through logs. */}
+          <dt>Bestellbestätigung</dt>
+          <dd>
+            {order.confirmation_email_sent_at ? (
+              <Badge variant="success">
+                Versendet{" "}
+                {new Intl.DateTimeFormat("de-CH", {
+                  timeZone: "Europe/Zurich",
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                }).format(new Date(order.confirmation_email_sent_at))}
+              </Badge>
+            ) : (
+              <Badge variant="warning">Nicht versendet</Badge>
+            )}
+          </dd>
         </dl>
       </div>
 

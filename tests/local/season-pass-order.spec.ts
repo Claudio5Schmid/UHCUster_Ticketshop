@@ -40,7 +40,7 @@ test("Season-Pass-Bestellung E2E: Produkt wählen, Formular ausfüllen, absenden
   const supabase = createServiceRoleClient();
   const { data: order, error } = await supabase
     .from("orders")
-    .select("status, total_rappen, customers(email, name)")
+    .select("status, total_rappen, confirmation_email_sent_at, customers(email, name)")
     .eq("order_number", orderNumber)
     .single();
 
@@ -48,4 +48,11 @@ test("Season-Pass-Bestellung E2E: Produkt wählen, Formular ausfüllen, absenden
   expect(order?.status).toBe("neu");
   expect(order?.total_rappen).toBe(PRODUCT_PRICE_RAPPEN);
   expect((order?.customers as unknown as { email: string; name: string } | null)?.email).toBe(customer.email);
+
+  // The order confirmation email must NOT have been sent here: test customers use the
+  // reserved @playwright-test.invalid domain, which would hard-bounce and damage the
+  // SES sending reputation. A timestamp appearing here means the bounce guard in
+  // src/lib/email/ses.ts stopped working - that is a real production problem, not a
+  // test-only detail, so it is asserted on every run.
+  expect(order?.confirmation_email_sent_at).toBeNull();
 });

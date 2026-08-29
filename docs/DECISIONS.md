@@ -539,3 +539,39 @@ The residual risk is real and should be understood: this is hand-rolled auth, so
 Supabase's key rotation, revocation, or refresh handling. There is no way to revoke a leaked token
 before its 8 hours are up other than rotating `SCANNER_SESSION_SECRET` (which logs out every scanner
 at once, mid-game). **Deferred by decision - revisit after 5 September, preferring option (a).**
+
+**D49 — Customers now get an order-confirmation email, reversing D38's "no order confirmations"
+for exactly this one message.** Until now the confirmation existed only as a rendered page: close
+the tab and the order number was gone for good, with nothing in the customer's inbox until the
+office got round to sending the invoice by hand days later. Claudio asked for the mail to be built.
+This is the second scoped exception to the "no email, ever" rule, after member cards (D40) - it is
+*not* a general opening of the floodgates: still no admin notifications, no reminders, no marketing.
+
+Content deliberately mirrors the on-screen confirmation (`src/app/(shop)/kasse/page.tsx`) rather
+than inventing a second version of the story: order number, line items, total, and the same three
+numbered next steps. It states outright that it is **not** the invoice and that the customer should
+not transfer anything yet - without that, an email containing a total and an order number reads
+exactly like a bill, and people would pay against it before the real invoice (with the actual
+payment details) ever arrives. Sent as both `text` and a single-column inline-styled HTML part;
+no images, no external CSS, no flex/grid, since desktop mail clients drop all of those.
+
+**Sending is best-effort and deliberately cannot fail an order.** It runs inside Next's `after()`,
+so it happens once the response is already flushed: a slow or broken SES never delays the
+confirmation screen, and - the point that matters - never turns a committed order into a visible
+error for the customer. The order is the real artifact; the mail is a courtesy copy of it. Any
+failure is logged and left legible as a null `orders.confirmation_email_sent_at`, surfaced on the
+admin order detail as a "Nicht versendet" badge, so "the customer says they got nothing" is a
+question the office can answer from the UI instead of from server logs.
+
+**Reserved-TLD guard (`isUndeliverableAddress`).** The Playwright suite deliberately creates real
+orders on the production project with `@playwright-test.invalid` customers. Left alone, every local
+test run would have fired hard bounces at SES, and AWS suspends accounts over sustained bounce
+rates - so RFC 2606/6761 reserved TLDs (`.invalid`, `.test`, `.example`, `.localhost`) are never
+handed to SES at all. `season-pass-order.spec.ts` asserts `confirmation_email_sent_at` stays null
+for exactly this reason: it is a guard against a production reputation problem, not a test detail.
+
+**Open operational question, not resolved in code:** whether the AWS SES account is still in
+sandbox mode. The IAM user (`uhcuster-ticketshop-smtp`) is correctly send-only and cannot call
+`GetAccount`, so this could not be checked from here. In sandbox, SES silently accepts sends only
+to *verified* addresses - meaning real customers would receive nothing while the app records every
+send as successful. This must be confirmed in the AWS console before 5 September.
