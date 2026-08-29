@@ -6,6 +6,7 @@ import { Container } from "@/components/layout/Container/Container";
 import { Button } from "@/components/ui/Button/Button";
 import { Input } from "@/components/ui/Input/Input";
 import { TurnstileWidget } from "@/components/shop/TurnstileWidget/TurnstileWidget";
+import { CheckoutSteps } from "@/components/shop/CheckoutSteps/CheckoutSteps";
 import { useCart } from "@/lib/cart";
 import { formatRappenAsChf } from "@/lib/pricing";
 import { submitOrder, type OrderConfirmation } from "./actions";
@@ -63,13 +64,18 @@ export default function KassePage() {
     return (
       <div className={styles.page}>
         <Container>
+          <CheckoutSteps current={2} />
           <div className={styles.confirmation}>
+            <div className={styles.successMark} aria-hidden="true">
+              ✓
+            </div>
             <h1>Bestellung eingegangen</h1>
-            <p>
-              Vielen Dank, {confirmation.customerName}! Deine Bestellung wurde erfasst. Notiere dir
-              die Bestellnummer oder mache einen Screenshot dieser Seite:
+            <p className={styles.confirmationLead}>
+              Vielen Dank, {confirmation.customerName}! Deine Bestellung wurde erfasst. Notiere dir die Bestellnummer
+              oder mache einen Screenshot dieser Seite:
             </p>
             <div className={styles.orderNumber}>{confirmation.orderNumber}</div>
+
             <div className={styles.confirmationList}>
               {confirmation.items.map((item, index) => (
                 <div key={index} className={styles.summaryLine}>
@@ -85,14 +91,27 @@ export default function KassePage() {
                 <span>{formatRappenAsChf(confirmation.totalRappen)}</span>
               </div>
             </div>
-            <p>
-              Das Büro des UHC Uster sendet dir die Rechnung mit den Zahlungsdetails innerhalb
-              weniger Werktage an <strong>{confirmation.customerEmail}</strong> zu. Deine Karte(n)
-              erhältst du, sobald die Zahlung eingegangen ist.
-            </p>
-            <Button variant="secondary" onClick={() => window.print()} style={{ marginTop: "var(--space-5)" }}>
-              Diese Seite drucken
-            </Button>
+
+            <div className={styles.nextSteps}>
+              <h2 className={styles.nextStepsTitle}>Wie es weitergeht</h2>
+              <ol className={styles.nextStepsList}>
+                <li>
+                  Das Büro des UHC Uster sendet dir die Rechnung mit den Zahlungsdetails innerhalb weniger Werktage an{" "}
+                  <strong>{confirmation.customerEmail}</strong>.
+                </li>
+                <li>Du überweist den Betrag mit der Bestellnummer als Referenz.</li>
+                <li>Sobald die Zahlung eingegangen ist, erhältst du deine Karte(n).</li>
+              </ol>
+            </div>
+
+            <div className={styles.confirmationActions}>
+              <Button variant="secondary" onClick={() => window.print()}>
+                Diese Seite drucken
+              </Button>
+              <Button as="a" href="/">
+                Zurück zur Startseite
+              </Button>
+            </div>
           </div>
         </Container>
       </div>
@@ -103,8 +122,9 @@ export default function KassePage() {
     return (
       <div className={styles.page}>
         <Container>
+          <CheckoutSteps current={1} />
           <h1>Kasse</h1>
-          <p style={{ marginTop: "var(--space-5)", color: "var(--color-text-secondary)" }}>
+          <p className={styles.emptyState}>
             Dein Warenkorb ist leer. <Link href="/">Zurück zur Startseite</Link>.
           </p>
         </Container>
@@ -115,44 +135,79 @@ export default function KassePage() {
   return (
     <div className={styles.page}>
       <Container>
+        <CheckoutSteps current={1} />
         <h1>Kasse</h1>
 
-        <div className={styles.summary}>
-          {lines.map((line) => (
-            <div key={line.id} className={styles.summaryLine}>
-              <span>
-                {line.productName}
-                {line.holderName ? ` - ${line.holderName}` : ""}
-              </span>
-              <span>{line.priceRappen === 0 ? "Gratis" : formatRappenAsChf(line.priceRappen)}</span>
+        {/* Form and running total side by side, so the amount stays in view while
+            the address is filled in rather than scrolling away above it. */}
+        <div className={styles.layout}>
+          <form ref={formRef} onSubmit={handleSubmit} className={styles.formColumn}>
+            <fieldset className={styles.fieldset}>
+              <legend className={styles.legend}>Kontakt</legend>
+              <div className={styles.formGrid}>
+                <Input name="name" label="Name" placeholder="Vorname Nachname" required autoComplete="name" />
+                <Input
+                  name="email"
+                  type="email"
+                  label="E-Mail"
+                  placeholder="name@example.com"
+                  required
+                  autoComplete="email"
+                />
+                <Input name="phone" type="tel" label="Telefon" placeholder="079 000 00 00" required autoComplete="tel" />
+              </div>
+            </fieldset>
+
+            <fieldset className={styles.fieldset}>
+              <legend className={styles.legend}>Rechnungsadresse</legend>
+              <div className={styles.formGrid}>
+                <Input
+                  name="addressStreet"
+                  label="Strasse und Nr."
+                  placeholder="Musterstrasse 1"
+                  required
+                  autoComplete="street-address"
+                  className={styles.fullSpan}
+                />
+                <Input name="addressZip" label="PLZ" placeholder="8610" required autoComplete="postal-code" />
+                <Input name="addressCity" label="Ort" placeholder="Uster" required autoComplete="address-level2" />
+              </div>
+            </fieldset>
+
+            <div className={styles.turnstile}>
+              <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} />
             </div>
-          ))}
-          <div className={styles.summaryTotal}>
-            <span>Total</span>
-            <span>{formatRappenAsChf(total)}</span>
-          </div>
+
+            {error && <p className={styles.error}>{error}</p>}
+
+            <Button type="submit" disabled={submitting} fullWidth>
+              {submitting ? "Wird gesendet …" : "Bestellung abschicken"}
+            </Button>
+            <p className={styles.reassurance}>
+              Keine Onlinezahlung: du erhältst die Rechnung per E-Mail und bezahlst per Überweisung.
+            </p>
+          </form>
+
+          <aside className={styles.summary} aria-label="Bestellübersicht">
+            <h2 className={styles.summaryTitle}>Deine Bestellung</h2>
+            {lines.map((line) => (
+              <div key={line.id} className={styles.summaryLine}>
+                <span>
+                  {line.productName}
+                  {line.holderName ? ` - ${line.holderName}` : ""}
+                </span>
+                <span>{line.priceRappen === 0 ? "Gratis" : formatRappenAsChf(line.priceRappen)}</span>
+              </div>
+            ))}
+            <div className={styles.summaryTotal}>
+              <span>Total</span>
+              <span>{formatRappenAsChf(total)}</span>
+            </div>
+            <Link href="/warenkorb" className={styles.editLink}>
+              Warenkorb bearbeiten
+            </Link>
+          </aside>
         </div>
-
-        <form ref={formRef} onSubmit={handleSubmit}>
-          <div className={styles.formGrid}>
-            <Input name="name" label="Name" placeholder="Vorname Nachname" required />
-            <Input name="email" type="email" label="E-Mail" placeholder="name@example.com" required />
-            <Input name="phone" type="tel" label="Telefon" placeholder="079 000 00 00" required />
-            <Input name="addressStreet" label="Strasse und Nr." placeholder="Musterstrasse 1" required />
-            <Input name="addressZip" label="PLZ" placeholder="8610" required />
-            <Input name="addressCity" label="Ort" placeholder="Uster" required />
-          </div>
-
-          <div className={styles.turnstile}>
-            <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} />
-          </div>
-
-          {error && <p className={styles.error}>{error}</p>}
-
-          <Button type="submit" disabled={submitting}>
-            {submitting ? "Wird gesendet …" : "Bestellung abschicken"}
-          </Button>
-        </form>
       </Container>
     </div>
   );

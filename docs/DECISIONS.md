@@ -509,3 +509,33 @@ metal (i.e. `metalName !== null`), so the existing "quiet gradation via spacing/
 now fits all four Red Castle Club tiers on one row at normal desktop widths, while still degrading
 gracefully to fewer columns (confirmed down to a single column at mobile width) since it's still
 `auto-fit`, not a hardcoded 4-column grid. **Resolved.**
+
+**D48 — The match-day scanner login stays a self-issued HMAC session token rather than Supabase
+Auth, as a knowing, documented exception.** Claudio asked for an audit that no login anywhere in the
+project is self-built ("DAS IST EIN ABSOLUTES NO GO!!! alles muss über die supabase auth laufen").
+The audit found exactly one: `src/lib/scanner/session.ts` mints its own JWT-shaped token (HMAC-SHA256
+over a base64url payload, own `SCANNER_SESSION_SECRET`, verified by hand in each scanner Route
+Handler, stored in `localStorage`). Everything else is genuinely Supabase Auth - `/admin/login`
+(`signInWithPassword`), `/admin/setup` and admin creation (`auth.admin.createUser`), all authorization
+via the `is_admin()` RLS helper. The ticket QR token (`TICKET_TOKEN_SECRET`, `src/lib/tickets/token.ts`)
+is *not* a login: it signs an artifact printed on a pass, and no session is derived from it.
+
+Two Supabase-native replacements were put to Claudio: (a) Supabase **anonymous sign-ins** - the helper
+still types only the per-game code, the server verifies it and then calls `signInAnonymously()`, so
+Supabase itself issues and validates a real session/JWT, with a `scanner_sessions` table plus RLS
+scoping the session to one game; or (b) a real Supabase account per scanner device. Claudio chose to
+**leave it as-is for now and document it**, given the 5 September launch and that (a) additionally
+requires enabling "Anonymous sign-ins" in the Supabase dashboard.
+
+Why this is defensible as a scoped exception: match-day helpers are *anonymous devices*, not people
+with accounts - there is deliberately no user record to authenticate against (D32). The token is
+scoped to exactly one game, expires after 8 hours, is signed with a secret in a different security
+domain from the ticket secret, is verified with `timingSafeEqual`, and the code exchange behind it is
+rate-limited (10 attempts / 10 minutes per IP). It grants only the ability to scan tickets for that
+one game via Route Handlers - never a Supabase session, never admin access, never a database
+credential.
+
+The residual risk is real and should be understood: this is hand-rolled auth, so it does not get
+Supabase's key rotation, revocation, or refresh handling. There is no way to revoke a leaked token
+before its 8 hours are up other than rotating `SCANNER_SESSION_SECRET` (which logs out every scanner
+at once, mid-game). **Deferred by decision - revisit after 5 September, preferring option (a).**

@@ -2,25 +2,91 @@
   padding-block: var(--space-8);
 }
 
+/* Form left, order summary right. Collapses to a single column on tablet and below,
+   where the summary moves above the form so the total is still seen first. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-7);
+  align-items: start;
+  margin-top: var(--space-6);
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .formColumn {
+    order: 2;
+  }
+
+  .summary {
+    order: 1;
+  }
+}
+
+.formColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/* Grouping the six fields under two headings turns one undifferentiated block into
+   two short, obviously-related sets. */
+.fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.legend {
+  font-size: var(--text-micro-size);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-3);
+  padding: 0;
+}
+
 .formGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--space-5);
-  max-width: 720px;
-  margin-block: var(--space-6);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+.fullSpan {
+  grid-column: 1 / -1;
 }
 
 .summary {
-  max-width: 720px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-5);
-  margin-bottom: var(--space-6);
+  background: var(--color-bg-alt);
+  position: sticky;
+  top: calc(64px + var(--space-4));
+}
+
+@media (max-width: 900px) {
+  .summary {
+    position: static;
+  }
+}
+
+.summaryTitle {
+  font-size: var(--text-small-size);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: var(--space-3);
 }
 
 .summaryLine {
   display: flex;
   justify-content: space-between;
+  gap: var(--space-3);
   padding-block: var(--space-2);
   font-size: var(--text-small-size);
 }
@@ -30,21 +96,62 @@
   justify-content: space-between;
   padding-top: var(--space-3);
   margin-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border-strong);
   font-weight: 700;
 }
 
+.editLink {
+  display: inline-block;
+  margin-top: var(--space-4);
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+}
+
 .turnstile {
-  margin-bottom: var(--space-5);
+  margin-block: var(--space-2);
 }
 
 .error {
   color: var(--color-error-text);
-  margin-bottom: var(--space-4);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-text);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-small-size);
+}
+
+.reassurance {
+  font-size: var(--text-micro-size);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.emptyState {
+  margin-top: var(--space-5);
+  color: var(--color-text-secondary);
 }
 
 .confirmation {
   max-width: 640px;
+}
+
+.successMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success-text);
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: var(--space-4);
+}
+
+.confirmationLead {
+  color: var(--color-text-secondary);
 }
 
 .orderNumber {
@@ -62,9 +169,41 @@
   margin-bottom: var(--space-6);
 }
 
+.nextSteps {
+  border-left: 3px solid var(--color-accent);
+  padding-left: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.nextStepsTitle {
+  font-size: var(--text-h3-size);
+  font-weight: var(--text-h3-weight);
+  margin-bottom: var(--space-3);
+}
+
+.nextStepsList {
+  margin: 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+}
+
+.confirmationActions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
 @media print {
   :global(header),
   :global(footer) {
+    display: none;
+  }
+
+  .confirmationActions {
     display: none;
   }
 }

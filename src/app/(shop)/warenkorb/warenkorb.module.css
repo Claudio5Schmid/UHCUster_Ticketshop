@@ -7,12 +7,27 @@
   max-width: 48ch;
 }
 
+/* Same two-column shape as the checkout page, so the step from cart to Kasse doesn't
+   rearrange the screen under the customer. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-7);
+  align-items: start;
+  margin-top: var(--space-6);
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .lines {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  max-width: 640px;
-  margin-bottom: var(--space-7);
+  gap: var(--space-4);
+  min-width: 0;
 }
 
 .line {
@@ -22,6 +37,7 @@
   padding: var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .lineHeader {
@@ -48,6 +64,7 @@
   font-size: var(--text-micro-size);
   text-decoration: underline;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .removeButton:hover {
@@ -55,16 +72,64 @@
 }
 
 .summary {
-  max-width: 640px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  background: var(--color-bg-alt);
+  position: sticky;
+  top: calc(64px + var(--space-4));
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+@media (max-width: 900px) {
+  .summary {
+    position: static;
+  }
+}
+
+.summaryTitle {
+  font-size: var(--text-small-size);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: var(--space-2);
+}
+
+.summaryRow {
+  display: flex;
   justify-content: space-between;
-  padding-block: var(--space-5);
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+}
+
+.summaryTotal {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: var(--space-3);
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-4);
   border-top: 1px solid var(--color-border-strong);
-  margin-bottom: var(--space-6);
+  font-weight: 700;
 }
 
 .total {
   font-size: var(--text-h3-size);
   font-weight: 700;
+}
+
+.hint {
+  font-size: var(--text-micro-size);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-3);
+  text-align: center;
+}
+
+.continueLink {
+  display: inline-block;
+  margin-top: var(--space-4);
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+  text-align: center;
 }
