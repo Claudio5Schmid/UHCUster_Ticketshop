@@ -7,9 +7,12 @@
  * an admin correcting a game by hand types the name freely, and games.opponent
  * is a plain text column.
  *
- * The files live in /public/logos, every one of them rendered onto the same
- * 320x160 transparent canvas, so a crest always occupies an identical box and
- * the rows line up whatever the club's own aspect ratio is.
+ * The files live in /public/logos, every one of them trimmed of its own padding
+ * and rendered to the same height, keeping its natural width. Normalising on
+ * height rather than into a fixed box is what makes a square emblem and a wide
+ * wordmark read at the same size: fitting both into one box would shrink the
+ * wide one - UHC Uster's own logo is 2.8:1, so in a 2:1 box it came out barely
+ * two thirds the height of a square crest beside it.
  */
 
 export interface TeamLogo {
@@ -18,9 +21,28 @@ export interface TeamLogo {
   height: number;
 }
 
-/** Every file in /public/logos shares this canvas - see the comment above. */
-const LOGO_WIDTH = 320;
+/** Every file in /public/logos is rendered to this height - see the comment above. */
 const LOGO_HEIGHT = 160;
+
+/**
+ * Each crest's width at that height, i.e. its own aspect ratio. Needed because
+ * next/image wants intrinsic dimensions, and here they genuinely differ per club.
+ * Regenerate these together with the files if a crest is ever replaced.
+ */
+const LOGO_WIDTHS: Record<string, number> = {
+  "floorball-chur-united": 160,
+  "floorball-koeniz-bern": 160,
+  "floorball-thurgau": 164,
+  "grasshopper-club-zuerich": 160,
+  "hc-rychenberg-winterthur": 151,
+  "kloten-dietlikon-jets": 171,
+  "sv-wiler-ersigen": 239,
+  "tigers-langnau": 199,
+  "uhc-alligator-malans": 298,
+  "uhc-uster": 448,
+  "wasa-st-gallen": 268,
+  "zug-united": 219,
+};
 
 /**
  * The club whose shop this is. Every game in the listings is a home game, so
@@ -55,10 +77,7 @@ function normalizeTeamName(team: string): string {
  * the sync's own spelling is listed first in each group.
  */
 const LOGO_FILES: Record<string, string> = {
-  // The emblem alone, not the full logo: the wordmark is illegible at the size a
-  // fixture row renders it. New filename rather than a rewrite of the old one, so
-  // no image cache can keep serving the wordmark after a deploy.
-  "UHC Uster": "uhc-uster-emblem",
+  "UHC Uster": "uhc-uster",
 
   "Floorball Chur United": "floorball-chur-united",
   "Chur United": "floorball-chur-united",
@@ -100,8 +119,9 @@ const LOGOS_BY_NORMALIZED_NAME = new Map(
 /** The club's crest, or null when we don't have one - callers fall back to the name. */
 export function getTeamLogo(team: string): TeamLogo | null {
   const file = LOGOS_BY_NORMALIZED_NAME.get(normalizeTeamName(team));
-  if (!file) {
+  const width = file ? LOGO_WIDTHS[file] : undefined;
+  if (!file || width === undefined) {
     return null;
   }
-  return { src: `/logos/${file}.png`, width: LOGO_WIDTH, height: LOGO_HEIGHT };
+  return { src: `/logos/${file}.png`, width, height: LOGO_HEIGHT };
 }

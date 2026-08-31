@@ -1,16 +1,19 @@
-/* Both dimensions are set, not just one: every file in /public/logos is the same
-   320x160 canvas, so 2:1 is that exact aspect ratio - and next/image warns when
-   only one of the two is overridden in CSS. */
+/* Sized by height, width follows the club's own shape. Every file in
+   /public/logos is already trimmed and rendered to one common height, so this
+   gives a square emblem and a wide wordmark the same optical weight - which
+   fitting them into a shared fixed box does not. `width: auto` is set explicitly
+   rather than left off: next/image warns when only one of the two is overridden. */
 .logo {
-  width: 112px;
+  width: auto;
   height: 56px;
+  max-width: 180px;
   object-fit: contain;
 }
 
 @media (max-width: 480px) {
   .logo {
-    width: 88px;
     height: 44px;
+    max-width: 140px;
   }
 }
 
@@ -18,8 +21,8 @@
    beside text rather than carrying the row on its own. Declared after the media
    query above so it wins at every width: a table cell shouldn't reflow on a phone. */
 .sm {
-  width: 56px;
   height: 28px;
+  max-width: 90px;
 }
 
 /* Matches what a club's name looked like before crests replaced it. */
