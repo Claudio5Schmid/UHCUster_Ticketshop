@@ -638,3 +638,45 @@ is not rediscovered later: whenever a wallet pass names a game, it carries both 
 the same `/public/logos` set the app uses, and not the club name as text. The 320x160 transparent
 PNGs in that directory are already sized for it. A pass covering the whole season has the same
 caveat as D52 - there is no single opponent to show.
+
+**D54 — A customer reaches their order through a signed link, not an account.** Claudio compared the
+shop against FC Basel's ticket shop and asked what was worth taking from it. The biggest difference
+is structural, not cosmetic: there the purchase ends with the customer (payment, ticket in the
+account), here the purchase *starts* the office's work (invoice by hand, PDFs handed over by hand).
+Customer accounts and online payment stay out (D38 and the brief), so the only thing a buyer can be
+given after the click is a link.
+
+Built as `/meine-tickets/<token>` (`src/lib/orders/access-token.ts`): HMAC-SHA256 over the order
+number, its own `ORDER_LINK_SECRET` - a third signing domain next to ticket tokens and scanner
+sessions, for the same reason D32 keeps those two apart. The order number itself is sequential
+(`UHCU-2627-0001`) and so cannot be the credential; the signature is what makes it unguessable. The
+link is handed out in three places: on the confirmation screen right after checkout, in the order
+confirmation e-mail (D49), and as a "Link kopieren" button on the admin order detail page, for the
+invoice mail the office writes by hand anyway.
+
+Deliberately **no expiry**, unlike the scanner session: this link is the customer's only durable way
+back to their season pass, and that pass is valid all season. An expiring link would mean "lost your
+PDF, call the office" - exactly the work this removes. A single link cannot be revoked; what sits
+behind it is a paid season pass the customer already has a copy of.
+
+**Fallback, not front door:** `/meine-tickets` takes an order number plus the e-mail the order was
+placed with, for people who lost the link. Since the number is guessable, the e-mail is the only real
+secret in the pair - hence the same IP rate limit the checkout uses (own key prefix `order-lookup:`,
+10 attempts / 10 minutes) and *one* identical error message whether the number does not exist or the
+e-mail does not match. The comparison runs in JS rather than as a PostgREST `ilike` filter: `%` and
+`_` in a user-supplied string are wildcards there, which would make "any e-mail" a valid answer.
+
+**What the page shows, and what it does not:** status (`neu` → `rechnung_versendet` → `bezahlt`), the
+line items, the total, and from `bezahlt` on the ticket PDFs for self-service download (individually
+and as a ZIP, through two Route Handlers that verify the token instead of an admin session and then
+read service-role - the same shape `create_order` and the scanner routes already use). Not on the
+page: address, phone, e-mail. A link that goes astray should expose a season pass, not a customer
+record. Voided and replaced tickets are not offered either - otherwise somebody downloads a PDF that
+no longer scans at the door.
+
+**The real gain is office time:** the PDFs no longer have to be sent by hand, the order just gets
+marked `bezahlt`. `orders.files_handed_over_at` and the member-card send stay untouched next to it,
+for people who would rather receive their card by mail anyway.
+
+**Open:** `NEXT_PUBLIC_SITE_URL` needs to be set to the real domain in Vercel, otherwise
+`src/lib/site-url.ts` builds the link in the confirmation mail from `VERCEL_PROJECT_PRODUCTION_URL`.

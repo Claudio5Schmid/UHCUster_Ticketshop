@@ -152,6 +152,8 @@
 
 .confirmationLead {
   color: var(--color-text-secondary);
+  /* Global styles reset every heading margin to 0, so the lead needs its own gap. */
+  margin-top: var(--space-4);
 }
 
 .orderNumber {
@@ -197,13 +199,49 @@
   flex-wrap: wrap;
 }
 
+/* The order link, given the same weight as the "how it continues" block: it is the
+   one thing on this screen the customer needs to keep. */
+.statusLink {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-alt);
+  padding: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.statusLinkText {
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+}
+
+.statusLinkRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Long signed URL: wrap it rather than let it push the card sideways on mobile. */
+.statusLinkUrl {
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-micro-size);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
 @media print {
   :global(header),
   :global(footer) {
     display: none;
   }
 
-  .confirmationActions {
+  .confirmationActions,
+  .statusLinkRow button {
     display: none;
   }
 }

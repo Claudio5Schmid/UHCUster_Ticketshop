@@ -11,6 +11,9 @@ export interface OrderConfirmationEmailInput {
   customerName: string;
   totalRappen: number;
   items: OrderConfirmationEmailItem[];
+  /** Signed link to the order's status page (docs/DECISIONS.md D54). Absolute, since
+   * a relative path in an e-mail points nowhere. */
+  statusUrl: string;
 }
 
 function escapeHtml(value: string): string {
@@ -56,7 +59,13 @@ export function orderConfirmationText(input: OrderConfirmationEmailInput): strin
     "     innerhalb weniger Werktage an diese E-Mail-Adresse.",
     `  2. Du überweist den Betrag und gibst dabei die Bestellnummer ${input.orderNumber}`,
     "     als Referenz an.",
-    "  3. Sobald die Zahlung eingegangen ist, erhältst du deine Karte(n).",
+    "  3. Sobald die Zahlung eingegangen ist, kannst du deine Karte(n) direkt",
+    "     herunterladen - unter demselben Link:",
+    "",
+    `  ${input.statusUrl}`,
+    "",
+    "Über diesen Link siehst du jederzeit den Stand deiner Bestellung. Speichere ihn",
+    "dir, und behandle ihn wie ein Ticket - wer ihn hat, kommt an deine Karten.",
     "",
     "Diese E-Mail bestätigt nur den Eingang deiner Bestellung - sie ist noch keine",
     "Rechnung. Bitte überweise noch nichts, bevor du die Rechnung erhalten hast.",
@@ -113,8 +122,23 @@ export function orderConfirmationHtml(input: OrderConfirmationEmailInput): strin
           <li>Du überweist den Betrag und gibst dabei die Bestellnummer <strong>${escapeHtml(
             input.orderNumber
           )}</strong> als Referenz an.</li>
-          <li>Sobald die Zahlung eingegangen ist, erhältst du deine Karte(n).</li>
+          <li>Sobald die Zahlung eingegangen ist, kannst du deine Karte(n) direkt herunterladen.</li>
         </ol>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+          <tr>
+            <td style="background:#e4032e;border-radius:8px;">
+              <a href="${escapeHtml(
+                input.statusUrl
+              )}" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;">Bestellung ansehen</a>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:0 0 24px;font-size:13px;line-height:1.6;color:#6b6b6b;word-break:break-all;">
+          Über diesen Link siehst du jederzeit den Stand deiner Bestellung und lädst später deine Karten
+          herunter. Speichere ihn dir, und behandle ihn wie ein Ticket - wer ihn hat, kommt an deine Karten.<br />
+          <a href="${escapeHtml(input.statusUrl)}" style="color:#6b6b6b;">${escapeHtml(input.statusUrl)}</a>
+        </p>
 
         <p style="margin:0 0 24px;padding:12px 16px;background:#fafafa;border-radius:8px;font-size:13px;line-height:1.6;color:#6b6b6b;">
           Diese E-Mail bestätigt nur den Eingang deiner Bestellung - sie ist noch keine Rechnung.

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button/Button";
 import { Input } from "@/components/ui/Input/Input";
 import { TurnstileWidget } from "@/components/shop/TurnstileWidget/TurnstileWidget";
 import { CheckoutSteps } from "@/components/shop/CheckoutSteps/CheckoutSteps";
+import { useToast } from "@/components/ui/Toast/Toast";
 import { useCart } from "@/lib/cart";
 import { formatRappenAsChf } from "@/lib/pricing";
 import { submitOrder, type OrderConfirmation } from "./actions";
@@ -20,6 +21,10 @@ export default function KassePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<OrderConfirmation | null>(null);
+  // Assembled here rather than inside the confirmation view: an event handler is
+  // the one place window.location can be read without an effect or a render-phase
+  // browser access.
+  const [statusUrl, setStatusUrl] = useState("");
 
   const total = lines.reduce((sum, line) => sum + line.priceRappen, 0);
 
@@ -52,6 +57,7 @@ export default function KassePage() {
         turnstileToken
       );
       setConfirmation(result);
+      setStatusUrl(`${window.location.origin}${result.statusPath}`);
       clear();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Etwas ist schiefgelaufen.");
@@ -71,8 +77,7 @@ export default function KassePage() {
             </div>
             <h1>Bestellung eingegangen</h1>
             <p className={styles.confirmationLead}>
-              Vielen Dank, {confirmation.customerName}! Deine Bestellung wurde erfasst. Notiere dir die Bestellnummer
-              oder mache einen Screenshot dieser Seite:
+              Vielen Dank, {confirmation.customerName}! Deine Bestellung wurde unter dieser Nummer erfasst:
             </p>
             <div className={styles.orderNumber}>{confirmation.orderNumber}</div>
 
@@ -100,15 +105,20 @@ export default function KassePage() {
                   <strong>{confirmation.customerEmail}</strong>.
                 </li>
                 <li>Du überweist den Betrag mit der Bestellnummer als Referenz.</li>
-                <li>Sobald die Zahlung eingegangen ist, erhältst du deine Karte(n).</li>
+                <li>Sobald die Zahlung eingegangen ist, lädst du deine Karte(n) selbst herunter.</li>
               </ol>
             </div>
 
+            <StatusLink url={statusUrl} />
+
             <div className={styles.confirmationActions}>
+              <Button as="a" href={confirmation.statusPath}>
+                Bestellung ansehen
+              </Button>
               <Button variant="secondary" onClick={() => window.print()}>
                 Diese Seite drucken
               </Button>
-              <Button as="a" href="/">
+              <Button as="a" href="/" variant="secondary">
                 Zurück zur Startseite
               </Button>
             </div>
@@ -209,6 +219,42 @@ export default function KassePage() {
           </aside>
         </div>
       </Container>
+    </div>
+  );
+}
+
+/**
+ * The order link, shown the moment the order exists rather than only in the
+ * confirmation e-mail (docs/DECISIONS.md D54) - a customer who mistyped their
+ * address, or whose mail lands in spam, still leaves this page with a way back to
+ * their order.
+ */
+function StatusLink({ url }: { url: string }) {
+  const { showToast } = useToast();
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Link kopiert.");
+    } catch {
+      showToast("Kopieren hat nicht geklappt - bitte den Link von Hand markieren.", "error");
+    }
+  }
+
+  return (
+    <div className={styles.statusLink}>
+      <h2 className={styles.nextStepsTitle}>Dein Link zur Bestellung</h2>
+      <p className={styles.statusLinkText}>
+        Speichere dir diesen Link. Er zeigt dir jederzeit den Stand deiner Bestellung, und sobald die
+        Zahlung eingegangen ist, lädst du dort deine Karten herunter. Wir schicken ihn dir auch per
+        E-Mail.
+      </p>
+      <div className={styles.statusLinkRow}>
+        <code className={styles.statusLinkUrl}>{url}</code>
+        <Button variant="secondary" size="sm" onClick={handleCopy}>
+          Link kopieren
+        </Button>
+      </div>
     </div>
   );
 }

@@ -15,6 +15,11 @@ export function Footer() {
               <p className={styles.tagline}>Saisonkarten und Red Castle Club für den UHC Uster.</p>
             </div>
             <ul className={styles.linkList}>
+              {/* First in the list on purpose: it is the only link here a customer
+                  ever actively looks for. */}
+              <li>
+                <Link href="/meine-tickets">Meine Tickets</Link>
+              </li>
               <li>
                 <Link href="/impressum">Impressum</Link>
               </li>

@@ -72,6 +72,31 @@ by simply typing a new one in; there is nothing to "revoke" beyond that.
    admin can review it directly in Supabase (no admin UI view of raw scan_events exists
    yet; noted in `docs/BACKLOG.md`).
 
+## Getting a customer their tickets
+
+Since D54 the office does not have to send ticket PDFs at all. Every order has a signed
+customer link (`/meine-tickets/<token>`) that shows the order's current status and, from
+the moment the order is marked **Bezahlt**, offers the ticket PDFs for download. The
+customer gets that link twice on their own: on the confirmation screen right after
+checkout, and in the confirmation e-mail. So the normal flow is just:
+
+1. Mark the order **"Rechnung versendet"** when the invoice goes out - paste the link
+   from the order detail page's **Kundenlink** block into that same mail if you like.
+2. Mark it **"Bezahlt"** when the transfer arrives. That issues the tickets, and they
+   appear on the customer's link within seconds. Nothing else needs sending.
+
+The old route still works and is still there for anyone who would rather have the PDFs
+by mail: download them from the order detail page and attach them, then flip the
+"Übergeben" marker. Use the **Kundenlink** copy button when a customer phones in saying
+they never got the confirmation mail (typo in the address, spam folder) - it is the same
+link, and it works regardless of which e-mail address the order carries.
+
+If a customer has lost everything, point them at `/meine-tickets`: order number plus the
+e-mail address they ordered with gets them back to the same page. That form is rate
+limited to 10 attempts per 10 minutes per IP, so somebody who genuinely cannot remember
+which address they used will hit the limit before they guess - in that case just read the
+address off the order detail page and tell them.
+
 ## Cancelling an order
 
 Set the order's status to "Storniert" on its detail page (`/admin/orders/[nummer]`).

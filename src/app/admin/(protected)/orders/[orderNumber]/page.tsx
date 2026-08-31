@@ -2,9 +2,11 @@ import { notFound } from "next/navigation";
 import { getOrderDetail } from "@/lib/admin/orders";
 import { getOrderTickets } from "@/lib/admin/tickets";
 import { getMemberCardsSentAtForOrder } from "@/lib/admin/members";
+import { buildOrderAccessUrl } from "@/lib/orders/access-token";
 import { formatRappenAsChf } from "@/lib/pricing";
 import { Badge } from "@/components/ui/Badge/Badge";
 import { OrderActions } from "./OrderActions";
+import { CustomerLinkButton } from "./CustomerLinkButton";
 import { TicketsPanel } from "./TicketsPanel";
 import styles from "../../admin.module.css";
 
@@ -26,6 +28,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
       </div>
 
       <OrderActions orderId={order.id} orderNumber={order.order_number} status={order.status} refundOwed={order.refund_owed} />
+
+      <CustomerLinkButton url={buildOrderAccessUrl(order.order_number)} />
 
       <div className={styles.detailGrid}>
         <dl className={styles.detailBlock}>

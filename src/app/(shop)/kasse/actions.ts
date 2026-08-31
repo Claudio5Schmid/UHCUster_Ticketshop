@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import { CURRENT_SEASON } from "@/lib/season";
 import { getClientIp, checkOrderRateLimit } from "@/lib/rate-limit";
+import { assertOrderLinkConfigured, buildOrderAccessPath, buildOrderAccessUrl } from "@/lib/orders/access-token";
 import { sendEmail } from "@/lib/email/ses";
 import {
   orderConfirmationSubject,
@@ -39,6 +40,9 @@ export interface OrderConfirmation {
   customerEmail: string;
   totalRappen: number;
   items: OrderConfirmationItem[];
+  /** Signed link to this order's status page - the customer's durable way back to
+   * the order and, once paid, to the ticket PDFs (docs/DECISIONS.md D54). */
+  statusPath: string;
 }
 
 async function verifyTurnstile(token: string): Promise<boolean> {
@@ -79,6 +83,10 @@ export async function submitOrder(
     throw new Error("Zu viele Bestellversuche. Bitte versuche es in einigen Minuten erneut.");
   }
 
+  // Checked here, next to the other configuration the checkout depends on, so a
+  // missing secret cannot surface after create_order() has already committed.
+  assertOrderLinkConfigured();
+
   const turnstileOk = await verifyTurnstile(turnstileToken);
   if (!turnstileOk) {
     throw new Error("Sicherheitsprüfung fehlgeschlagen. Bitte lade die Seite neu und versuche es erneut.");
@@ -109,6 +117,7 @@ export async function submitOrder(
     customerEmail: data.customer_email,
     totalRappen: data.total_rappen,
     items: data.items,
+    statusPath: buildOrderAccessPath(data.order_number),
   };
 
   // Runs after the response is flushed, so a slow or failing SES never delays the
@@ -125,11 +134,14 @@ export async function submitOrder(
 
 async function sendOrderConfirmationEmail(confirmation: OrderConfirmation): Promise<void> {
   try {
+    const statusUrl = buildOrderAccessUrl(confirmation.orderNumber);
     const sent = await sendEmail({
       to: confirmation.customerEmail,
       subject: orderConfirmationSubject(confirmation.orderNumber),
-      bodyText: orderConfirmationText(confirmation),
-      bodyHtml: orderConfirmationHtml(confirmation),
+      // The mail carries the absolute link; the on-screen confirmation only needs
+      // the relative path it was already rendered from.
+      bodyText: orderConfirmationText({ ...confirmation, statusUrl }),
+      bodyHtml: orderConfirmationHtml({ ...confirmation, statusUrl }),
     });
 
     if (!sent) return;

@@ -131,6 +131,7 @@ against printing `.env` contents.
 | `CRON_SECRET` | server-only | Set once deployed to Vercel; Vercel sends it back as `Authorization: Bearer …` on scheduled requests, which `/api/sync/swissunihockey` checks so the sync can't be triggered by an arbitrary public GET |
 | `TICKET_TOKEN_SECRET` | server-only | HMAC signing key for ticket tokens (Phase 6) |
 | `SCANNER_SESSION_SECRET` | server-only | HMAC signing key for scanner-device session tokens (Phase 7) — a separate secret from `TICKET_TOKEN_SECRET` on purpose, different security domain |
+| `ORDER_LINK_SECRET` | server-only | HMAC signing key for the customer order links behind `/meine-tickets` (D54) - a third, separate secret from `TICKET_TOKEN_SECRET` and `SCANNER_SESSION_SECRET`, same reasoning |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | public | Cloudflare Turnstile widget on `/kasse`. Currently Cloudflare's public always-pass test key (`docs/DECISIONS.md` D25) — swap for a real Turnstile site's key before launch |
 | `TURNSTILE_SECRET_KEY` | server-only | Server-side Turnstile verification in the checkout Server Action. Currently the matching test secret — same swap needed |
 | `APPLE_WALLET_PASS_TYPE_ID` | server-only | Apple Wallet pass type identifier |
@@ -139,7 +140,7 @@ against printing `.env` contents.
 | `APPLE_WALLET_WWDR_CERTIFICATE` | server-only | Apple WWDR intermediate certificate |
 | `GOOGLE_WALLET_SERVICE_ACCOUNT_JSON` | server-only | Google Wallet API service account credentials |
 | `GOOGLE_WALLET_ISSUER_ID` / `_CLASS_ID` | server-only | Google Wallet API identifiers |
-| `NEXT_PUBLIC_SITE_URL` | public | Canonical site URL for absolute links |
+| `NEXT_PUBLIC_SITE_URL` | public | Canonical site URL for absolute links. Read through `src/lib/site-url.ts`, which falls back to `VERCEL_PROJECT_PRODUCTION_URL` and then localhost - set it in production so the order link in a confirmation e-mail always points at the real domain (D54) |
 
 Not needed, and must never be added: any email/SMTP provider credential, any payment provider key.
 
@@ -321,3 +322,21 @@ list/schedule/Eventfrog links, the HMAC-vs-offline-verification tension, and the
 lifecycle questions) are now tracked live in `docs/DECISIONS.md`, which is the single running log for
 Phase 0.5 and onward. This section is intentionally left short rather than duplicated and drifting
 out of sync — check `docs/DECISIONS.md` for current status.
+
+## 15. Customer order page (post-Phase-8, D54)
+
+`/meine-tickets/<token>` is the one customer-facing surface that is not part of buying something:
+an order's status and, once it is `bezahlt`, its ticket PDFs, reachable without an account. The
+token is an HMAC over the order number (`src/lib/orders/access-token.ts`, own `ORDER_LINK_SECRET`)
+and is issued on the confirmation screen, in the confirmation e-mail, and as a copyable link on the
+admin order detail page. `/meine-tickets` without a token is the lost-link fallback: order number
+plus the e-mail the order was placed with, rate-limited through the same `check_order_rate_limit`
+function as the checkout under an `order-lookup:` key prefix.
+
+Both download routes (`.../tickets/[ticketId]` and `.../tickets-zip`) sit under the same token
+segment and repeat the verification themselves, exactly like the admin routes repeat `is_admin()`:
+verify the signature, resolve the order, require `status = 'bezahlt'`, then read via the
+service-role client - the third place in the app (after `create_order` and the scanner routes) that
+uses "verify your own caller, then act service-role" because no Supabase session exists.
+`src/lib/orders/customer-view.ts` deliberately narrows what it returns: no address, phone, or
+e-mail, and no voided or replaced tickets.
