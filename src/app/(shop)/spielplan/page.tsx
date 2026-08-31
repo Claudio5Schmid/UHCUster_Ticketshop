@@ -6,7 +6,7 @@ import { EVENTFROG_UHC_USTER_SEARCH_URL } from "@/lib/eventfrog";
 import styles from "../home.module.css";
 
 export const metadata = {
-  title: "Spielplan - UHC Uster Ticketshop",
+  title: "Einzeltickets - UHC Uster Ticketshop",
 };
 
 export const revalidate = 60;
@@ -38,7 +38,7 @@ export default async function SpielplanPage() {
             </div>
           ) : (
             <p className={styles.emptyState}>
-              Der Spielplan für die Saison {CURRENT_SEASON_LABEL} wird in Kürze
+              Die Heimspiele der Saison {CURRENT_SEASON_LABEL} werden in Kürze
               veröffentlicht.
             </p>
           )}

@@ -1,0 +1,21 @@
+/* Both dimensions are set, not just one: every file in /public/logos is the same
+   320x160 canvas, so 2:1 is that exact aspect ratio - and next/image warns when
+   only one of the two is overridden in CSS. */
+.logo {
+  width: 112px;
+  height: 56px;
+  object-fit: contain;
+}
+
+@media (max-width: 480px) {
+  .logo {
+    width: 88px;
+    height: 44px;
+  }
+}
+
+/* Matches what the opponent name looked like before crests replaced it. */
+.fallback {
+  font-size: var(--text-h3-size);
+  font-weight: var(--text-h3-weight);
+}

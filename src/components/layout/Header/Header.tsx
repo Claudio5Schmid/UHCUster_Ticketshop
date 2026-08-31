@@ -23,7 +23,7 @@ export function Header() {
           <nav className={styles.nav} aria-label="Hauptnavigation">
             <Link href="/#saisonkarten">Saisonkarten</Link>
             <Link href="/red-castle-club">Red Castle Club</Link>
-            <Link href="/spielplan">Spielplan</Link>
+            <Link href="/spielplan">Einzeltickets</Link>
           </nav>
           <div className={styles.right}>
             <CartButton />

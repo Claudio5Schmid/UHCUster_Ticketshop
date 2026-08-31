@@ -11,27 +11,51 @@
   border-bottom: none;
 }
 
+/* Centred rather than baseline-aligned: the opponent is a crest now, and an
+   image has no text baseline to align the date against. */
 .info {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-5);
+  align-items: center;
+  gap: var(--space-6);
 }
 
-.date {
-  font-size: var(--text-small-size);
-  color: var(--color-text-secondary);
-  font-variant-numeric: tabular-nums;
-  width: 140px;
+.when {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 150px;
   flex-shrink: 0;
 }
 
-.opponent {
-  font-size: var(--text-h3-size);
-  font-weight: var(--text-h3-weight);
+/* Small like before, but in full text colour and semibold so it still leads the
+   venue line under it now that the two sit stacked in one block. */
+.date {
+  font-size: var(--text-small-size);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .venue {
   font-size: var(--text-small-size);
   color: var(--color-text-secondary);
-  margin-top: var(--space-1);
+}
+
+/* Below this the date block, crest and button no longer share a line without
+   squeezing the crest, so the row stacks and the button drops underneath. */
+@media (max-width: 560px) {
+  .row {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .info {
+    width: 100%;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .when {
+    width: auto;
+  }
 }

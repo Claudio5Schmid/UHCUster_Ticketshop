@@ -8,7 +8,7 @@ import styles from "./MobileNav.module.css";
 const LINKS = [
   { href: "/#saisonkarten", label: "Saisonkarten" },
   { href: "/red-castle-club", label: "Red Castle Club" },
-  { href: "/spielplan", label: "Spielplan" },
+  { href: "/spielplan", label: "Einzeltickets" },
 ];
 
 export function MobileNav() {

@@ -39,7 +39,7 @@ export default async function Home() {
               Saisonkarte sichern
             </Button>
             <Button as="a" href="/spielplan" variant="secondary">
-              Spielplan ansehen
+              Einzeltickets ansehen
             </Button>
           </div>
         </Container>
@@ -99,7 +99,7 @@ export default async function Home() {
               <h2>Nächste Heimspiele</h2>
             </div>
             <Button as="a" href="/spielplan" variant="secondary" size="sm">
-              Ganzer Spielplan
+              Alle Einzeltickets
             </Button>
           </div>
           {upcomingGames.length > 0 ? (
@@ -110,7 +110,7 @@ export default async function Home() {
             </div>
           ) : (
             <p className={styles.emptyState}>
-              Der Spielplan für die Saison {CURRENT_SEASON_LABEL} wird in Kürze
+              Die Heimspiele der Saison {CURRENT_SEASON_LABEL} werden in Kürze
               veröffentlicht. Einzeltickets gibt es dann hier und über Eventfrog.
             </p>
           )}

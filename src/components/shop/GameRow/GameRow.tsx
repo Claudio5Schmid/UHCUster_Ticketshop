@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/Button/Button";
+import { TeamLogo } from "@/components/shop/TeamLogo/TeamLogo";
 import type { Game } from "@/lib/games";
 import styles from "./GameRow.module.css";
 
@@ -24,11 +25,16 @@ export function GameRow({ game }: GameRowProps) {
   return (
     <div className={styles.row}>
       <div className={styles.info}>
-        <span className={styles.date}>{formattedDate}</span>
-        <div>
-          <span className={styles.opponent}>UHC Uster - {game.opponent}</span>
-          {game.venue && <div className={styles.venue}>{game.venue}</div>}
+        {/* Venue sits with the date rather than under the crest: both are details
+            of when and where, and a text line under the crest would start further
+            left than the crest itself, which is centred in its fixed box. */}
+        <div className={styles.when}>
+          <span className={styles.date}>{formattedDate}</span>
+          {game.venue && <span className={styles.venue}>{game.venue}</span>}
         </div>
+        {/* Every game in this list is a home game, so only the visiting club
+            needs identifying - "UHC Uster - " in front of it was noise. */}
+        <TeamLogo team={game.opponent} />
       </div>
       {game.eventfrog_url ? (
         <Button as="a" href={game.eventfrog_url} target="_blank" rel="noopener noreferrer" variant="secondary" size="sm">
