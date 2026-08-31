@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/Button/Button";
-import { TeamLogo } from "@/components/shop/TeamLogo/TeamLogo";
-import { HOME_TEAM } from "@/lib/teamLogos";
+import { Matchup } from "@/components/match/Matchup/Matchup";
 import type { Game } from "@/lib/games";
 import styles from "./GameRow.module.css";
 
@@ -33,15 +32,7 @@ export function GameRow({ game }: GameRowProps) {
           <span className={styles.date}>{formattedDate}</span>
           {game.venue && <span className={styles.venue}>{game.venue}</span>}
         </div>
-        {/* Both crests, so the row reads as a fixture rather than as a lone club.
-            "vs." is left readable rather than aria-hidden: with the club names
-            carried only by the images' alt text, it is what tells a screen reader
-            these two are playing each other. */}
-        <div className={styles.matchup}>
-          <TeamLogo team={HOME_TEAM} />
-          <span className={styles.versus}>vs.</span>
-          <TeamLogo team={game.opponent} />
-        </div>
+        <Matchup opponent={game.opponent} />
       </div>
       {game.eventfrog_url ? (
         <Button as="a" href={game.eventfrog_url} target="_blank" rel="noopener noreferrer" variant="secondary" size="sm">

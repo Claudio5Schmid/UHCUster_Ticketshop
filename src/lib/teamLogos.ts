@@ -55,7 +55,10 @@ function normalizeTeamName(team: string): string {
  * the sync's own spelling is listed first in each group.
  */
 const LOGO_FILES: Record<string, string> = {
-  "UHC Uster": "uhc-uster",
+  // The emblem alone, not the full logo: the wordmark is illegible at the size a
+  // fixture row renders it. New filename rather than a rewrite of the old one, so
+  // no image cache can keep serving the wordmark after a deploy.
+  "UHC Uster": "uhc-uster-emblem",
 
   "Floorball Chur United": "floorball-chur-united",
   "Chur United": "floorball-chur-united",

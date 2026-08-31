@@ -41,19 +41,6 @@
   color: var(--color-text-secondary);
 }
 
-.matchup {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.versus {
-  font-size: var(--text-small-size);
-  color: var(--color-text-secondary);
-  /* The crests carry the row; this only has to separate them, not compete. */
-  font-weight: 500;
-}
-
 /* Below this the date block and both crests no longer share a line with the
    button, so the pairing drops onto its own row and the button under it. */
 @media (max-width: 700px) {

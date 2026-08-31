@@ -9,11 +9,17 @@ import { saveScannerSession } from "@/lib/scanner/session-storage";
 import type { Game } from "@/lib/games";
 import styles from "./scanner.module.css";
 
-function formatGameLabel(game: Game): string {
-  const date = new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", dateStyle: "medium", timeStyle: "short" }).format(
+function formatGameDate(game: Game): string {
+  return new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", dateStyle: "medium", timeStyle: "short" }).format(
     new Date(game.played_at)
   );
-  return `${date} - UHC Uster vs. ${game.opponent}`;
+}
+
+// The dropdown stays text: an <option> renders no markup, so a crest cannot go
+// inside one. It is also the moment a volunteer has to be certain which game
+// they are signing in for, which a name does better than a crest.
+function formatGameOption(game: Game): string {
+  return `${formatGameDate(game)} - UHC Uster vs. ${game.opponent}`;
 }
 
 export function ScannerLogin({ games }: { games: Game[] }) {
@@ -44,7 +50,8 @@ export function ScannerLogin({ games }: { games: Game[] }) {
         token: data.token,
         gameId,
         deviceLabel,
-        gameLabel: game ? formatGameLabel(game) : "",
+        gameLabel: game ? formatGameDate(game) : "",
+        opponent: game?.opponent,
       });
       router.push("/scanner/scan");
     } catch {
@@ -71,7 +78,7 @@ export function ScannerLogin({ games }: { games: Game[] }) {
         <Select label="Spiel" value={gameId} onChange={(event) => setGameId(event.target.value)} required>
           {games.map((game) => (
             <option key={game.id} value={game.id}>
-              {formatGameLabel(game)}
+              {formatGameOption(game)}
             </option>
           ))}
         </Select>

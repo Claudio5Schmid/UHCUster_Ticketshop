@@ -65,6 +65,26 @@
   gap: var(--space-3);
 }
 
+/* The fixture block in the status bar: crests plus the date. */
+.fixture {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* A light chip behind the crests - this screen is black, and several clubs ship
+   their crest on white while Kloten-Dietlikon's is on black. Without it one club
+   would read as a white block and another would disappear. */
+.fixtureCrests {
+  display: inline-flex;
+  align-items: center;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+
 .cameraWrap {
   position: relative;
   flex: 1;

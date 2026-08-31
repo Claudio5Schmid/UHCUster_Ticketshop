@@ -605,3 +605,36 @@ not a working setup. Separately, and independently of all of the above, the acco
 **SES sandbox** (confirmed by Claudio), so only verified recipients get anything at all until
 production access is granted - AWS takes up to 24 hours to approve. **Both must be resolved before
 5 September.**
+
+## 2026-08-31
+
+**D51 — A game is shown as club crests, never as lettering, everywhere in the app.** Claudio
+supplied the crests of all eleven clubs UHC Uster meets in 26/27 and asked that a fixture read as
+UHC Uster's crest against the opponent's wherever a game appears, rather than "UHC Uster - Gegner"
+as text, and that this be kept consistent rather than done only on the shop page. Implemented as one
+shared `Matchup` component (`src/components/match/`) so no surface can drift: the shop's fixture
+lists, the scanner's status bar and the admin live view, schedule cards and dashboard table all
+render the same thing. Crests come from `src/lib/teamLogos.ts`, keyed on a normalised opponent name
+because `games.opponent` is free text an admin can hand-correct; an unknown club falls back to its
+name rather than to an empty row.
+
+Two places keep the name **beside** the crests rather than instead of them, deliberately: the admin
+schedule (it is the screen where that name is edited) and any operations view where somebody must be
+*certain* which game they have - recognising a crest is not the same as reading a name. And two
+places cannot take a crest at all: `<option>` elements render no markup, so the scanner's game picker
+and the dashboard's game filter stay text. That is an HTML limitation, not an oversight.
+
+**D52 — The ticket PDF has no opponent to show, because a ticket is not per-game.** Checked while
+implementing D51: `tickets` has no game reference and `TicketPdfData` carries none - every ticket
+this shop issues is a season pass or a Red Castle Club membership, valid for *all* home games
+(single-game tickets are sold by Eventfrog, off this platform). So "both crests on the ticket" has
+no meaning on the current artifact; the PDF already carries the full UHC Uster logo, emblem
+included, in its header. If a per-game PDF is ever issued, or if the season pass should show the
+crests of the games it covers, that is a deliberate design change - not something D51 did silently.
+
+**D53 — Wallet passes must follow D51 when they are built.** Neither wallet exists yet (D28, blocked
+on an Apple developer enrollment and a Google issuer account). Recording the requirement here so it
+is not rediscovered later: whenever a wallet pass names a game, it carries both clubs' crests, from
+the same `/public/logos` set the app uses, and not the club name as text. The 320x160 transparent
+PNGs in that directory are already sized for it. A pass covering the whole season has the same
+caveat as D52 - there is no single opponent to show.

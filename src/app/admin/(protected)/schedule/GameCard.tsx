@@ -11,6 +11,7 @@ import {
   clearGameManualOverride,
 } from "./actions";
 import type { AdminGame } from "@/lib/admin/schedule";
+import { Matchup } from "@/components/match/Matchup/Matchup";
 import styles from "./schedule.module.css";
 
 const dateFormatter = new Intl.DateTimeFormat("de-CH", {
@@ -76,7 +77,11 @@ export function GameCard({ game }: { game: AdminGame }) {
     <article className={styles.card}>
       <header className={styles.cardHeader}>
         <div>
-          <h3 className={styles.opponent}>vs. {game.opponent}</h3>
+          <h3 className={styles.opponent}>
+            {/* Name kept alongside the crests - this is the screen where an admin
+                edits that very name, so it has to stay readable. */}
+            <Matchup opponent={game.opponent} size="sm" showName />
+          </h3>
           <p className={styles.meta}>
             {dateFormatter.format(new Date(game.played_at))}
             {game.venue ? ` · ${game.venue}` : ""}

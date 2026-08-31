@@ -14,7 +14,15 @@
   }
 }
 
-/* Matches what the opponent name looked like before crests replaced it. */
+/* Dense chrome - the scanner's status bar, admin tables - where the crest sits
+   beside text rather than carrying the row on its own. Declared after the media
+   query above so it wins at every width: a table cell shouldn't reflow on a phone. */
+.sm {
+  width: 56px;
+  height: 28px;
+}
+
+/* Matches what a club's name looked like before crests replaced it. */
 .fallback {
   font-size: var(--text-h3-size);
   font-weight: var(--text-h3-weight);

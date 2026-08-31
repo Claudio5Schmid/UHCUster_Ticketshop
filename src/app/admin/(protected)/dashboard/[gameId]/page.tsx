@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getGamesForSeason } from "@/lib/games";
 import { getLiveGameStats, getScanLogForGame } from "@/lib/admin/live";
 import { CURRENT_SEASON } from "@/lib/season";
+import { Matchup } from "@/components/match/Matchup/Matchup";
 import { LiveStatsView } from "./LiveStatsView";
 import { ScanLogTable } from "./ScanLogTable";
 
@@ -22,8 +23,11 @@ export default async function LiveGamePage({ params }: { params: Promise<{ gameI
 
   return (
     <div>
-      <h1>
-        UHC Uster vs. {game.opponent} <span style={{ color: "var(--color-text-secondary)", fontWeight: 400 }}>({label})</span>
+      {/* Crests like the rest of the app, but the opponent's name stays: this is
+          an operations screen where being sure beats recognising at a glance. */}
+      <h1 style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
+        <Matchup opponent={game.opponent} showName />
+        <span style={{ color: "var(--color-text-secondary)", fontWeight: 400 }}>({label})</span>
       </h1>
       <LiveStatsView gameId={gameId} initialStats={stats} />
       <ScanLogTable entries={scanLog} />

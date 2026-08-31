@@ -6,6 +6,7 @@ import { loadScannerSession, clearScannerSession, type StoredScannerSession } fr
 import { useScannerEngine, type ScanFeedback } from "@/lib/scanner/useScannerEngine";
 import { useBarcodeCamera } from "@/lib/scanner/useBarcodeCamera";
 import { playAcceptedSound, playRejectedSound, vibrateAccepted, vibrateRejected } from "@/lib/scanner/feedback";
+import { Matchup } from "@/components/match/Matchup/Matchup";
 import styles from "../scanner.module.css";
 
 const FEEDBACK_DISPLAY_MS = 800;
@@ -18,6 +19,28 @@ const FEEDBACK_TEXT: Record<ScanFeedback["kind"], { title: string; icon: string 
   invalid_signature: { title: "Ungültiges Format", icon: "✕" },
   checking: { title: "Wird geprüft...", icon: "…" },
 };
+
+/**
+ * The fixture in the status bar, as crests like everywhere else. They sit on a
+ * light chip because this screen is pure black: several clubs ship their crest
+ * on white and Kloten-Dietlikon's is on black, so on the raw background one of
+ * them would be a white block and another would vanish entirely.
+ *
+ * A session saved before the scanner stored the opponent keeps working - it just
+ * shows the date on its own.
+ */
+function SessionFixture({ session }: { session: StoredScannerSession }) {
+  return (
+    <span className={styles.fixture}>
+      {session.opponent && (
+        <span className={styles.fixtureCrests}>
+          <Matchup opponent={session.opponent} size="sm" />
+        </span>
+      )}
+      <span>{session.gameLabel}</span>
+    </span>
+  );
+}
 
 function formatTime(iso: string): string {
   return new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
@@ -70,7 +93,7 @@ function ScanningView({ session, onExit }: { session: StoredScannerSession; onEx
     return (
       <div className={styles.scanPage}>
         <div className={styles.topBar}>
-          <span>{session.gameLabel}</span>
+          <SessionFixture session={session} />
         </div>
         <p style={{ margin: "auto", color: "#fff" }}>Ticketliste wird geladen...</p>
       </div>
@@ -96,7 +119,7 @@ function ScanningView({ session, onExit }: { session: StoredScannerSession; onEx
   return (
     <div className={styles.scanPage}>
       <div className={styles.topBar}>
-        <span>{session.gameLabel}</span>
+        <SessionFixture session={session} />
         <span>
           {session.deviceLabel} · {ticketCount} Tickets
           {pendingSyncCount > 0 && <span className={styles.pendingBadge}>{pendingSyncCount} in Warteschlange</span>}

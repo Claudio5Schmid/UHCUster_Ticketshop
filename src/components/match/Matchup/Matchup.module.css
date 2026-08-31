@@ -1,0 +1,25 @@
+.matchup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.sm {
+  gap: var(--space-2);
+}
+
+.versus {
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+  /* The crests carry the pairing; this only has to separate them, not compete. */
+  font-weight: 500;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.sm .versus,
+.sm .name {
+  font-size: var(--text-small-size);
+}

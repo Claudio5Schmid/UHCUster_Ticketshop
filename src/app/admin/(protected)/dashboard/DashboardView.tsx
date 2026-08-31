@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Select } from "@/components/ui/Select/Select";
 import { Table, type TableColumn } from "@/components/ui/Table/Table";
 import { PieChart } from "@/components/ui/PieChart/PieChart";
+import { Matchup } from "@/components/match/Matchup/Matchup";
 import { getAttendanceReportAction } from "./actions";
 import type { Game } from "@/lib/games";
 import type { AttendanceReport, GameAttendanceRow } from "@/lib/admin/dashboard";
@@ -98,8 +99,13 @@ export function DashboardView({ games, initialReport }: { games: Game[]; initial
         row.isTotal ? (
           <strong>Total</strong>
         ) : (
-          <Link href={`/admin/dashboard/${row.gameId}`} className={styles.orderLink}>
-            {dateFormatter.format(new Date(row.playedAt))} - vs. {row.opponent}
+          <Link
+            href={`/admin/dashboard/${row.gameId}`}
+            className={styles.orderLink}
+            style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap" }}
+          >
+            {dateFormatter.format(new Date(row.playedAt))}
+            <Matchup opponent={row.opponent} size="sm" showName />
           </Link>
         ),
     },
