@@ -11,8 +11,8 @@
   border-bottom: none;
 }
 
-/* Centred rather than baseline-aligned: the opponent is a crest now, and an
-   image has no text baseline to align the date against. */
+/* Centred rather than baseline-aligned: the teams are crests now, and an image
+   has no text baseline to align the date against. */
 .info {
   display: flex;
   align-items: center;
@@ -41,9 +41,22 @@
   color: var(--color-text-secondary);
 }
 
-/* Below this the date block, crest and button no longer share a line without
-   squeezing the crest, so the row stacks and the button drops underneath. */
-@media (max-width: 560px) {
+.matchup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.versus {
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+  /* The crests carry the row; this only has to separate them, not compete. */
+  font-weight: 500;
+}
+
+/* Below this the date block and both crests no longer share a line with the
+   button, so the pairing drops onto its own row and the button under it. */
+@media (max-width: 700px) {
   .row {
     flex-wrap: wrap;
     gap: var(--space-3);
@@ -51,11 +64,16 @@
 
   .info {
     width: 100%;
-    justify-content: space-between;
-    gap: var(--space-4);
+    flex-wrap: wrap;
+    gap: var(--space-3);
   }
 
+  /* Side by side rather than stacked: the pairing already needs its own line
+     here, so keeping date and venue on one keeps a fixture to three lines. */
   .when {
-    width: auto;
+    width: 100%;
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--space-3);
   }
 }

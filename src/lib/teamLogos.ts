@@ -23,6 +23,13 @@ const LOGO_WIDTH = 320;
 const LOGO_HEIGHT = 160;
 
 /**
+ * The club whose shop this is. Every game in the listings is a home game, so
+ * this is always the left-hand side of the pairing - the name matches what
+ * Swiss Unihockey calls the team, so the same lookup below resolves it.
+ */
+export const HOME_TEAM = "UHC Uster";
+
+/**
  * Lowercases, folds German umlauts the way the clubs themselves write them out
  * ("Köniz" / "Koeniz"), strips any remaining diacritics, then drops everything
  * that isn't a letter or digit - so "SV Wiler-Ersigen", "sv wiler ersigen" and
@@ -42,12 +49,14 @@ function normalizeTeamName(team: string): string {
 }
 
 /**
- * The ten clubs UHC Uster hosts in 26/27, plus Floorball Thurgau - away-only
- * this season, but kept here so a moved or added fixture doesn't silently fall
- * back to text. Extra keys are naming variants seen in the wild; the sync's own
- * spelling is listed first in each group.
+ * UHC Uster itself, the ten clubs it hosts in 26/27, plus Floorball Thurgau -
+ * away-only this season, but kept here so a moved or added fixture doesn't
+ * silently fall back to text. Extra keys are naming variants seen in the wild;
+ * the sync's own spelling is listed first in each group.
  */
 const LOGO_FILES: Record<string, string> = {
+  "UHC Uster": "uhc-uster",
+
   "Floorball Chur United": "floorball-chur-united",
   "Chur United": "floorball-chur-united",
 
