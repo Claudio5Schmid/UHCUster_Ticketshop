@@ -75,6 +75,13 @@
   padding: var(--space-2) var(--container-padding-mobile) var(--space-4);
 }
 
+/* Has to be spelled out: the UA's `[hidden] { display: none }` loses to the
+   `.panel` class selector above, so without this the panel stays laid out and
+   painted over the page even while the toggle reports aria-expanded="false". */
+.panel[hidden] {
+  display: none;
+}
+
 .panelOpen {
   animation: slideDown var(--duration-base) var(--easing-standard);
 }

@@ -12,6 +12,15 @@ export interface PieSlice {
   color?: string;
 }
 
+interface PieArc extends PieSlice {
+  color: string;
+  fraction: number;
+  /** Arc length in user units, for stroke-dasharray. */
+  dash: number;
+  /** Where this arc starts along the circle, for stroke-dashoffset. */
+  offset: number;
+}
+
 interface PieChartProps {
   title: string;
   slices: PieSlice[];
@@ -66,23 +75,24 @@ export function PieChart({ title, slices, unit, emptyLabel = "Keine Daten" }: Pi
     );
   }
 
+  // A loop rather than .map(): both counters below have to carry from one slice to
+  // the next, and React Compiler rejects reassigning them from inside a callback.
+  const arcs: PieArc[] = [];
   let offsetSoFar = 0;
   // Palette entries are consumed only by slices without a pinned color, so pinning one
   // never causes a duplicate color further down the list.
   let paletteCursor = 0;
-  const arcs = data.map((slice) => {
+  for (const slice of data) {
     const fraction = slice.value / total;
-    const color = slice.color ?? PALETTE[paletteCursor++ % PALETTE.length];
-    const arc = {
+    arcs.push({
       ...slice,
-      color,
+      color: slice.color ?? PALETTE[paletteCursor++ % PALETTE.length],
       fraction,
       dash: fraction * CIRCUMFERENCE,
       offset: offsetSoFar * CIRCUMFERENCE,
-    };
+    });
     offsetSoFar += fraction;
-    return arc;
-  });
+  }
 
   const highlighted = active === null ? null : arcs[active];
 

@@ -18,10 +18,17 @@ export function MobileNav() {
 
   // Any navigation closes the panel. Route-change alone isn't enough: the
   // "Saisonkarten" link is an in-page anchor on "/", so tapping it from "/" never
-  // changes the pathname - each link also closes on click below.
-  useEffect(() => {
+  // changes the pathname - each link also closes on click below. What's left for
+  // this to catch is browser back/forward with the panel still open.
+  //
+  // Adjusted during render instead of in an effect: React re-runs the component
+  // with the new state before committing, so the panel never paints open on the
+  // new route (https://react.dev/learn/you-might-not-need-an-effect).
+  const [renderedPathname, setRenderedPathname] = useState(pathname);
+  if (pathname !== renderedPathname) {
+    setRenderedPathname(pathname);
     setOpen(false);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     if (!open) return;

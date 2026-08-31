@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Select } from "@/components/ui/Select/Select";
 import { Table, type TableColumn } from "@/components/ui/Table/Table";
@@ -29,8 +29,12 @@ export function DashboardView({ games, initialReport }: { games: Game[]; initial
   const [error, setError] = useState<string | null>(null);
 
   // Every selection change reloads immediately - no "show results" button to press.
-  useEffect(() => {
-    const gameIds = selection === ALL_GAMES ? games.map((game) => game.id) : [selection];
+  // Fetching from the change handler rather than an effect keyed on `selection`
+  // also drops a round trip on mount: the default selection is "all games", which
+  // is exactly what the server already rendered into `initialReport`.
+  function handleSelectionChange(next: string) {
+    setSelection(next);
+    const gameIds = next === ALL_GAMES ? games.map((game) => game.id) : [next];
     setError(null);
     startTransition(async () => {
       try {
@@ -39,8 +43,7 @@ export function DashboardView({ games, initialReport }: { games: Game[]; initial
         setError(loadError instanceof Error ? loadError.message : "Fehler beim Laden.");
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection]);
+  }
 
   const byProductSlices = useMemo(
     () => Object.entries(report.grandTotalByProduct).map(([label, value]) => ({ label, value })),
@@ -117,7 +120,7 @@ export function DashboardView({ games, initialReport }: { games: Game[]; initial
         <Select
           label="Spiel"
           value={selection}
-          onChange={(event) => setSelection(event.target.value)}
+          onChange={(event) => handleSelectionChange(event.target.value)}
           className={styles.gameSelect}
         >
           <option value={ALL_GAMES}>Alle Spiele ({games.length})</option>
