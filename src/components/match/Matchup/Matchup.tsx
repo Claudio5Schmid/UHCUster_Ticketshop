@@ -22,11 +22,18 @@ interface MatchupProps {
 export function Matchup({ opponent, size = "md", showName = false }: MatchupProps) {
   return (
     <span className={size === "sm" ? `${styles.matchup} ${styles.sm}` : styles.matchup}>
-      <TeamLogo team={HOME_TEAM} size={size} decorative={showName} />
+      {/* Each club sits centred in a column of its own. Without that the crests
+          are flush against "vs." and, since they are all different widths, the
+          list frays down its outer edges. */}
+      <span className={`${styles.side} ${styles.home}`}>
+        <TeamLogo team={HOME_TEAM} size={size} decorative={showName} />
+      </span>
       {/* Readable, not aria-hidden: with the clubs carried only by the crests'
           alt text, this is what tells a screen reader they are playing each other. */}
       <span className={styles.versus}>vs.</span>
-      <TeamLogo team={opponent} size={size} decorative={showName} />
+      <span className={`${styles.side} ${styles.away}`}>
+        <TeamLogo team={opponent} size={size} decorative={showName} />
+      </span>
       {showName && <span className={styles.name}>{opponent}</span>}
     </span>
   );

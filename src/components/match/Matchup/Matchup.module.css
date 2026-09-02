@@ -4,8 +4,53 @@
   gap: var(--space-3);
 }
 
+/*
+ * One column per club, crest centred inside it. The crests keep their own
+ * widths - a round emblem is narrow, a wordmark wide - so without a column each
+ * row would start its crest at a different place and the list would fray.
+ *
+ * min-width rather than width: a club with no crest on file falls back to its
+ * name, which is allowed to push the column wider rather than overflow it.
+ */
+.side {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Each sized just past the widest crest it can hold at that breakpoint: UHC
+   Uster's own logo on the left (always the same one, 157px at this size), and
+   Alligator Malans, the widest of the opponents, on the right. */
+.home {
+  min-width: 160px;
+}
+
+.away {
+  min-width: 112px;
+}
+
+@media (max-width: 480px) {
+  .home {
+    min-width: 126px;
+  }
+
+  .away {
+    min-width: 88px;
+  }
+}
+
+/* Dense chrome. Higher specificity than the media query above, so it applies at
+   every width - a scanner bar or table cell shouldn't reflow on a phone. */
 .sm {
   gap: var(--space-2);
+}
+
+.sm .home {
+  min-width: 80px;
+}
+
+.sm .away {
+  min-width: 56px;
 }
 
 .versus {
