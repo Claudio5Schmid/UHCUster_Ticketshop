@@ -20,7 +20,9 @@ rather than deleted so historical orders always resolve to a real row.
 An append-only ledger of every price a product has ever had, populated automatically by a trigger on
 `products` whenever `price_rappen` changes (and seeded on product creation, so history is complete
 from day one). Admins can read it; nobody, including admins, can write to it directly or edit/delete
-a row — enforced by a database trigger, not just convention.
+a row — enforced by a database trigger, not just convention. `changed_by` goes to null when that
+admin is removed; `changed_by_email` keeps a copy of their address, written by the same
+`before insert` trigger that fills `audit_log.actor_email`.
 
 ## order_number_sequences
 
@@ -103,7 +105,9 @@ insert itself goes through the caller's own session, so it's gated by the real "
 admin_users" RLS policy rather than only the function's own `is_admin()` check. Removing an admin
 there deletes the Auth account, and the `admin_users` row cascades away with it, so the address is
 free to be added again; `audit_log.actor_admin_id` and `price_history.changed_by` are `on delete set
-null` so their append-only rows survive that.
+null` so their append-only rows survive that, and both tables keep the acting admin's address in
+`actor_email` / `changed_by_email`, written when the row is created, so an entry keeps its author
+even once the account is gone.
 
 ## audit_log
 
@@ -113,6 +117,8 @@ changes and reissues, and non-price product edits (name/description/benefits/tie
 active). Kept separate from `price_history`, which is scoped strictly to prices per its own name and
 the brief's Phase 1 definition — see `docs/DECISIONS.md` D18 for the reasoning. Admin-readable only;
 populated exclusively by the `SECURITY DEFINER` mutation functions and the auto-cancel job.
+`actor_admin_id` points at the acting admin and goes to null when that admin is removed; `actor_email`
+holds a copy of their address, filled by a `before insert` trigger, so the trail keeps its author.
 
 ## games
 
