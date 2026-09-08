@@ -269,11 +269,15 @@ max_frequency = "5s"
 # 4152127777 = "123456"
 
 # Configure logged in session timeouts.
-# [auth.sessions]
-# Force log out after the specified duration.
+# Must match ADMIN_INACTIVITY_TIMEOUT_MS in src/lib/admin/session.ts and the
+# hosted project's Authentication -> Sessions setting (docs/OPERATIONS.md).
+# This block only governs a locally-run stack.
+[auth.sessions]
+# Force log out after the specified duration. Deliberately unset: an admin
+# working through a long match day should not be thrown out mid-task.
 # timebox = "24h"
 # Force log out if the user has been inactive longer than the specified duration.
-# inactivity_timeout = "8h"
+inactivity_timeout = "1h"
 
 # This hook runs before a new user is created and allows developers to reject the request based on the incoming user object.
 # [auth.hook.before_user_created]

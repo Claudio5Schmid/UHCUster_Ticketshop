@@ -1,0 +1,9 @@
+.message {
+  margin: 0 0 var(--space-5);
+  color: var(--color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-3);
+}

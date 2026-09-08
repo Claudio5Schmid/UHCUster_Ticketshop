@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { AdminNav } from "@/components/admin/AdminNav/AdminNav";
+import { IdleLogout } from "@/components/admin/IdleLogout/IdleLogout";
 
 export default async function ProtectedAdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await getSupabaseServerClient();
@@ -24,6 +25,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
 
   return (
     <div>
+      <IdleLogout />
       <AdminNav />
       <main style={{ maxWidth: "var(--content-max-width)", marginInline: "auto", padding: "var(--space-6) var(--container-padding-mobile)" }}>
         {children}

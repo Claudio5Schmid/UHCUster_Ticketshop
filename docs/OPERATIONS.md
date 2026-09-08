@@ -167,3 +167,25 @@ password-change time. **Recommended: enable it** (Supabase dashboard → Authent
 Policies → Password security) - free, no code change, and the only accounts it
 protects (admins) are exactly the ones worth protecting most. Not enabled automatically
 here since it's an auth-service setting, not something reachable via a SQL migration.
+
+### Session inactivity timeout
+
+An admin session used to last forever: there is no time-box and no inactivity timeout
+configured, and with refresh-token rotation on, a tab left open on the club laptop stayed
+logged in indefinitely. The app now signs an idle admin out after **one hour** from the
+browser (`src/lib/admin/session.ts`, `src/components/admin/IdleLogout/`), which is a real
+sign-out - it calls the same server action as the "Abmelden" button.
+
+That covers a tab left open. It cannot cover a browser **closed** before the countdown
+fires: no page is running, so nothing signs out, and the cookie stays valid. Closing that
+gap needs the server-side setting: **Supabase dashboard → Authentication → Sessions →
+Inactivity timeout = 3600 seconds**, leaving "Time-box user sessions" empty. Check whether
+the project's plan includes it - on hosted Supabase, session timeouts are a paid-tier
+feature. If it is not available, the in-browser hour plus the one-hour `jwt_expiry` is what
+there is, and that should be stated plainly rather than assumed.
+
+Three places hold this number and they must agree: `ADMIN_INACTIVITY_TIMEOUT_MS`,
+`supabase/config.toml` `[auth.sessions]` (local stack only), and the dashboard setting.
+
+Scanner devices are unaffected - they authenticate with signed tokens, not a Supabase Auth
+session, so no timeout here can log a scanner out mid-match.
