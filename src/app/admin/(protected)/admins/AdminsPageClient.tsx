@@ -138,8 +138,8 @@ export function AdminsPageClient({ admins }: { admins: AdminUser[] }) {
 
       <Modal open={!!removingAdmin} onClose={() => setRemovingAdmin(null)} title="Admin entfernen">
         <p style={{ marginBottom: "var(--space-5)" }}>
-          Zugriff für {removingAdmin?.email} entfernen? Das Konto selbst bleibt bestehen, verliert aber sofort den
-          Zugriff auf den Admin-Bereich.
+          Zugriff für {removingAdmin?.email} entfernen? Das Konto wird dabei vollständig gelöscht - die Adresse ist
+          danach wieder frei und kann jederzeit erneut als Admin angelegt werden.
         </p>
         <div className={styles.actions}>
           <Button type="button" onClick={handleRemoveConfirm} disabled={isPending}>

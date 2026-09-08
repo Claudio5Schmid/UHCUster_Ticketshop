@@ -38,6 +38,13 @@ export async function createAdditionalAdmin(email: string, password: string): Pr
   });
 
   if (createUserError || !userData.user) {
+    // Supabase answers a taken address with a generic "already been registered",
+    // which in this app only ever means one of two concrete things - say which.
+    if (createUserError?.message.toLowerCase().includes("already been registered")) {
+      throw new Error(
+        `Für ${email} existiert bereits ein Konto. Entweder ist die Person schon Admin, oder ihr Konto stammt aus einer Entfernung von vor diesem Fix und muss in Supabase unter Authentication > Users einmalig gelöscht werden.`
+      );
+    }
     throw new Error(createUserError?.message ?? "Konto konnte nicht erstellt werden.");
   }
 
@@ -48,14 +55,24 @@ export async function createAdditionalAdmin(email: string, password: string): Pr
 }
 
 /**
- * Only removes the admin_users row (RLS-gated via the caller's own session) -
- * the underlying Auth account is left alone, so a mistaken removal is
- * recoverable by re-adding the same person without recreating their login.
- * Guards against locking everyone out: can't remove yourself, can't remove
- * the last remaining admin.
+ * Removes the Auth account, which cascades the admin_users row away with it
+ * (admin_users.user_id references auth.users on delete cascade). Leaving the Auth
+ * account behind - which is what this used to do - kept the address registered, so
+ * the same person could never be added back: createAdditionalAdmin below always
+ * needs to create the Auth user, and that fails on a taken e-mail.
+ *
+ * Deleting the account is service-role work, so the "only admins may do this" check
+ * that RLS used to provide on the admin_users delete is made explicitly here first,
+ * exactly as createAdditionalAdmin does. Guards against locking everyone out: can't
+ * remove yourself, can't remove the last remaining admin.
  */
 export async function removeAdmin(userId: string): Promise<void> {
   const supabase = await getSupabaseServerClient();
+
+  const { data: isAdmin } = await supabase.rpc("is_admin");
+  if (!isAdmin) {
+    throw new Error("Nur bestehende Admins können Admin-Konten entfernen.");
+  }
 
   const {
     data: { user },
@@ -69,6 +86,7 @@ export async function removeAdmin(userId: string): Promise<void> {
     throw new Error("Der letzte Admin kann nicht entfernt werden.");
   }
 
-  const { error } = await supabase.from("admin_users").delete().eq("user_id", userId);
-  if (error) throw new Error(error.message);
+  const adminClient = getSupabaseAdminClient();
+  const { error } = await adminClient.auth.admin.deleteUser(userId);
+  if (error) throw new Error(`Konto konnte nicht entfernt werden: ${error.message}`);
 }

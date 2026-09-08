@@ -487,9 +487,12 @@ inventing a new one:
   `bootstrapFirstAdmin`'s own mechanism exactly - `/admin/setup` (D26) stays permanently one-time-only
   for the very first admin), but the `admin_users` insert itself goes through the caller's own
   session so it stays gated by the real RLS policy, not just the function's own `is_admin()` check.
-  Removing an admin only deletes the `admin_users` row, never the underlying Auth account (a mistaken
-  removal is recoverable without recreating login credentials) - guarded against removing yourself or
-  the last remaining admin.
+  Removing an admin deletes the underlying Auth account, which cascades the `admin_users` row away
+  with it - guarded against removing yourself or the last remaining admin. This reverses the original
+  "keep the Auth account so a mistaken removal is recoverable": keeping it left the address registered,
+  so re-adding that person was the one thing that could never be done. The two append-only history
+  tables now release their pointer (`on delete set null`) instead of blocking the removal, so
+  attribution for removed admins is given up in exchange for removal working at all.
 **Resolved.**
 
 **D47 — Red Castle Club shop cards get real metal colors too, reversing the website's own

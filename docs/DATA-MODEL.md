@@ -101,7 +101,9 @@ Every admin after the first goes through `/admin/admins` instead (D46) — still
 via the service-role client (unavoidable, that's a service-role-only operation), but the `admin_users`
 insert itself goes through the caller's own session, so it's gated by the real "Admins can insert
 admin_users" RLS policy rather than only the function's own `is_admin()` check. Removing an admin
-there only deletes the `admin_users` row, never the Auth account.
+there deletes the Auth account, and the `admin_users` row cascades away with it, so the address is
+free to be added again; `audit_log.actor_admin_id` and `price_history.changed_by` are `on delete set
+null` so their append-only rows survive that.
 
 ## audit_log
 
