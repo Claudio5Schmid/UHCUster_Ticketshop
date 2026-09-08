@@ -6,7 +6,10 @@ import { defineConfig, devices } from "@playwright/test";
 process.loadEnvFile(".env.local");
 process.loadEnvFile(".env.test.local");
 
-const PORT = 3000;
+// Overridable because port 3000 is a popular default - another project's dev
+// server sitting there gets silently reused by `reuseExistingServer`, and the
+// suite then tests that app instead of this one.
+const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3000);
 const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
