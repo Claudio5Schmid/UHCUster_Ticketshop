@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 interface UseBarcodeCameraOptions {
   onDecode: (text: string) => void;
-  /** While true, decoded frames are ignored - used during the 800ms feedback lock. */
+  /** While true, decoded frames are ignored - held from a scan until the operator taps the result away. */
   paused: boolean;
 }
 

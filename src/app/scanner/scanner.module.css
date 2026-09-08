@@ -154,6 +154,15 @@
   color: #fff;
 }
 
+/* A card that was already let in is not a rejection - it needs its own signal,
+   or the person at the door cannot tell "not valid" from "already inside".
+   Dark text on purpose: white on this yellow is about 2:1 and unreadable at
+   arm's length in a dim hall, the dark foreground is roughly 8:1. */
+.feedbackWarning {
+  background: #e8a900;
+  color: #1a1a1a;
+}
+
 .feedbackIcon {
   font-size: 88px;
   line-height: 1;
@@ -169,6 +178,14 @@
   font-size: var(--text-h3-size);
   opacity: 0.92;
   margin: 0;
+}
+
+.feedbackHint {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-small-size);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
 }
 
 .pendingBadge {

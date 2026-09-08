@@ -9,8 +9,6 @@ import { playAcceptedSound, playRejectedSound, vibrateAccepted, vibrateRejected 
 import { Matchup } from "@/components/match/Matchup/Matchup";
 import styles from "../scanner.module.css";
 
-const FEEDBACK_DISPLAY_MS = 800;
-
 const FEEDBACK_TEXT: Record<ScanFeedback["kind"], { title: string; icon: string }> = {
   accepted: { title: "Zutritt gewährt", icon: "✓" },
   already_redeemed: { title: "Bereits gescannt", icon: "⟳" },
@@ -76,9 +74,6 @@ function ScanningView({ session, onExit }: { session: StoredScannerSession; onEx
       playRejectedSound();
       vibrateRejected();
     }
-
-    const timeout = setTimeout(() => setLocked(false), FEEDBACK_DISPLAY_MS);
-    return () => clearTimeout(timeout);
   }, [lastResult]);
 
   function handleManualSubmit(event: React.FormEvent) {
@@ -114,7 +109,24 @@ function ScanningView({ session, onExit }: { session: StoredScannerSession; onEx
       ? styles.feedbackAccepted
       : lastResult?.kind === "checking"
         ? styles.feedbackChecking
-        : styles.feedbackRejected;
+        : lastResult?.kind === "already_redeemed"
+          ? styles.feedbackWarning
+          : styles.feedbackRejected;
+
+  /**
+   * A result now stays up until someone taps it away. The previous 800ms
+   * auto-release meant a scan could come and go before the person holding the
+   * phone had looked at it, and a card left lying in front of the lens
+   * re-scanned itself every 800ms, writing a permanent scan_events row each
+   * time. "checking" is deliberately not dismissible: the answer is still in
+   * flight, and unlocking here would hide the result that is about to arrive.
+   */
+  const isTerminal = lastResult !== null && lastResult.kind !== "checking";
+
+  function rearm() {
+    if (!isTerminal) return;
+    setLocked(false);
+  }
 
   return (
     <div className={styles.scanPage}>
@@ -156,16 +168,36 @@ function ScanningView({ session, onExit }: { session: StoredScannerSession; onEx
       )}
 
       {feedback && lastResult && (
-        <div className={`${styles.feedback} ${feedbackClass}`}>
+        <div
+          className={`${styles.feedback} ${feedbackClass}`}
+          role={isTerminal ? "button" : undefined}
+          tabIndex={isTerminal ? 0 : undefined}
+          onClick={rearm}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              rearm();
+            }
+          }}
+        >
           <span className={styles.feedbackIcon} aria-hidden="true">
             {feedback.icon}
           </span>
           <p className={styles.feedbackTitle}>{feedback.title}</p>
           {lastResult.holderName && <p className={styles.feedbackDetail}>{lastResult.holderName}</p>}
           {lastResult.productName && <p className={styles.feedbackDetail}>{lastResult.productName}</p>}
-          {lastResult.kind === "already_redeemed" && lastResult.redeemedAt && (
-            <p className={styles.feedbackDetail}>bereits gescannt um {formatTime(lastResult.redeemedAt)}</p>
+          {/* already_redeemed can only ever mean an earlier scan was accepted - the
+              partial unique index on scan_events fires on accepted rows only - so the
+              outcome of that first scan is known without carrying it around. The time
+              is missing when the device decided offline from its own ticket list. */}
+          {lastResult.kind === "already_redeemed" && (
+            <p className={styles.feedbackDetail}>
+              {lastResult.redeemedAt
+                ? `Erster Scan: Zutritt gewährt um ${formatTime(lastResult.redeemedAt)}`
+                : "Erster Scan: Zutritt gewährt"}
+            </p>
           )}
+          {isTerminal && <p className={styles.feedbackHint}>Zum Weiterscannen tippen</p>}
         </div>
       )}
     </div>
