@@ -12,8 +12,7 @@ import {
   type SendCardsResult,
 } from "@/lib/admin/members";
 import type { CsvColumnMapping } from "@/lib/csv/memberCsv";
-
-const SEND_CONFIRMATION_PHRASE = "Versenden";
+import { SEND_CONFIRMATION_PHRASE, matchesSendConfirmation } from "@/lib/admin/send-confirmation";
 
 export async function createMemberAction(input: MemberInput) {
   await createMemberAndIssueCards(input);
@@ -51,7 +50,7 @@ export async function sendPendingCardsAction(
   confirmationPhrase: string,
   memberIds?: string[]
 ): Promise<SendCardsResult> {
-  if (confirmationPhrase !== SEND_CONFIRMATION_PHRASE) {
+  if (!matchesSendConfirmation(confirmationPhrase)) {
     throw new Error(`Bitte "${SEND_CONFIRMATION_PHRASE}" eingeben, um den Versand zu bestätigen.`);
   }
   const result = await sendPendingMemberCards(subject, body, memberIds);

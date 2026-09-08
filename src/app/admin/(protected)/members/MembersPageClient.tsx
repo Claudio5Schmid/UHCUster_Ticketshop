@@ -16,6 +16,7 @@ import {
 } from "./actions";
 import type { Member } from "@/lib/admin/members";
 import { CSV_FIELDS, parseCsvHeader, detectColumnMapping, type CsvColumnMapping, type CsvField } from "@/lib/csv/memberCsv";
+import { matchesSendConfirmation } from "@/lib/admin/send-confirmation";
 import styles from "../admin.module.css";
 
 type SortKey = "name" | "email" | "kategorie" | "karte" | "uebertragbar";
@@ -560,7 +561,7 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
             onChange={(e) => setConfirmation(e.target.value)}
           />
           <div className={styles.actions}>
-            <Button onClick={handleSend} disabled={isPending || confirmation !== "Versenden" || sendCount === 0}>
+            <Button onClick={handleSend} disabled={isPending || !matchesSendConfirmation(confirmation) || sendCount === 0}>
               {sendCount} Karte(n) jetzt versenden
             </Button>
             <Button
