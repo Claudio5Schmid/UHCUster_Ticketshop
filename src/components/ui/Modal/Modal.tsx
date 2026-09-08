@@ -23,10 +23,20 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
     }
 
     document.addEventListener("keydown", handleKeyDown);
-    dialogRef.current?.focus();
 
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
+
+  /**
+   * Moving focus into the dialog belongs to *opening* it, and to nothing else. Every
+   * caller passes an inline arrow as onClose, so its identity changes on each render:
+   * keeping this in the effect above re-ran it after every keystroke and pulled focus
+   * out of whatever field the user was typing in - one character per click.
+   */
+  useEffect(() => {
+    if (!open) return;
+    dialogRef.current?.focus();
+  }, [open]);
 
   if (!open) return null;
 
