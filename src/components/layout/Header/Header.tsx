@@ -55,13 +55,13 @@ export function Header() {
           <div className={styles.right}>
             <Link href="/meine-tickets" className={styles.iconLink} aria-label="Meine Tickets">
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <circle cx="10" cy="6.5" r="3.4" stroke="currentColor" strokeWidth="1.4" />
                 <path
-                  d="M2.5 7.5V5.5a1 1 0 0 1 1-1h13a1 1 0 0 1 1 1v2a2.5 2.5 0 0 0 0 5v2a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-2a2.5 2.5 0 0 0 0-5Z"
+                  d="M3.5 17.2c.8-3.4 3.4-5.2 6.5-5.2s5.7 1.8 6.5 5.2"
                   stroke="currentColor"
                   strokeWidth="1.4"
-                  strokeLinejoin="round"
+                  strokeLinecap="round"
                 />
-                <path d="M12.5 4.5v11" stroke="currentColor" strokeWidth="1.4" strokeDasharray="1.6 1.8" />
               </svg>
             </Link>
             <CartButton />

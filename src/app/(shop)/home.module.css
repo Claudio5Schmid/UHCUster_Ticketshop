@@ -1,7 +1,7 @@
 /* Hero content pieces used inside HeroShell (the photo hero itself lives in
    src/components/shop/HeroShell). Centred, like everything in that hero. */
 .heroLogo {
-  height: 72px;
+  height: 56px;
   width: auto;
   margin-bottom: var(--space-2);
 }

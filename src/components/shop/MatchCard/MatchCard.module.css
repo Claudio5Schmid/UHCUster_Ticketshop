@@ -25,10 +25,8 @@
 }
 
 .crests {
+  --crest-height: 36px;
   margin-block: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-pill);
-  background: var(--gradient-crest-halo);
 }
 
 .action {

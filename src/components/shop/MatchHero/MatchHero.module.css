@@ -1,5 +1,5 @@
 .date {
-  font-size: var(--text-h3-size);
+  font-size: var(--text-body-size);
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -7,19 +7,17 @@
 }
 
 .pairing {
-  font-size: var(--text-h2-size);
+  font-size: var(--text-h3-size);
   font-weight: 800;
-  line-height: var(--text-h2-line);
+  line-height: var(--text-h3-line);
   letter-spacing: var(--text-display-tracking);
   text-transform: uppercase;
   color: var(--color-accent);
 }
 
 .crests {
+  --crest-height: 44px;
   margin-block: var(--space-2);
-  padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-pill);
-  background: var(--gradient-crest-halo);
 }
 
 .lead {
@@ -39,10 +37,10 @@
 
 @media (max-width: 640px) {
   .date {
-    font-size: var(--text-body-size);
+    font-size: var(--text-small-size);
   }
 
   .pairing {
-    font-size: var(--text-h3-size);
+    font-size: var(--text-body-size);
   }
 }

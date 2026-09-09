@@ -792,4 +792,14 @@ Eventfrog or a disabled "Tickets folgen" - there is no VIP single ticket to link
 
 Home page order became hero → coming games → season passes → Red Castle Club teaser, the FCB
 pattern; season passes remain one click away in the header. `docs/uhcusterdesignanalyse.md` #4
-records the visual rules. **Resolved in code; the real hero photo is still to come from Claudio.**
+records the visual rules.
+
+Adjusted after the first preview, again against the FCB page: the crests had been the loudest
+thing on the page. They are now small (36px in a card, 44px in the hero) and overlap the way two
+badges do on a match poster, with no "vs." - `Matchup layout="overlap"`, the columns layout the
+admin and scanner use is untouched. That only works because `public/logos/uhc-uster.png` had its
+baked-in white background keyed out; every other place the crest appears already puts it on white
+(the scanner's chip, admin tables), so nothing else changed. The hero shrank to FCB's proportions
+(title 56px and always one line, date 18px, pairing 24px, countdown 36px, ~60% viewport high), and
+the "Meine Tickets" icon became a person, since a ticket icon beside a cart read as "buy" rather
+than "mine". **Resolved in code; the real hero photo is still to come from Claudio.**

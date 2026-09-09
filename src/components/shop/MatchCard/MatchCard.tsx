@@ -16,10 +16,8 @@ export function MatchCard({ game }: { game: Game }) {
     <article className={styles.card}>
       <p className={styles.date}>{formatGameDateLine(game.played_at, game.venue)}</p>
       <p className={styles.league}>{LEAGUE_LABEL}</p>
-      {/* The crests sit on a white halo: the card's red glow is strongest right
-          here, and a black wordmark on saturated red is not something to squint at. */}
       <div className={styles.crests}>
-        <Matchup opponent={game.opponent} size="md" />
+        <Matchup opponent={game.opponent} layout="overlap" />
       </div>
       <div className={styles.action}>
         {game.eventfrog_url ? (

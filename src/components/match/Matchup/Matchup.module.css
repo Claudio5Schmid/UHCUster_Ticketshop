@@ -68,3 +68,51 @@
 .sm .name {
   font-size: var(--text-small-size);
 }
+
+/*
+ * The shop's pairing: both crests at one small height, the opponent's laid
+ * over the right end of Uster's the way two badges sit on a match poster.
+ * Sized from --crest-height so the hero and the cards pick their own.
+ */
+.overlap {
+  --crest-height: 36px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.overlapHome,
+.overlapAway {
+  display: inline-flex;
+  align-items: center;
+}
+
+.overlapAway {
+  position: relative;
+  z-index: 1;
+  /* A shallow overlap: Uster's crest is a wordmark, so any more than this
+     hides the last letter of "USTER". */
+  margin-left: calc(var(--crest-height) * -0.12);
+}
+
+/* Beats TeamLogo's own .logo height (a class alone) by class + element. */
+.overlap img {
+  height: var(--crest-height);
+  width: auto;
+  max-width: none;
+}
+
+.overlap .name {
+  margin-left: var(--space-3);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

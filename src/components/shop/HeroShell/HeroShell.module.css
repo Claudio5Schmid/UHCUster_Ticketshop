@@ -3,9 +3,9 @@
   overflow: hidden;
   /* The header sits transparently over the top of this block (negative margin
      on .overlay in Header.module.css), so the content pads past it. */
-  padding-top: calc(var(--header-height) + var(--space-7));
-  padding-bottom: var(--space-8);
-  min-height: clamp(520px, 78vh, 800px);
+  padding-top: calc(var(--header-height) + var(--space-6));
+  padding-bottom: var(--space-7);
+  min-height: clamp(420px, 60vh, 640px);
   display: flex;
   align-items: center;
 }
@@ -33,7 +33,7 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   width: 100%;
 }
 
@@ -43,14 +43,14 @@
   line-height: var(--text-display-line);
   letter-spacing: var(--text-display-tracking);
   text-transform: uppercase;
-  text-wrap: balance;
-  max-width: 16ch;
+  /* One line, always - the size token scales with the viewport for that. */
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {
   .hero {
     min-height: 0;
-    padding-top: calc(var(--header-height) + var(--space-6));
-    padding-bottom: var(--space-7);
+    padding-top: calc(var(--header-height) + var(--space-5));
+    padding-bottom: var(--space-6);
   }
 }

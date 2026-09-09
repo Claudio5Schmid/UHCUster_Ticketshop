@@ -132,21 +132,22 @@ Der Ticketshop übernimmt die **Anordnung** des FC-Basel-Ticketshops, nicht dess
 ### HERO (Startseite, Einzeltickets, Red Castle Club)
 - Ein Foto über die volle Breite (`public/hero/heimspiel.jpg`, ≤ 2400 px breit, JPEG). Bis das echte Foto da ist, liegt dort ein kleiner heller Verlauf als Platzhalter – die Datei wird ersetzt, der Code nicht.
 - Darüber eine **weisse Überlagerung** (`--gradient-hero-overlay`, 70–92 % Weiss, unten dichter). Text und Logos bleiben schwarz/rot; das Foto ist Stimmung, nicht Kontrastfläche.
-- Inhalt zentriert, von oben nach unten: Titel «SICHERE DIR DEINEN PLATZ» → Datum/Zeit/Halle → «UHC USTER - GEGNER» (rot) → beide Club-Logos → Countdown (TAGE : STD : MIN) → roter Pill-Button «Tickets kaufen».
+- Inhalt zentriert, von oben nach unten: Titel «SICHERE DIR DEINEN PLATZ» (immer **eine Zeile**, skaliert mit der Breite, 56 px Desktop) → Datum/Zeit/Halle (18 px) → «UHC USTER - GEGNER» (rot, 24 px) → beide Club-Logos klein und überlappend (44 px, ohne «vs.») → Countdown (36 px, TAGE : STD : MIN) → roter Pill-Button «Tickets kaufen». Hero-Höhe ca. 60 % des Fensters.
 - Countdown: bis Anpfiff; ab Anpfiff bis +3 h «Spiel läuft - Heute!»; danach springt der Hero zum nächsten Heimspiel. Ohne kommendes Spiel: Titel, ein Satz, Pill-Link zur Eventfrog-Suche.
 - Red Castle Club: gleiches Foto, Club-Logo, Titel «RED CASTLE CLUB», Einleitungstext, Pill-Button «Mitglied werden» (Anker auf die Karten). Kein Countdown.
 
 ### DISPLAY-TYPOGRAFIE
-- Weiterhin Inter, aber für Hero-Titel, Sektionstitel («KOMMENDE SPIELE») und Countdown-Ziffern: **Versalien, Weight 900, Tracking −0.02em**, Line-height 1. Tokens `--text-display-*`, `--text-section-title-size`, `--text-countdown-size`.
+- Weiterhin Inter, aber für Hero-Titel, Sektionstitel («KOMMENDE SPIELE») und Countdown-Ziffern: **Versalien, Weight 900, Tracking −0.02em**, Line-height 1. Tokens `--text-display-*` (56 px Desktop, `6vw` dazwischen, damit der Titel nie umbricht), `--text-section-title-size`, `--text-countdown-size` (36 px).
 - Ziffern immer `tabular-nums`, damit der Countdown nicht springt.
 
 ### HEADER
 - Auf den drei Hero-Seiten **transparent über dem Foto** (Logo bleibt farbig, Links schwarz), ab 24 px Scroll die gewohnte weisse Leiste mit feiner Linie. Auf allen anderen Seiten von Anfang an weiss.
-- Logo links, drei Textlinks **zentriert** (Saisonkarten, Red Castle Club, Einzeltickets), rechts zwei Icons im **runden Rahmen** (Meine Tickets, Warenkorb mit rotem Zähler). Mobil: Burger-Menü, das zusätzlich «Meine Tickets» ausschreibt.
+- Logo links, drei Textlinks **zentriert** (Saisonkarten, Red Castle Club, Einzeltickets), rechts zwei Icons im **runden Rahmen** (36 px): eine Person für «Meine Tickets», der Warenkorb mit rotem Zähler. Mobil: Burger-Menü, das zusätzlich «Meine Tickets» ausschreibt.
 
 ### SPIELKARTEN
 - Raster: 3 pro Reihe ab 1024 px, 2 ab 640 px, sonst 1. Startseite zeigt die nächsten 3 mit «ALLE ANSEHEN», Einzeltickets alle kommenden Heimspiele.
-- Karte: weiss, Radius 24 px (`--radius-xl`), Schatten `--shadow-card-lg`, **roter Radialverlauf aus der Mitte** (`--gradient-match-card`, 35 % Rot im Zentrum, nach aussen weiss). Die Logos sitzen auf einem weissen Halo (`--gradient-crest-halo`), damit sie über dem stärksten Rot lesbar bleiben.
+- Karte: weiss, Radius 24 px (`--radius-xl`), Schatten `--shadow-card-lg`, **roter Radialverlauf aus der Mitte** (`--gradient-match-card`, 35 % Rot im Zentrum, nach aussen weiss).
+- Logos **klein (36 px) und überlappend** wie auf einem Matchplakat: das Uster-Logo ganz, das Gegner-Wappen über dessen rechtem Rand, kein «vs.» (`Matchup layout="overlap"`). Das Uster-Logo ist dafür freigestellt (transparenter Hintergrund), damit auf dem Rot kein weisses Rechteck steht. Kein Halo.
 - Inhalt zentriert: Datum/Zeit/Halle (fett) → «L-UPL» (grau) → Logos → roter Pill-Button «Tickets kaufen» (Eventfrog, neuer Tab) bzw. deaktiviert «Tickets folgen», solange kein Link hinterlegt ist. Kein zweiter Button: VIP gibt es nur als Red-Castle-Club-Saisonkarte.
 
 ### SEKTIONEN
