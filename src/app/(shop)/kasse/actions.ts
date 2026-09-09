@@ -5,7 +5,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase";
 import { CURRENT_SEASON } from "@/lib/season";
 import { getClientIp, checkOrderRateLimit } from "@/lib/rate-limit";
 import { assertOrderLinkConfigured, buildOrderAccessPath, buildOrderAccessUrl } from "@/lib/orders/access-token";
-import { sendEmail } from "@/lib/email/ses";
+import { sendEmail } from "@/lib/email/mailer";
 import {
   orderConfirmationSubject,
   orderConfirmationText,
@@ -120,7 +120,7 @@ export async function submitOrder(
     statusPath: buildOrderAccessPath(data.order_number),
   };
 
-  // Runs after the response is flushed, so a slow or failing SES never delays the
+  // Runs after the response is flushed, so a slow or failing mail provider never delays the
   // customer's confirmation screen - and, critically, never fails an order that is
   // already committed. The order is the thing that matters; the email is a courtesy
   // copy of it. Failures are logged and left visible as a null

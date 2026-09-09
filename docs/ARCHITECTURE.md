@@ -281,8 +281,8 @@ to existing club members going forward — CSV import or single-member entry gen
 and/or N transferable codes per member (two `products`, see `docs/DATA-MODEL.md`), reusing the
 existing Phase 6 `issue_tickets_for_order` PDF pipeline unchanged. This is the one deliberate, scoped
 exception to the project's original "no email anywhere" rule (`docs/DECISIONS.md` D38): a batch
-"send" button emails each member their card PDF(s) via Amazon SES (`src/lib/email/ses.ts`, nodemailer
-+ `@aws-sdk/client-sesv2`), gated behind an editable subject/body and a typed confirmation phrase
+"send" button emails each member their card PDF(s) via Resend (`src/lib/email/mailer.ts`; Amazon SES
+until 2026-09-09, see D56), gated behind an editable subject/body and a typed confirmation phrase
 (D42) so nothing goes out without an explicit human step. `create_member_order()` (Postgres,
 `SECURITY DEFINER`, admin-only) creates an already-`bezahlt` order per member — there's no payment to
 wait for — so ticket issuance and PDF generation work exactly as they do for a real checkout.

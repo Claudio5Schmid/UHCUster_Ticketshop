@@ -11,7 +11,6 @@
     "test:preview": "playwright test --config=playwright.config.preview.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-sesv2": "^3.1119.0",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",
     "@zxing/browser": "^0.2.1",
@@ -20,16 +19,15 @@
     "fast-xml-parser": "^5.11.0",
     "jszip": "^3.10.1",
     "next": "16.3.3",
-    "nodemailer": "^9.0.5",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "resend": "^6.26.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/node": "^20",
-    "@types/nodemailer": "^8.0.1",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",

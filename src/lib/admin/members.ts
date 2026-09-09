@@ -1,7 +1,7 @@
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { issueTicketsForOrder, addMemberTickets } from "@/lib/tickets/issue";
 import { getOrderTickets, type OrderTicket } from "@/lib/admin/tickets";
-import { sendCardEmail } from "@/lib/email/ses";
+import { sendCardEmail } from "@/lib/email/mailer";
 import { CURRENT_SEASON } from "@/lib/season";
 import { parseMemberCsvRows, type CsvColumnMapping } from "@/lib/csv/memberCsv";
 import {

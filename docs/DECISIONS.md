@@ -726,3 +726,35 @@ cards rather than people, and attaches only what has not gone out yet, so a memb
 added later receives that card rather than their whole set again. A card whose PDF is missing from
 Storage now fails that member visibly instead of quietly sending an incomplete set - one such ticket
 exists in production today. **Resolved.**
+
+## 2026-09-09
+
+**D56 — Outbound email moves from Amazon SES to Resend.** The provider swap Claudio decided
+outside the repo, now actually in the code. `src/lib/email/ses.ts` is replaced by
+`src/lib/email/mailer.ts` - named for the job rather than the provider, since the two call sites
+(checkout confirmation, member card send) only needed editing for this switch because the module
+carried the first provider's name. `@aws-sdk/client-sesv2` and `nodemailer` are gone; `resend` is
+the only mail dependency.
+
+Nothing about *what* is sent changed: both templates in `src/lib/email/order-confirmation.ts` are
+provider-independent, the reserved-TLD guard (D49) still keeps Playwright's `.invalid` addresses
+away from a real provider, and the two exceptions to "no email anywhere" (D38/D40/D49) are still
+the only two.
+
+**One behavioural difference had to be handled explicitly.** Resend reports a refused send in its
+response object instead of throwing, the opposite of the nodemailer transport it replaces. Left
+unchecked that would have turned every rejection into a reported success - and the card send would
+have stamped cards as delivered that never left. `sendEmail` therefore inspects `error` and throws.
+
+Environment variables changed with it: `RESEND_API_KEY`, `MAIL_FROM_EMAIL`, `MAIL_REPLY_TO` replace
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_REGION`/`SES_FROM_EMAIL`/`SES_REPLY_TO`. Only the
+API key name is provider-specific; the address ones are not, for the same reason the module was
+renamed. Sending address: `tickets@uhcuster.ch`.
+
+**Not resolved in code, and blocking real delivery:** `uhcuster.ch` has to be verified in Resend
+and its DKIM records added to DNS. As of this entry the domain's live DNS still points entirely at
+SES (`v=spf1 include:amazonses.com`, MX `feedback-smtp.eu-central-1.amazonses.com` on
+`tickets.uhcuster.ch`), so until that is changed Resend-sent mail fails SPF/DKIM alignment and
+receivers drop it silently - the exact failure D50 documents, just with the providers swapped.
+**Resolved in code; open on DNS and the Resend dashboard.**
+
