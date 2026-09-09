@@ -105,6 +105,14 @@ export interface SendCardEmailInput {
   attachments: EmailAttachment[];
 }
 
-export async function sendCardEmail(input: SendCardEmailInput): Promise<void> {
-  await sendEmail(input);
+/**
+ * Returns false when the address was skipped as structurally undeliverable, the
+ * same as sendEmail. This used to return void, which meant a member on a
+ * reserved-TLD address was recorded as having received their cards when nothing
+ * had been sent - harmless while sending was tracked per member and only test
+ * data ever hit it, but the per-card status now shown in the admin has to be
+ * true.
+ */
+export async function sendCardEmail(input: SendCardEmailInput): Promise<boolean> {
+  return sendEmail(input);
 }

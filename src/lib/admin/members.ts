@@ -346,12 +346,19 @@ export async function sendMemberCards(
         });
       }
 
-      await sendCardEmail({
+      const delivered = await sendCardEmail({
         to: member.email,
         subject: applyTemplate(subjectTemplate, member),
         bodyText: applyTemplate(bodyTemplate, member),
         attachments,
       });
+
+      if (!delivered) {
+        // A reserved-TLD address can never receive anything, so the cards stay
+        // open. Reported rather than skipped quietly: an admin who selected this
+        // member is owed the reason their cards did not go out.
+        throw new Error("Adresse ist nicht zustellbar (reservierte Domain) - es wurde nichts versendet.");
+      }
 
       const { error: markError } = await supabase.rpc("mark_tickets_sent", {
         p_ticket_ids: pending.map((ticket) => ticket.id),
