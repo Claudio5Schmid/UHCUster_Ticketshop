@@ -287,6 +287,15 @@ exception to the project's original "no email anywhere" rule (`docs/DECISIONS.md
 `SECURITY DEFINER`, admin-only) creates an already-`bezahlt` order per member — there's no payment to
 wait for — so ticket issuance and PDF generation work exactly as they do for a real checkout.
 
+Since then each card is managed individually. Clicking a member's name opens
+`/admin/members/[id]`, which lists their cards in the same table the order detail page uses
+(`src/components/admin/TicketTable/`): kind and running number, holder, whether the QR still works,
+whether it has been sent, and the PDF. Cards can be added to a member who already has some
+(`add_member_tickets`, fenced to the two zero-price member products so it structurally cannot reach a
+paid shop order), deactivated for good, or regenerated after a loss (`regenerate_ticket`, which keeps
+the running number and comes back as still to send). Sending is driven by an explicit selection and
+counts open **cards**, not members; only the cards that have not gone out yet are attached.
+
 Not built: any migration of pre-existing/legacy member QR codes (D41, explicitly out of scope for
 now), and a `kategorie`-to-product mapping (D40, category is currently a display-only label).
 

@@ -64,6 +64,16 @@ PDF lives in the private `tickets` Storage bucket. A lost ticket is never delete
 auditable. Admin-readable only; holder-name changes, reissues, and initial issuance
 (`issue_tickets_for_order`, Phase 6) all go through logged functions, never a bare write.
 
+Three columns came with the card lifecycle (`add_ticket_card_tracking`). `order_id` is denormalised
+from `order_items` so per-order rules don't depend on a join. `transferable_index` is the running
+number a member and the office use to name a card ("übertragbar-2"), unique per order through a
+partial index that excludes `ersetzt` only: a **voided** card keeps holding its number, so a newly
+created one can never claim it, while a **replaced** card releases it, because its replacement *is*
+that card and inherits the number. `card_sent_at` records when this individual card was e-mailed —
+`members.cards_sent_at` used to carry one timestamp for a whole member, which cannot express "two
+sent, two still open" the moment a card is added after the first send. That column is deprecated,
+still written, and read by nothing.
+
 ## scan_events
 
 An append-only record of every scan attempt at the door, whether or not it resolved to a real ticket
@@ -151,8 +161,9 @@ table in this schema).
 ## Mutation functions (not tables, but part of the data layer)
 
 Every write to `orders`, `tickets`, and non-price fields of `products` goes through one of:
-`transition_order_status`, `set_refund_owed`, `rename_ticket_holder`, `reissue_ticket`,
-`update_product_details`, `issue_tickets_for_order` (Phase 6), `set_files_handed_over` (Phase 6). Each
+`transition_order_status`, `set_refund_owed`, `rename_ticket_holder`, `regenerate_ticket`,
+`update_product_details`, `issue_tickets_for_order` (Phase 6), `set_files_handed_over` (Phase 6),
+`add_member_tickets`, `mark_tickets_sent`. Each
 checks `is_admin()` internally, performs its change, and writes the matching `audit_log` row
 atomically. They're callable only by `authenticated` sessions (not `anon`), and are meant to be called
 through the admin's own authenticated session — not a shared service-role connection — so that

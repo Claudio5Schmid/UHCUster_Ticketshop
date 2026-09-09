@@ -366,13 +366,10 @@ $$;
 revoke execute on function public.create_member_order(text, text, integer, integer, text) from public, anon;
 grant execute on function public.create_member_order(text, text, integer, integer, text) to authenticated;
 
--- 5. Overwriting a ticket PDF in place.
+-- Deliberately NOT here: an update policy on the tickets Storage bucket.
 --
--- The bucket had select and insert policies only, so a card's PDF could be
--- written once and never again. Re-rendering at the same path is what lets an
--- existing card gain the running number without its QR code - and therefore the
--- copy already in a member's hands - changing at all.
-create policy "Admins can update ticket files"
-  on storage.objects for update
-  using (bucket_id = 'tickets' and public.is_admin())
-  with check (bucket_id = 'tickets' and public.is_admin());
+-- Re-rendering existing PDFs so they carry the running number is a one-off
+-- maintenance job (scripts/rerender-ticket-pdfs.ts), and it runs with the
+-- service-role key, which bypasses Storage policies anyway. Granting every
+-- logged-in admin the standing right to overwrite a ticket PDF would buy
+-- nothing and widen what a stolen admin session can do.

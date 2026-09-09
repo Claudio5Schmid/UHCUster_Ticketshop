@@ -683,3 +683,46 @@ for people who would rather receive their card by mail anyway.
 
 **Open:** `NEXT_PUBLIC_SITE_URL` needs to be set to the real domain in Vercel, otherwise
 `src/lib/site-url.ts` builds the link in the confirmation mail from `VERCEL_PROJECT_PRODUCTION_URL`.
+
+---
+
+**D55 — A card is now a thing in its own right: created, deactivated, replaced and sent one at a
+time.** Until now a member's cards existed only as a number typed once at creation. `issue_tickets_for_order`
+refuses to run twice for an order, so a typo in the member list could not be corrected at all; the only
+route to a fresh QR code, `reissue_ticket`, had never been called and could not have been (it let
+Postgres pick the new id, but Node needs that id *before* uploading, because the PDF path is derived
+from it and the token is an HMAC over it, and it never set `pdf_path`). Claudio asked for the
+flexibility after running into exactly this. He explicitly dropped an earlier idea of editing a
+quantity field in favour of acting on individual cards - "so bleibt man flexibel was die tickets
+anbelangt und kann fehler resonant frei korrigieren".
+
+**The once-only guard stays.** It is the only thing standing between a double-click on "Als bezahlt
+markieren" and a paying customer receiving two complete sets of passes, so it was not relaxed and no
+bypass flag was added. Topping up goes through `add_member_tickets`, which accepts only the two
+zero-price `mitglieder-*` products: an admin correcting the member list structurally cannot reach a
+paid shop order through it, whatever the caller passes. Because those products cost 0, keeping
+`order_items.quantity` in step leaves `orders.total_rappen` and every accounting figure untouched.
+
+**Deactivating is final, replacing is separate** (Claudio's choice over a reversible toggle). A
+deactivated card is refused at the door and stays that way; a replacement is only ever created by an
+explicit second act, so a mis-click cannot quietly mint a new QR code. Worth knowing operationally:
+scanner devices decide from a ticket list downloaded when they start, so a card deactivated mid-match
+still gets in on a device that is already running.
+
+**Running numbers** (`übertragbar-1`, `-2`) are per order and printed on the card. A replacement
+inherits the number of the card it replaces - to the member and the office it is still the same card -
+while a *voided* card keeps holding its own, so a newly created card can never end up sharing a number
+with a QR code that once existed. That distinction is enforced by a partial unique index, not by
+application logic. Existing PDFs were re-rendered in place (`scripts/rerender-ticket-pdfs.ts`, same
+id, same token, same path) so they gained the number without any QR changing; the copy already in a
+member's inbox naturally stays as it was.
+
+**Send tracking moved to the card.** `members.cards_sent_at` was one timestamp for a whole member and
+could not say "two sent, two still open" - it was simply wrong the moment a card was added after the
+first send. It is deprecated but still written, so rolling the code back lands on data it understands.
+
+**The "send to everyone" button is gone.** Sending is driven by an explicit selection, counts open
+cards rather than people, and attaches only what has not gone out yet, so a member who gets one card
+added later receives that card rather than their whole set again. A card whose PDF is missing from
+Storage now fails that member visibly instead of quietly sending an incomplete set - one such ticket
+exists in production today. **Resolved.**
