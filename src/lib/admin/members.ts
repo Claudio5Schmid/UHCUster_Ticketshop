@@ -2,6 +2,8 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { issueTicketsForOrder, addMemberTickets } from "@/lib/tickets/issue";
 import { getOrderTickets, type OrderTicket } from "@/lib/admin/tickets";
 import { sendCardEmail } from "@/lib/email/mailer";
+import { memberCardsHtml, memberCardsText } from "@/lib/email/member-cards";
+import { buildOrderAccessUrl } from "@/lib/orders/access-token";
 import { CURRENT_SEASON } from "@/lib/season";
 import { parseMemberCsvRows, type CsvColumnMapping } from "@/lib/csv/memberCsv";
 import {
@@ -310,7 +312,9 @@ export async function sendMemberCards(
   const supabase = await getSupabaseServerClient();
   const { data: members, error } = await supabase
     .from("members")
-    .select("id, vorname, nachname, email, order_id")
+    // order_number comes along for the durable link the card e-mail carries - the
+    // same signed order page a paying customer gets (D54).
+    .select("id, vorname, nachname, email, order_id, orders(order_number)")
     .in("id", memberIds)
     .not("order_id", "is", null);
 
@@ -346,10 +350,28 @@ export async function sendMemberCards(
         });
       }
 
+      // PostgREST returns an embedded one-to-one either as the row or as a
+      // single-element array depending on how it reads the relationship; the
+      // generated types say array here, MemberRow says object. Accept both.
+      const joined = (member as unknown as {
+        orders?: { order_number: string } | { order_number: string }[] | null;
+      }).orders;
+      const orderNumber = Array.isArray(joined) ? joined[0]?.order_number : joined?.order_number;
+      if (!orderNumber) {
+        throw new Error("Bestellung ohne Bestellnummer - Karten-Link kann nicht erstellt werden.");
+      }
+
+      const template = {
+        bodyText: applyTemplate(bodyTemplate, member),
+        statusUrl: buildOrderAccessUrl(orderNumber),
+        cardCount: pending.length,
+      };
+
       const delivered = await sendCardEmail({
         to: member.email,
         subject: applyTemplate(subjectTemplate, member),
-        bodyText: applyTemplate(bodyTemplate, member),
+        bodyText: memberCardsText(template),
+        bodyHtml: memberCardsHtml(template),
         attachments,
       });
 

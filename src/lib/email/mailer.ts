@@ -102,6 +102,7 @@ export interface SendCardEmailInput {
   to: string;
   subject: string;
   bodyText: string;
+  bodyHtml?: string;
   attachments: EmailAttachment[];
 }
 
