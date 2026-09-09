@@ -63,7 +63,7 @@ export function MatchHeroContent({ games, serverNow }: MatchHeroContentProps) {
         {HOME_TEAM} - {game.opponent}
       </p>
       <div className={styles.crests}>
-        <Matchup opponent={game.opponent} layout="overlap" />
+        <Matchup opponent={game.opponent} layout="compact" />
       </div>
       <Countdown playedAt={game.played_at} now={now} />
       <div className={styles.action}>

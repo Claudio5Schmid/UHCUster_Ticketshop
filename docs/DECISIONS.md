@@ -795,11 +795,14 @@ pattern; season passes remain one click away in the header. `docs/uhcusterdesign
 records the visual rules.
 
 Adjusted after the first preview, again against the FCB page: the crests had been the loudest
-thing on the page. They are now small (36px in a card, 44px in the hero) and overlap the way two
-badges do on a match poster, with no "vs." - `Matchup layout="overlap"`, the columns layout the
-admin and scanner use is untouched. That only works because `public/logos/uhc-uster.png` had its
-baked-in white background keyed out; every other place the crest appears already puts it on white
-(the scanner's chip, admin tables), so nothing else changed. The hero shrank to FCB's proportions
+thing on the page. They are now small (36px in a card, 44px in the hero) and sit side by side with a hair
+of space, like two badges on a match poster, with no "vs." - `Matchup layout="compact"`; the
+columns layout the admin and scanner use is untouched. (An overlapping version was tried first
+and dropped: Uster's crest is a wordmark, and a badge over its last letter looked like a mistake.)
+That only works because the crests with a baked-in white background - Uster, Zug United, Chur
+United, Köniz Bern - had it keyed out, flood-filled in from the edge so white inside a badge
+stays white; every other place a crest appears already puts it on white (the scanner's chip,
+admin tables), so nothing else changed. Kloten-Dietlikon's is on black and was left alone. The hero shrank to FCB's proportions
 (title 56px and always one line, date 18px, pairing 24px, countdown 36px, ~60% viewport high), and
 the "Meine Tickets" icon became a person, since a ticket icon beside a cart read as "buy" rather
 than "mine". **Resolved in code; the real hero photo is still to come from Claudio.**

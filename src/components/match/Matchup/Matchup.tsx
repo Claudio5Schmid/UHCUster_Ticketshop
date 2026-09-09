@@ -15,12 +15,12 @@ interface MatchupProps {
   showName?: boolean;
   /**
    * "columns" (default) centres each crest in a column of its own with "vs."
-   * between - the admin tables and scanner bar. "overlap" is the shop's: the
-   * two crests small and touching, the opponent's tucked over the right edge
-   * of Uster's, no "vs." on screen. Height comes from the `--crest-height`
-   * custom property on an ancestor (36px if unset).
+   * between - the admin tables and scanner bar. "compact" is the shop's: the
+   * two crests small and side by side with a hair of space between, no "vs."
+   * on screen. Height comes from the `--crest-height` custom property on an
+   * ancestor (36px if unset).
    */
-  layout?: "columns" | "overlap";
+  layout?: "columns" | "compact";
 }
 
 /**
@@ -28,16 +28,16 @@ interface MatchupProps {
  * a home game, so the home side is always Uster and always on the left.
  */
 export function Matchup({ opponent, size = "md", showName = false, layout = "columns" }: MatchupProps) {
-  if (layout === "overlap") {
+  if (layout === "compact") {
     return (
-      <span className={styles.overlap}>
-        <span className={styles.overlapHome}>
+      <span className={styles.compact}>
+        <span className={styles.compactSide}>
           <TeamLogo team={HOME_TEAM} size={size} decorative={showName} />
         </span>
         {/* Still read out, so a screen reader hears "UHC Uster gegen ..." rather
             than two club names in a row. */}
         <span className={styles.srOnly}>gegen</span>
-        <span className={styles.overlapAway}>
+        <span className={styles.compactSide}>
           <TeamLogo team={opponent} size={size} decorative={showName} />
         </span>
         {showName && <span className={styles.name}>{opponent}</span>}

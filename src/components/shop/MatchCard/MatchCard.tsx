@@ -17,7 +17,7 @@ export function MatchCard({ game }: { game: Game }) {
       <p className={styles.date}>{formatGameDateLine(game.played_at, game.venue)}</p>
       <p className={styles.league}>{LEAGUE_LABEL}</p>
       <div className={styles.crests}>
-        <Matchup opponent={game.opponent} layout="overlap" />
+        <Matchup opponent={game.opponent} layout="compact" />
       </div>
       <div className={styles.action}>
         {game.eventfrog_url ? (
