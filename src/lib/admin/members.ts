@@ -1,60 +1,119 @@
 import { getSupabaseServerClient } from "@/lib/supabase-server";
-import { issueTicketsForOrder } from "@/lib/tickets/issue";
-import { getOrderTickets } from "@/lib/admin/tickets";
+import { issueTicketsForOrder, addMemberTickets } from "@/lib/tickets/issue";
+import { getOrderTickets, type OrderTicket } from "@/lib/admin/tickets";
 import { sendCardEmail } from "@/lib/email/ses";
 import { CURRENT_SEASON } from "@/lib/season";
 import { parseMemberCsvRows, type CsvColumnMapping } from "@/lib/csv/memberCsv";
+import {
+  EMPTY_COUNTS,
+  countCards,
+  isLiveTicket,
+  applyMemberFilters,
+  type CountableTicket,
+  type Member,
+  type MemberFilters,
+} from "@/lib/admin/member-state";
+
+export type { Member, MemberCardCounts, MemberSendState, MemberFilters } from "@/lib/admin/member-state";
+export { memberSendState, applyMemberFilters, countCards } from "@/lib/admin/member-state";
 
 export interface MemberInput {
   vorname: string;
   nachname: string;
   email: string;
   kategorie: string | null;
-  mitgliederkarte: boolean;
-  transferableCodeCount: number;
+  personalCardCount: number;
+  transferableCardCount: number;
 }
 
-export interface Member {
-  id: string;
-  vorname: string;
-  nachname: string;
-  email: string;
-  kategorie: string | null;
-  mitgliederkarte: boolean;
-  transferable_code_count: number;
-  order_id: string | null;
-  // Only populated by getAllMembers (joins orders for the admin order-detail
-  // link) - other functions here return a bare members row and don't need it.
-  order_number?: string | null;
-  cards_sent_at: string | null;
-  created_at: string;
-}
-
-interface MemberRow extends Omit<Member, "order_number"> {
+interface MemberRow extends Omit<Member, "order_number" | "cards"> {
   orders: { order_number: string } | null;
 }
 
-/** So the member list can link straight to /admin/orders/<order_number> -
- * that page already shows the generated ticket PDFs (view/download/zip),
- * and isn't filtered by order source, so it works for member orders too. */
-export async function getAllMembers(): Promise<Member[]> {
+/**
+ * Every member with the state of their cards attached.
+ *
+ * Counted from `tickets` rather than from the members row, because
+ * mitgliederkarte / transferable_code_count only record what was asked for when
+ * the member was created - after a card is added, deactivated or regenerated
+ * they no longer describe what the member actually holds.
+ *
+ * Two queries and an aggregation in Node rather than a view: a few hundred
+ * members is a few thousand ticket rows, which is nothing, and keeping the
+ * counting rules in one readable place beats spreading them across SQL.
+ */
+export async function getAllMembers(filters: MemberFilters = {}): Promise<Member[]> {
   const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase
     .from("members")
     .select("*, orders(order_number)")
     .order("nachname", { ascending: true });
   if (error) throw new Error(`Failed to load members: ${error.message}`);
-  return ((data ?? []) as MemberRow[]).map(({ orders, ...member }) => ({
+
+  const rows = (data ?? []) as MemberRow[];
+  const orderIds = rows.map((row) => row.order_id).filter((id): id is string => Boolean(id));
+
+  const cardsByOrder = new Map<string, ReturnType<typeof countCards>>();
+  if (orderIds.length > 0) {
+    const { data: tickets, error: ticketsError } = await supabase
+      .from("tickets")
+      .select("order_id, status, transferable, card_sent_at")
+      .in("order_id", orderIds);
+    if (ticketsError) throw new Error(`Failed to load member cards: ${ticketsError.message}`);
+
+    const grouped = new Map<string, CountableTicket[]>();
+    for (const ticket of tickets ?? []) {
+      const list = grouped.get(ticket.order_id) ?? [];
+      list.push(ticket);
+      grouped.set(ticket.order_id, list);
+    }
+    for (const [orderId, list] of grouped) {
+      cardsByOrder.set(orderId, countCards(list));
+    }
+  }
+
+  const members = rows.map(({ orders, ...member }) => ({
     ...member,
     order_number: orders?.order_number ?? null,
+    cards: (member.order_id && cardsByOrder.get(member.order_id)) || { ...EMPTY_COUNTS },
   }));
+
+  return applyMemberFilters(members, filters);
 }
 
-export async function updateMemberKategorie(memberId: string, kategorie: string | null): Promise<Member> {
+/** The categories actually in use, for the filter bar's dropdown. */
+export async function getMemberKategorien(): Promise<string[]> {
   const supabase = await getSupabaseServerClient();
-  const { data, error } = await supabase.from("members").update({ kategorie }).eq("id", memberId).select().single();
-  if (error || !data) throw new Error(error?.message ?? "Failed to update Kategorie");
-  return data;
+  const { data, error } = await supabase.from("members").select("kategorie").not("kategorie", "is", null);
+  if (error) throw new Error(`Failed to load categories: ${error.message}`);
+  const values = new Set((data ?? []).map((row) => (row.kategorie ?? "").trim()).filter(Boolean));
+  return [...values].sort((a, b) => a.localeCompare(b, "de-CH"));
+}
+
+export interface MemberDetail {
+  member: Member;
+  tickets: OrderTicket[];
+}
+
+export async function getMemberDetail(memberId: string): Promise<MemberDetail | null> {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase.from("members").select("*, orders(order_number)").eq("id", memberId).maybeSingle();
+  if (error) throw new Error(`Failed to load member: ${error.message}`);
+  if (!data) return null;
+
+  const { orders, ...row } = data as MemberRow;
+  const tickets = row.order_id ? await getOrderTickets(row.order_id) : [];
+
+  return {
+    member: { ...row, order_number: orders?.order_number ?? null, cards: countCards(tickets) },
+    tickets,
+  };
+}
+
+export async function updateMemberKategorie(memberId: string, kategorie: string | null): Promise<void> {
+  const supabase = await getSupabaseServerClient();
+  const { error } = await supabase.from("members").update({ kategorie }).eq("id", memberId);
+  if (error) throw new Error(error.message);
 }
 
 /**
@@ -70,7 +129,7 @@ export async function deleteMembers(memberIds: string[]): Promise<void> {
 }
 
 /**
- * Inserts the roster row, and - if this member is actually getting a card -
+ * Inserts the roster row, and - if this member is actually getting cards -
  * creates the order and issues tickets through the exact same pipeline a real
  * shop purchase uses (src/lib/tickets/issue.ts), so PDFs, tokens, and Storage
  * all work identically. Cards are generated immediately; the email itself is a
@@ -79,6 +138,8 @@ export async function deleteMembers(memberIds: string[]): Promise<void> {
 export async function createMemberAndIssueCards(input: MemberInput): Promise<Member> {
   const supabase = await getSupabaseServerClient();
   const fullName = `${input.vorname} ${input.nachname}`.trim();
+  const personal = Math.max(0, Math.trunc(input.personalCardCount));
+  const transferable = Math.max(0, Math.trunc(input.transferableCardCount));
 
   const { data: member, error: memberError } = await supabase
     .from("members")
@@ -87,8 +148,11 @@ export async function createMemberAndIssueCards(input: MemberInput): Promise<Mem
       nachname: input.nachname,
       email: input.email,
       kategorie: input.kategorie,
-      mitgliederkarte: input.mitgliederkarte,
-      transferable_code_count: input.transferableCodeCount,
+      // Kept in step with personal_card_count so anything still reading the old
+      // boolean sees the truth until it is dropped.
+      mitgliederkarte: personal > 0,
+      personal_card_count: personal,
+      transferable_code_count: transferable,
     })
     .select()
     .single();
@@ -97,24 +161,11 @@ export async function createMemberAndIssueCards(input: MemberInput): Promise<Mem
     throw new Error(memberError?.message ?? "Failed to create member");
   }
 
-  const needsCards = input.mitgliederkarte || input.transferableCodeCount > 0;
-  if (!needsCards) {
-    return member;
+  if (personal + transferable === 0) {
+    return { ...(member as Omit<Member, "cards">), cards: { ...EMPTY_COUNTS } };
   }
 
-  const { data: orderId, error: orderError } = await supabase.rpc("create_member_order", {
-    p_customer_name: fullName,
-    p_email: input.email,
-    p_include_personal: input.mitgliederkarte,
-    p_transferable_count: input.transferableCodeCount,
-    p_season: CURRENT_SEASON,
-  });
-
-  if (orderError || !orderId) {
-    throw new Error(orderError?.message ?? "Failed to create member order");
-  }
-
-  await issueTicketsForOrder(orderId);
+  const orderId = await createOrderForMember(fullName, input.email, personal, transferable);
 
   const { data: updatedMember, error: updateError } = await supabase
     .from("members")
@@ -127,7 +178,77 @@ export async function createMemberAndIssueCards(input: MemberInput): Promise<Mem
     throw new Error(updateError?.message ?? "Failed to link member to their order");
   }
 
-  return updatedMember;
+  const tickets = await getOrderTickets(orderId);
+  return { ...(updatedMember as Omit<Member, "cards">), cards: countCards(tickets) };
+}
+
+async function createOrderForMember(
+  fullName: string,
+  email: string,
+  personal: number,
+  transferable: number
+): Promise<string> {
+  const supabase = await getSupabaseServerClient();
+  const { data: orderId, error } = await supabase.rpc("create_member_order", {
+    p_customer_name: fullName,
+    p_email: email,
+    p_personal_count: personal,
+    p_transferable_count: transferable,
+    p_season: CURRENT_SEASON,
+  });
+
+  if (error || !orderId) {
+    throw new Error(error?.message ?? "Failed to create member order");
+  }
+
+  await issueTicketsForOrder(orderId);
+  return orderId;
+}
+
+/**
+ * Adds cards to a member who already has some - the correction path for a typo
+ * in the member list, or someone who turns out to need one more code.
+ *
+ * A member created without any cards has no order yet, so the first addition
+ * creates one; from then on the cards are appended to it, which is what keeps
+ * the running numbers continuous.
+ */
+export async function addCardsToMember(
+  memberId: string,
+  counts: { personal: number; transferable: number }
+): Promise<void> {
+  const personal = Math.max(0, Math.trunc(counts.personal));
+  const transferable = Math.max(0, Math.trunc(counts.transferable));
+  if (personal + transferable === 0) return;
+
+  const supabase = await getSupabaseServerClient();
+  const { data: member, error } = await supabase
+    .from("members")
+    .select("id, vorname, nachname, email, order_id, personal_card_count, transferable_code_count")
+    .eq("id", memberId)
+    .single();
+  if (error || !member) throw new Error(error?.message ?? "Mitglied nicht gefunden.");
+
+  if (!member.order_id) {
+    const fullName = `${member.vorname} ${member.nachname}`.trim();
+    const orderId = await createOrderForMember(fullName, member.email, personal, transferable);
+    const { error: linkError } = await supabase.from("members").update({ order_id: orderId }).eq("id", memberId);
+    if (linkError) throw new Error(linkError.message);
+  } else {
+    await addMemberTickets(member.order_id, { personal, transferable });
+  }
+
+  // The two count columns record what this member was asked to receive, so they
+  // move with an addition. The cards themselves remain the source of truth.
+  const { error: countError } = await supabase
+    .from("members")
+    .update({
+      personal_card_count: member.personal_card_count + personal,
+      transferable_code_count: member.transferable_code_count + transferable,
+      mitgliederkarte: member.personal_card_count + personal > 0,
+    })
+    .eq("id", memberId);
+  if (countError) throw new Error(countError.message);
 }
 
 export interface CsvImportResult {
@@ -147,8 +268,10 @@ export async function importMembersFromCsv(content: string, mapping: CsvColumnMa
         nachname: rows[i].nachname,
         email: rows[i].email,
         kategorie: rows[i].kategorie,
-        mitgliederkarte: rows[i].mitgliederkarte,
-        transferableCodeCount: rows[i].transferableCodeCount,
+        // The CSV's "Mitgliederkarte ja/nein" column is a yes/no by nature -
+        // one personal card or none.
+        personalCardCount: rows[i].mitgliederkarte ? 1 : 0,
+        transferableCardCount: rows[i].transferableCodeCount,
       });
       imported++;
     } catch (error) {
@@ -159,27 +282,9 @@ export async function importMembersFromCsv(content: string, mapping: CsvColumnMa
   return { imported, failed };
 }
 
-/** For the order-detail page's ticket panel: null for every regular shop
- * order (they were never a member roster entry to begin with), the actual
- * send timestamp once this member's card email has gone out. */
-export async function getMemberCardsSentAtForOrder(orderId: string): Promise<string | null> {
-  const supabase = await getSupabaseServerClient();
-  const { data } = await supabase.from("members").select("cards_sent_at").eq("order_id", orderId).maybeSingle();
-  return data?.cards_sent_at ?? null;
-}
-
-export async function getPendingSendCount(): Promise<number> {
-  const supabase = await getSupabaseServerClient();
-  const { count } = await supabase
-    .from("members")
-    .select("*", { count: "exact", head: true })
-    .not("order_id", "is", null)
-    .is("cards_sent_at", null);
-  return count ?? 0;
-}
-
 export interface SendCardsResult {
   sent: number;
+  cards: number;
   failed: Array<{ email: string; reason: string }>;
 }
 
@@ -188,46 +293,55 @@ function applyTemplate(template: string, member: Pick<Member, "vorname" | "nachn
 }
 
 /**
- * The one place this whole system sends email. Only touches members that
- * actually have an order (cards were generated) and haven't been sent yet -
- * safe to call again after a partial failure, since already-sent members are
- * automatically skipped rather than re-emailed. Pass memberIds to restrict
- * the send to specific members (e.g. an admin-picked selection) instead of
- * every pending member.
+ * The one place this whole system sends email.
+ *
+ * Sending is driven by an explicit selection - there is deliberately no "send to
+ * everyone" path - and each member gets only the cards that have not gone out
+ * yet. A member whose cards have all been sent is skipped rather than mailed an
+ * empty message, so repeating a partially failed send is safe.
  */
-export async function sendPendingMemberCards(
+export async function sendMemberCards(
   subjectTemplate: string,
   bodyTemplate: string,
-  memberIds?: string[]
+  memberIds: string[]
 ): Promise<SendCardsResult> {
+  if (memberIds.length === 0) return { sent: 0, cards: 0, failed: [] };
+
   const supabase = await getSupabaseServerClient();
-  let query = supabase
+  const { data: members, error } = await supabase
     .from("members")
     .select("id, vorname, nachname, email, order_id")
-    .not("order_id", "is", null)
-    .is("cards_sent_at", null);
-  if (memberIds && memberIds.length > 0) {
-    query = query.in("id", memberIds);
-  }
-  const { data: pending, error } = await query;
+    .in("id", memberIds)
+    .not("order_id", "is", null);
 
-  if (error) throw new Error(`Failed to load pending members: ${error.message}`);
+  if (error) throw new Error(`Failed to load members: ${error.message}`);
 
   const failed: Array<{ email: string; reason: string }> = [];
   let sent = 0;
+  let cards = 0;
 
-  for (const member of pending ?? []) {
+  for (const member of members ?? []) {
     try {
       const tickets = await getOrderTickets(member.order_id as string);
+      const pending = tickets.filter((ticket) => isLiveTicket(ticket) && !ticket.card_sent_at);
+      if (pending.length === 0) continue;
+
+      const missing = pending.filter((ticket) => !ticket.pdf_path);
+      if (missing.length > 0) {
+        // Better a visible failure than an e-mail that silently arrives one card
+        // short - the member would have no way of knowing something is missing.
+        throw new Error(`${missing.length} Karte(n) haben keine PDF hinterlegt.`);
+      }
+
       const attachments = [];
-      for (const ticket of tickets) {
-        if (!ticket.pdf_path) continue;
-        const { data: file, error: downloadError } = await supabase.storage.from("tickets").download(ticket.pdf_path);
+      for (const ticket of pending) {
+        const path = ticket.pdf_path as string;
+        const { data: file, error: downloadError } = await supabase.storage.from("tickets").download(path);
         if (downloadError || !file) {
-          throw new Error(`PDF ${ticket.pdf_path} konnte nicht geladen werden: ${downloadError?.message}`);
+          throw new Error(`PDF ${path} konnte nicht geladen werden: ${downloadError?.message}`);
         }
         attachments.push({
-          filename: ticket.pdf_path.split("/").pop() ?? ticket.pdf_path,
+          filename: path.split("/").pop() ?? path,
           content: new Uint8Array(await file.arrayBuffer()),
         });
       }
@@ -239,12 +353,20 @@ export async function sendPendingMemberCards(
         attachments,
       });
 
+      const { error: markError } = await supabase.rpc("mark_tickets_sent", {
+        p_ticket_ids: pending.map((ticket) => ticket.id),
+      });
+      if (markError) throw new Error(markError.message);
+
+      // Deprecated, still written so a rollback of this code lands on data it
+      // understands. tickets.card_sent_at is what anything reads.
       await supabase.from("members").update({ cards_sent_at: new Date().toISOString() }).eq("id", member.id);
 
-      // Emailing the card is the handover for a member order - counts as
-      // "files handed over" automatically, same as if handed over in person.
-      // Best-effort: the email already went out, so a failure here shouldn't
-      // turn a successful send into a reported failure.
+      // Emailing the cards is the handover for a member order - counts as
+      // "files handed over" automatically, same as handing them over in person.
+      // Every card that was open has just been marked sent, so this is the point
+      // where the member has everything. Best-effort: the email already went
+      // out, so a failure here must not turn a successful send into a failure.
       try {
         await supabase.rpc("set_files_handed_over", { p_order_id: member.order_id, p_handed_over: true });
       } catch {
@@ -252,10 +374,11 @@ export async function sendPendingMemberCards(
       }
 
       sent++;
+      cards += pending.length;
     } catch (sendError) {
       failed.push({ email: member.email, reason: sendError instanceof Error ? sendError.message : "Unbekannter Fehler" });
     }
   }
 
-  return { sent, failed };
+  return { sent, cards, failed };
 }

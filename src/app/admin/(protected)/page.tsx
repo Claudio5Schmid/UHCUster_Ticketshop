@@ -72,7 +72,17 @@ export default async function AdminOrdersPage({
         </Link>
       ),
     },
-    { key: "customer_name", header: "Kunde", render: (order) => order.customer_name },
+    {
+      key: "customer_name",
+      header: "Kunde",
+      // A second, larger way into the order, so clicking a name works the same
+      // here as it does in the member list.
+      render: (order) => (
+        <Link href={`/admin/orders/${order.order_number}`} className={styles.orderLink}>
+          {order.customer_name}
+        </Link>
+      ),
+    },
     {
       key: "created_at",
       header: "Datum",

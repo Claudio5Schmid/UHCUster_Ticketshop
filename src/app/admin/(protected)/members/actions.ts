@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import {
   createMemberAndIssueCards,
   importMembersFromCsv,
-  sendPendingMemberCards,
+  sendMemberCards,
   updateMemberKategorie,
   deleteMembers,
+  addCardsToMember,
   type MemberInput,
   type CsvImportResult,
   type SendCardsResult,
@@ -26,9 +27,9 @@ export async function importCsvAction(csvContent: string, mapping: CsvColumnMapp
 }
 
 export async function updateMemberKategorieAction(memberId: string, kategorie: string | null) {
-  const updated = await updateMemberKategorie(memberId, kategorie);
+  await updateMemberKategorie(memberId, kategorie);
   revalidatePath("/admin/members");
-  return updated;
+  revalidatePath(`/admin/members/${memberId}`);
 }
 
 export async function deleteMembersAction(memberIds: string[]) {
@@ -36,24 +37,35 @@ export async function deleteMembersAction(memberIds: string[]) {
   revalidatePath("/admin/members");
 }
 
+/** Generates further cards for an existing member, PDFs and all. */
+export async function addCardsToMemberAction(memberId: string, counts: { personal: number; transferable: number }) {
+  await addCardsToMember(memberId, counts);
+  revalidatePath("/admin/members");
+  revalidatePath(`/admin/members/${memberId}`);
+}
+
 /**
- * The one send-everything (or send-to-a-picked-subset) action in the whole
- * system. Gated on the admin literally typing the confirmation phrase - not
- * real authentication (they're already an authenticated admin), just a
- * deliberate "are you sure" step for an action that can't be undone once real
- * emails go out. memberIds restricts the send to a specific selection; omit
- * it to send to every pending member.
+ * The one path that sends email in this system, and it only ever sends to an
+ * explicit selection - there is deliberately no "send to everyone" button, so a
+ * mis-click cannot mail the entire club.
+ *
+ * Gated on the admin literally typing the confirmation phrase. Not real
+ * authentication (they are already an authenticated admin), just a deliberate
+ * "are you sure" for something that cannot be undone once the mail is out.
  */
-export async function sendPendingCardsAction(
+export async function sendMemberCardsAction(
   subject: string,
   body: string,
   confirmationPhrase: string,
-  memberIds?: string[]
+  memberIds: string[]
 ): Promise<SendCardsResult> {
   if (!matchesSendConfirmation(confirmationPhrase)) {
     throw new Error(`Bitte "${SEND_CONFIRMATION_PHRASE}" eingeben, um den Versand zu bestätigen.`);
   }
-  const result = await sendPendingMemberCards(subject, body, memberIds);
+  if (memberIds.length === 0) {
+    throw new Error("Keine Mitglieder ausgewählt.");
+  }
+  const result = await sendMemberCards(subject, body, memberIds);
   revalidatePath("/admin/members");
   return result;
 }

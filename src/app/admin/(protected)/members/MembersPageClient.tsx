@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import Link from "next/link";
 import { Input } from "@/components/ui/Input/Input";
 import { Select } from "@/components/ui/Select/Select";
 import { Button } from "@/components/ui/Button/Button";
@@ -10,18 +11,16 @@ import { Table, type TableColumn } from "@/components/ui/Table/Table";
 import {
   createMemberAction,
   importCsvAction,
-  sendPendingCardsAction,
+  sendMemberCardsAction,
   updateMemberKategorieAction,
   deleteMembersAction,
 } from "./actions";
-import type { Member } from "@/lib/admin/members";
+import { memberSendState, type Member, type MemberSendState } from "@/lib/admin/member-state";
 import { CSV_FIELDS, parseCsvHeader, detectColumnMapping, type CsvColumnMapping, type CsvField } from "@/lib/csv/memberCsv";
 import { matchesSendConfirmation } from "@/lib/admin/send-confirmation";
 import styles from "../admin.module.css";
 
-type SortKey = "name" | "email" | "kategorie" | "karte" | "uebertragbar";
-
-const dateFormatter = new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", dateStyle: "medium", timeStyle: "short" });
+type SortKey = "name" | "email" | "kategorie" | "karten" | "versand";
 
 const DEFAULT_SUBJECT = "Deine Mitgliederkarte UHC Uster";
 const DEFAULT_BODY = `Hallo {{vorname}},
@@ -31,17 +30,20 @@ im Anhang findest du deine Mitgliederkarte(n) für die Saison 26/27 als PDF.
 Sportliche Grüsse
 UHC Uster`;
 
-/** Sent is the finished state (green); "ready to send" is the one that wants action
- * from the office (amber); no card at all is simply inert. */
-function statusFor(member: Member): { label: string; variant: "neutral" | "warning" | "success" } {
-  if (!member.order_id) return { label: "Keine Karte", variant: "neutral" };
-  if (member.cards_sent_at) {
-    return { label: `Versendet ${dateFormatter.format(new Date(member.cards_sent_at))}`, variant: "success" };
-  }
-  return { label: "Bereit zum Versand", variant: "warning" };
+const SEND_STATE: Record<MemberSendState, { label: string; variant: "neutral" | "warning" | "success" | "info" }> = {
+  ohne: { label: "Keine Karte", variant: "neutral" },
+  offen: { label: "Nichts versendet", variant: "warning" },
+  teilweise: { label: "Teilweise versendet", variant: "info" },
+  vollstaendig: { label: "Vollständig versendet", variant: "success" },
+};
+
+/** "2 von 3 versendet" - the thing the office actually wants to know per row. */
+function sendSummary(member: Member): string {
+  if (member.cards.active === 0) return "–";
+  return `${member.cards.sent} von ${member.cards.active} versendet`;
 }
 
-export function MembersPageClient({ members, pendingCount }: { members: Member[]; pendingCount: number }) {
+export function MembersPageClient({ members, filterBar }: { members: Member[]; filterBar: ReactNode }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +56,7 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
   const [nachname, setNachname] = useState("");
   const [email, setEmail] = useState("");
   const [kategorie, setKategorie] = useState("");
-  const [mitgliederkarte, setMitgliederkarte] = useState(true);
+  const [personalCount, setPersonalCount] = useState(1);
   const [transferableCount, setTransferableCount] = useState(0);
 
   // CSV import - a file is read client-side first so the admin can confirm/fix
@@ -65,23 +67,23 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
   const [csvMapping, setCsvMapping] = useState<CsvColumnMapping>({});
   const [csvResultMessage, setCsvResultMessage] = useState<string | null>(null);
 
-  // Batch send - sendTarget null means "every pending member" (the toolbar's count);
-  // a specific id list means "just this selection".
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [body, setBody] = useState(DEFAULT_BODY);
   const [confirmation, setConfirmation] = useState("");
   const [sendResultMessage, setSendResultMessage] = useState<string | null>(null);
-  const [sendTarget, setSendTarget] = useState<string[] | null>(null);
 
-  const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
-  const sentCount = members.filter((m) => m.cards_sent_at).length;
-  const noCardCount = members.filter((m) => !m.order_id).length;
+  // Card totals, not member totals: a member with three cards of which one is
+  // still to send is one row but one open card, and the send button counts cards.
+  // These describe the list as currently filtered, which is what is on screen.
+  const openCards = members.reduce((total, member) => total + member.cards.open, 0);
+  const sentCards = members.reduce((total, member) => total + member.cards.sent, 0);
+  const noCardCount = members.filter((member) => member.cards.active === 0).length;
 
   function handleCreateMember(event: React.FormEvent) {
     event.preventDefault();
@@ -93,14 +95,14 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
           nachname,
           email,
           kategorie: kategorie.trim() || null,
-          mitgliederkarte,
-          transferableCodeCount: transferableCount,
+          personalCardCount: personalCount,
+          transferableCardCount: transferableCount,
         });
         setVorname("");
         setNachname("");
         setEmail("");
         setKategorie("");
-        setMitgliederkarte(true);
+        setPersonalCount(1);
         setTransferableCount(0);
         setShowAddForm(false);
       } catch (submitError) {
@@ -156,14 +158,15 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
     setSendResultMessage(null);
     startTransition(async () => {
       try {
-        const result = await sendPendingCardsAction(subject, body, confirmation, sendTarget ?? undefined);
+        const result = await sendMemberCardsAction(subject, body, confirmation, selectedSendableIds);
         setSendResultMessage(
-          `${result.sent} E-Mails versendet.` +
-            (result.failed.length > 0 ? ` ${result.failed.length} fehlgeschlagen: ${result.failed.map((f) => `${f.email} (${f.reason})`).join("; ")}` : "")
+          `${result.cards} Karte(n) an ${result.sent} Mitglied(er) versendet.` +
+            (result.failed.length > 0
+              ? ` ${result.failed.length} fehlgeschlagen: ${result.failed.map((f) => `${f.email} (${f.reason})`).join("; ")}`
+              : "")
         );
         setConfirmation("");
         setShowSendForm(false);
-        setSendTarget(null);
         setSelectedIds(new Set());
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "Fehler beim Versand.");
@@ -188,31 +191,24 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
         return member.email.toLowerCase();
       case "kategorie":
         return (member.kategorie ?? "").toLowerCase();
-      case "karte":
-        return member.mitgliederkarte ? 1 : 0;
-      case "uebertragbar":
-        return member.transferable_code_count;
+      case "karten":
+        return member.cards.active;
+      case "versand":
+        // Sorted by how much work is left rather than alphabetically, so the
+        // members still waiting for something come first.
+        return ["offen", "teilweise", "vollstaendig", "ohne"].indexOf(memberSendState(member));
     }
   }
 
   const visibleMembers = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    let result = members;
-    if (query) {
-      result = result.filter((m) =>
-        `${m.vorname} ${m.nachname} ${m.email} ${m.kategorie ?? ""}`.toLowerCase().includes(query)
-      );
-    }
-    if (sortKey) {
-      result = [...result].sort((a, b) => {
-        const av = sortValue(a, sortKey);
-        const bv = sortValue(b, sortKey);
-        const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-        return sortDirection === "asc" ? cmp : -cmp;
-      });
-    }
-    return result;
-  }, [members, search, sortKey, sortDirection]);
+    if (!sortKey) return members;
+    return [...members].sort((a, b) => {
+      const av = sortValue(a, sortKey);
+      const bv = sortValue(b, sortKey);
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [members, sortKey, sortDirection]);
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -223,7 +219,11 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
     });
   }
 
-  const selectedPendingIds = members.filter((m) => selectedIds.has(m.id) && m.order_id && !m.cards_sent_at).map((m) => m.id);
+  // Selecting a member contributes their still-unsent cards - so "3 Karten
+  // versenden" means three cards, not three people.
+  const selectedMembers = members.filter((member) => selectedIds.has(member.id));
+  const selectedSendableIds = selectedMembers.filter((member) => member.cards.open > 0).map((member) => member.id);
+  const selectedOpenCards = selectedMembers.reduce((total, member) => total + member.cards.open, 0);
 
   const allVisibleSelected = visibleMembers.length > 0 && visibleMembers.every((m) => selectedIds.has(m.id));
   const someVisibleSelected = visibleMembers.some((m) => selectedIds.has(m.id));
@@ -236,24 +236,20 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
 
   function toggleSelectAll() {
     setSelectedIds((prev) => {
-      if (allVisibleSelected) {
-        const next = new Set(prev);
-        visibleMembers.forEach((m) => next.delete(m.id));
-        return next;
-      }
       const next = new Set(prev);
-      visibleMembers.forEach((m) => next.add(m.id));
+      if (allVisibleSelected) visibleMembers.forEach((m) => next.delete(m.id));
+      else visibleMembers.forEach((m) => next.add(m.id));
       return next;
     });
   }
 
   function handleKategorieBlur(member: Member, event: React.FocusEvent<HTMLInputElement>) {
     const value = event.target.value.trim();
-    const kategorie = value || null;
-    if (kategorie === member.kategorie) return;
+    const next = value || null;
+    if (next === member.kategorie) return;
     startTransition(async () => {
       try {
-        await updateMemberKategorieAction(member.id, kategorie);
+        await updateMemberKategorieAction(member.id, next);
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "Fehler beim Ändern der Kategorie.");
       }
@@ -289,23 +285,31 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
     );
   }
 
-  const sendCount = sendTarget ? sendTarget.length : pendingCount;
-
   const columns: TableColumn<Member>[] = [
     {
       key: "select",
       header: (
+        <input ref={selectAllRef} type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} aria-label="Alle auswählen" />
+      ),
+      render: (m) => (
         <input
-          ref={selectAllRef}
           type="checkbox"
-          checked={allVisibleSelected}
-          onChange={toggleSelectAll}
-          aria-label="Alle auswählen"
+          checked={selectedIds.has(m.id)}
+          onChange={() => toggleSelect(m.id)}
+          aria-label={`${m.vorname} ${m.nachname} auswählen`}
         />
       ),
-      render: (m) => <input type="checkbox" checked={selectedIds.has(m.id)} onChange={() => toggleSelect(m.id)} aria-label={`${m.vorname} ${m.nachname} auswählen`} />,
     },
-    { key: "name", header: sortableHeader("Name", "name"), render: (m) => `${m.vorname} ${m.nachname}` },
+    {
+      key: "name",
+      header: sortableHeader("Name", "name"),
+      // The way into a member, matching how an order is opened from its number.
+      render: (m) => (
+        <Link href={`/admin/members/${m.id}`} className={styles.orderLink}>
+          {m.vorname} {m.nachname}
+        </Link>
+      ),
+    },
     { key: "email", header: sortableHeader("E-Mail", "email"), render: (m) => m.email },
     {
       key: "kategorie",
@@ -321,31 +325,31 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
         />
       ),
     },
-    { key: "karte", header: sortableHeader("Karte", "karte"), render: (m) => (m.mitgliederkarte ? "Ja" : "Nein") },
     {
-      key: "uebertragbar",
-      header: sortableHeader("Übertragbar", "uebertragbar"),
-      render: (m) => m.transferable_code_count,
+      key: "karten",
+      header: sortableHeader("Karten", "karten"),
+      // Counted from the cards themselves, so deactivating or adding one shows
+      // up here immediately - the creation-time figures no longer would.
+      render: (m) =>
+        m.cards.active === 0 ? (
+          "–"
+        ) : (
+          <>
+            {m.cards.active}
+            {m.cards.transferable > 0 && (
+              <span style={{ color: "var(--color-text-secondary)" }}> ({m.cards.transferable} übertragbar)</span>
+            )}
+          </>
+        ),
     },
+    { key: "versandzahl", header: "Versand", render: (m) => sendSummary(m) },
     {
       key: "status",
-      header: "Status",
+      header: sortableHeader("Status", "versand"),
       render: (m) => {
-        const status = statusFor(m);
-        return <Badge variant={status.variant}>{status.label}</Badge>;
+        const state = SEND_STATE[memberSendState(m)];
+        return <Badge variant={state.variant}>{state.label}</Badge>;
       },
-    },
-    {
-      key: "dateien",
-      header: "Dateien",
-      render: (m) =>
-        m.order_number ? (
-          <a href={`/admin/orders/${m.order_number}`} target="_blank" rel="noopener noreferrer" className={styles.orderLink}>
-            Ansehen
-          </a>
-        ) : (
-          "–"
-        ),
     },
   ];
 
@@ -356,49 +360,36 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
       </div>
       {error && <p style={{ color: "var(--color-error-text)", marginBottom: "var(--space-4)" }}>{error}</p>}
 
+      {/* Compact here only: the order overview keeps the roomier tiles, so this
+          list gets to the table sooner without changing that page. */}
       <div className={styles.summaryGrid}>
-        <div className={styles.summaryTile}>
+        <div className={styles.summaryTile} data-size="compact">
           <span className={styles.summaryValue}>{members.length}</span>
           <span className={styles.summaryLabel}>Mitglieder</span>
         </div>
-        <div className={styles.summaryTile} data-tone={pendingCount > 0 ? "accent" : undefined}>
-          <span className={styles.summaryValue}>{pendingCount}</span>
+        <div className={styles.summaryTile} data-size="compact" data-tone={openCards > 0 ? "accent" : undefined}>
+          <span className={styles.summaryValue}>{openCards}</span>
           <span className={styles.summaryLabel}>Karten zu versenden</span>
         </div>
-        <div className={styles.summaryTile} data-tone="success">
-          <span className={styles.summaryValue}>{sentCount}</span>
+        <div className={styles.summaryTile} data-size="compact" data-tone="success">
+          <span className={styles.summaryValue}>{sentCards}</span>
           <span className={styles.summaryLabel}>Karten versendet</span>
         </div>
-        <div className={styles.summaryTile}>
+        <div className={styles.summaryTile} data-size="compact">
           <span className={styles.summaryValue}>{noCardCount}</span>
           <span className={styles.summaryLabel}>Ohne Karte</span>
         </div>
       </div>
 
-      {/* One toolbar instead of four stacked sections: search stays put, and the three
-          actions that used to each own a full-height block are now buttons opening a
-          dialog - so the member list itself is visible without scrolling past forms. */}
+      {filterBar}
+
       <div className={styles.toolbar}>
-        <div className={styles.searchField}>
-          <Input label="Suche" placeholder="Name, E-Mail oder Kategorie" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
         <div className={styles.toolbarActions}>
           <Button type="button" variant="secondary" size="sm" onClick={() => setShowAddForm(true)}>
             Mitglied hinzufügen
           </Button>
           <Button type="button" variant="secondary" size="sm" onClick={() => setShowCsvImport(true)}>
             CSV importieren
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              setSendTarget(null);
-              setShowSendForm(true);
-            }}
-            disabled={pendingCount === 0}
-          >
-            {pendingCount} Karte(n) versenden
           </Button>
         </div>
       </div>
@@ -413,15 +404,11 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
           </span>
           <Button
             type="button"
-            variant="secondary"
             size="sm"
-            disabled={selectedPendingIds.length === 0}
-            onClick={() => {
-              setSendTarget(selectedPendingIds);
-              setShowSendForm(true);
-            }}
+            disabled={selectedOpenCards === 0}
+            onClick={() => setShowSendForm(true)}
           >
-            An Ausgewählte senden ({selectedPendingIds.length})
+            {selectedOpenCards} Karte(n) versenden
           </Button>
           <Button type="button" variant="secondary" size="sm" onClick={() => setShowDeleteConfirm(true)}>
             Löschen
@@ -435,8 +422,8 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
       {visibleMembers.length === 0 ? (
         <p className={styles.emptyState}>
           {members.length === 0
-            ? "Noch keine Mitglieder erfasst. Über „CSV importieren“ die Vereinsliste laden."
-            : "Keine Mitglieder für diese Suche."}
+            ? "Keine Mitglieder für diese Auswahl. Filter zurücksetzen oder über „CSV importieren“ die Vereinsliste laden."
+            : "Keine Mitglieder für diese Auswahl."}
         </p>
       ) : (
         <Table caption="Mitglieder" columns={columns} rows={visibleMembers} getRowKey={(m) => m.id} />
@@ -494,20 +481,27 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
             <Input label="Name" value={nachname} onChange={(e) => setNachname(e.target.value)} required />
           </div>
           <Input label="E-Mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <Input label="Kategorie" value={kategorie} onChange={(e) => setKategorie(e.target.value)} placeholder="z.B. Funktionär, Spieler" />
           <div className={styles.formRow}>
-            <Input label="Kategorie" value={kategorie} onChange={(e) => setKategorie(e.target.value)} placeholder="z.B. Funktionär, Spieler" />
             <Input
-              label="Anzahl übertragbare Codes"
+              label="Anzahl persönliche Karten"
+              type="number"
+              min={0}
+              value={personalCount}
+              onChange={(e) => setPersonalCount(parseInt(e.target.value, 10) || 0)}
+            />
+            <Input
+              label="Anzahl übertragbare Karten"
               type="number"
               min={0}
               value={transferableCount}
               onChange={(e) => setTransferableCount(parseInt(e.target.value, 10) || 0)}
             />
           </div>
-          <label className={styles.checkboxRow}>
-            <input type="checkbox" checked={mitgliederkarte} onChange={(e) => setMitgliederkarte(e.target.checked)} />
-            Mitgliederkarte (persönlich, nicht übertragbar)
-          </label>
+          <p style={{ color: "var(--color-text-secondary)", fontSize: "var(--text-small-size)", margin: 0 }}>
+            Beide auf 0 lassen, wenn das Mitglied vorerst keine Karte bekommt - Karten lassen sich jederzeit im Mitglied
+            selbst hinzufügen.
+          </p>
           <div className={styles.actions}>
             <Button type="submit" disabled={isPending}>
               Erfassen und Karte(n) generieren
@@ -534,20 +528,11 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
         </div>
       </Modal>
 
-      <Modal
-        open={showSendForm}
-        onClose={() => {
-          setShowSendForm(false);
-          setSendTarget(null);
-        }}
-        title="Karten versenden"
-      >
+      <Modal open={showSendForm} onClose={() => setShowSendForm(false)} title="Karten versenden">
         <div className={styles.form}>
           <p style={{ color: "var(--color-text-secondary)" }}>
-            {sendTarget
-              ? `${sendCount} ausgewählte Mitglieder warten auf den Versand ihrer Karte(n).`
-              : `${sendCount} Mitglieder warten auf den Versand ihrer Karte(n).`}{" "}
-            Nachricht kann vor dem Versand angepasst werden - Platzhalter <code>{"{{vorname}}"}</code> und{" "}
+            {selectedOpenCards} noch nicht versendete Karte(n) an {selectedSendableIds.length} ausgewählte Mitglieder.
+            Bereits versendete Karten werden nicht erneut angehängt. Platzhalter <code>{"{{vorname}}"}</code> und{" "}
             <code>{"{{nachname}}"}</code> stehen zur Verfügung.
           </p>
           <Input label="Betreff" value={subject} onChange={(e) => setSubject(e.target.value)} />
@@ -561,17 +546,10 @@ export function MembersPageClient({ members, pendingCount }: { members: Member[]
             onChange={(e) => setConfirmation(e.target.value)}
           />
           <div className={styles.actions}>
-            <Button onClick={handleSend} disabled={isPending || !matchesSendConfirmation(confirmation) || sendCount === 0}>
-              {sendCount} Karte(n) jetzt versenden
+            <Button onClick={handleSend} disabled={isPending || !matchesSendConfirmation(confirmation) || selectedOpenCards === 0}>
+              {selectedOpenCards} Karte(n) jetzt versenden
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setShowSendForm(false);
-                setSendTarget(null);
-              }}
-            >
+            <Button type="button" variant="secondary" onClick={() => setShowSendForm(false)}>
               Abbrechen
             </Button>
           </div>

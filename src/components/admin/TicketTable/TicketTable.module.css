@@ -1,0 +1,86 @@
+.nameInput {
+  width: 100%;
+  min-width: 140px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  color: inherit;
+}
+
+.nameInput:hover:not(:disabled),
+.nameInput:focus {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+.nameInput:disabled {
+  color: var(--color-text-secondary);
+}
+
+.pending {
+  color: var(--color-text-secondary);
+}
+
+.pdfLink {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+}
+
+.pdfLink:hover {
+  color: var(--color-accent);
+}
+
+.rowActions {
+  display: flex;
+  gap: var(--space-3);
+  white-space: nowrap;
+}
+
+.rowAction {
+  all: unset;
+  cursor: pointer;
+  font-size: var(--text-small-size);
+  text-decoration: underline;
+  color: var(--color-text-secondary);
+}
+
+.rowAction:hover:not(:disabled) {
+  color: var(--color-accent);
+}
+
+.rowAction:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.error {
+  margin: var(--space-3) 0 0;
+  color: var(--color-error-text);
+}
+
+.dialogText {
+  margin: 0 0 var(--space-4);
+}
+
+.dialogNote {
+  margin: 0 0 var(--space-5);
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+}
+
+.dialogActions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -57,30 +57,6 @@ export async function updateFilesHandedOver(orderId: string, orderNumber: string
   revalidatePath(`/admin/orders/${orderNumber}`);
 }
 
-export async function renameTicketHolder(ticketId: string, orderNumber: string, newHolderName: string) {
-  const supabase = await getSupabaseServerClient();
-  const { error } = await supabase.rpc("rename_ticket_holder", {
-    p_ticket_id: ticketId,
-    p_new_holder_name: newHolderName,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath(`/admin/orders/${orderNumber}`);
-}
-
-/** Voids a single ticket with no replacement (docs/BACKLOG.md admin tooling
- * gap) - reissue_ticket() always creates a replacement, which isn't right for
- * "this ticket just shouldn't be valid anymore". */
-export async function voidTicket(ticketId: string, orderNumber: string) {
-  const supabase = await getSupabaseServerClient();
-  const { error } = await supabase.rpc("void_ticket", { p_ticket_id: ticketId });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath(`/admin/orders/${orderNumber}`);
-}
+// Renaming a holder, deactivating a card and regenerating its code moved to
+// ../ticket-actions.ts, because the same table now drives them from a member's
+// page as well as from here.

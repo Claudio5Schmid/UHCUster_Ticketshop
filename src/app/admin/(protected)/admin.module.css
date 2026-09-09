@@ -53,6 +53,16 @@
   background: var(--color-info-bg);
 }
 
+/* Additive, and only the members list passes it: the order overview keeps the
+   roomier tiles it was designed with, so nothing there shifts. */
+.summaryTile[data-size="compact"] {
+  padding: var(--space-3) var(--space-4);
+}
+
+.summaryTile[data-size="compact"] .summaryValue {
+  font-size: var(--text-body-size);
+}
+
 .summaryValue {
   font-size: var(--text-h3-size);
   font-weight: 700;
@@ -309,4 +319,9 @@
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   margin-bottom: var(--space-4);
+}
+
+.breadcrumb {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-small-size);
 }

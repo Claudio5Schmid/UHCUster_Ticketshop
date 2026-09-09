@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { readFile } from "fs/promises";
 import path from "path";
 import { getTicketAccentColor } from "@/lib/tier-colors";
+import { ticketTypeEyebrowSuffix } from "./label";
 import { CURRENT_SEASON_LABEL } from "@/lib/season";
 import type { ProductBenefits } from "@/lib/products";
 
@@ -14,6 +15,8 @@ export interface TicketPdfData {
   benefits: ProductBenefits;
   holderName: string | null;
   transferable: boolean;
+  /** Running number among an order's transferable cards; null for personal ones. */
+  transferableIndex?: number | null;
   orderNumber: string;
 }
 
@@ -133,7 +136,14 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
         ? `RED CASTLE CLUB · ${colors.metalName.toUpperCase()}`
         : "RED CASTLE CLUB"
       : "SAISONKARTE";
-  page.drawText(eyebrow, { x: MARGIN + cardPadding, y: cursorY, size: 10, font: fontBold, color: accentColor });
+  const eyebrowSuffix = ticketTypeEyebrowSuffix(data.transferableIndex);
+  page.drawText(eyebrowSuffix ? `${eyebrow} · ${eyebrowSuffix}` : eyebrow, {
+    x: MARGIN + cardPadding,
+    y: cursorY,
+    size: 10,
+    font: fontBold,
+    color: accentColor,
+  });
   cursorY -= GAP_EYEBROW_TO_TITLE;
 
   page.drawText(data.productName, { x: MARGIN + cardPadding, y: cursorY, size: 22, font: fontBold, color: black });
@@ -167,7 +177,9 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
 
   cursorY -= GAP_BEFORE_TRANSFER_NOTE;
   const transferNote = data.transferable
-    ? "Übertragbar - kann an eine beliebige Person weitergegeben werden."
+    ? data.transferableIndex
+      ? `Übertragbare Karte ${data.transferableIndex} - kann an eine beliebige Person weitergegeben werden.`
+      : "Übertragbar - kann an eine beliebige Person weitergegeben werden."
     : "Nicht übertragbar - nur für die genannte Person gültig.";
   page.drawText(transferNote, { x: MARGIN + cardPadding, y: cursorY, size: 8.5, font, color: grey });
 

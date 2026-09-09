@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { getOrderDetail } from "@/lib/admin/orders";
 import { getOrderTickets } from "@/lib/admin/tickets";
-import { getMemberCardsSentAtForOrder } from "@/lib/admin/members";
 import { buildOrderAccessUrl } from "@/lib/orders/access-token";
 import { formatRappenAsChf } from "@/lib/pricing";
 import { Badge } from "@/components/ui/Badge/Badge";
@@ -18,7 +17,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
     notFound();
   }
 
-  const [tickets, cardsSentAt] = await Promise.all([getOrderTickets(order.id), getMemberCardsSentAtForOrder(order.id)]);
+  const tickets = await getOrderTickets(order.id);
 
   return (
     <div>
@@ -93,7 +92,6 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         orderNumber={order.order_number}
         tickets={tickets}
         filesHandedOverAt={order.files_handed_over_at}
-        cardsSentAt={cardsSentAt}
       />
     </div>
   );
