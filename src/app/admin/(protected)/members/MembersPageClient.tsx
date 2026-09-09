@@ -70,7 +70,10 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [body, setBody] = useState(DEFAULT_BODY);
   const [confirmation, setConfirmation] = useState("");
-  const [sendResultMessage, setSendResultMessage] = useState<string | null>(null);
+  /* The tone travels with the text. This used to be a bare string always rendered in
+     the green success banner, so "0 Karte(n) versendet. 3 fehlgeschlagen" was reported
+     to the office as a success - the one thing a status colour must never do. */
+  const [sendResult, setSendResult] = useState<{ text: string; tone: "success" | "warning" | "error" } | null>(null);
 
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -155,16 +158,21 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
 
   function handleSend() {
     setError(null);
-    setSendResultMessage(null);
+    setSendResult(null);
     startTransition(async () => {
       try {
         const result = await sendMemberCardsAction(subject, body, confirmation, selectedSendableIds);
-        setSendResultMessage(
-          `${result.cards} Karte(n) an ${result.sent} Mitglied(er) versendet.` +
-            (result.failed.length > 0
-              ? ` ${result.failed.length} fehlgeschlagen: ${result.failed.map((f) => `${f.email} (${f.reason})`).join("; ")}`
-              : "")
-        );
+        const failures = result.failed.length;
+        setSendResult({
+          // Nothing out at all is an error; a partial send is a warning that still has
+          // to say what did go through, so the office knows what not to resend.
+          tone: failures === 0 ? "success" : result.sent === 0 ? "error" : "warning",
+          text:
+            `${result.cards} Karte(n) an ${result.sent} Mitglied(er) versendet.` +
+            (failures > 0
+              ? ` ${failures} fehlgeschlagen: ${result.failed.map((f) => `${f.email} (${f.reason})`).join("; ")}`
+              : ""),
+        });
         setConfirmation("");
         setShowSendForm(false);
         setSelectedIds(new Set());
@@ -395,7 +403,19 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
       </div>
 
       {csvResultMessage && <p className={styles.successMessage}>{csvResultMessage}</p>}
-      {sendResultMessage && <p className={styles.successMessage}>{sendResultMessage}</p>}
+      {sendResult && (
+        <p
+          className={
+            sendResult.tone === "success"
+              ? styles.successMessage
+              : sendResult.tone === "warning"
+                ? styles.warningMessage
+                : styles.errorMessage
+          }
+        >
+          {sendResult.text}
+        </p>
+      )}
 
       {selectedIds.size > 0 && (
         <div className={styles.selectionBar}>

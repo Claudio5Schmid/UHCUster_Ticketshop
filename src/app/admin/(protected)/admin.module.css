@@ -321,6 +321,24 @@
   margin-bottom: var(--space-4);
 }
 
+/* Same shape as .successMessage, different tone. A send that partly or wholly
+   failed used to be reported in the green one - the office read "0 versendet, 3
+   fehlgeschlagen" off a success banner. Green is a status colour here and has to
+   mean it went out. */
+.warningMessage {
+  composes: successMessage;
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+}
+
+.errorMessage {
+  composes: successMessage;
+  color: var(--color-error-text);
+  background: var(--color-error-bg);
+  border-color: var(--color-error-text);
+}
+
 .breadcrumb {
   margin: 0 0 var(--space-4);
   font-size: var(--text-small-size);
