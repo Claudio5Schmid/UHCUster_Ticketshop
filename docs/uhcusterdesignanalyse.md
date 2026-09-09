@@ -47,11 +47,11 @@ Das folgende Schema übernimmt Marke (Rot/Schwarz/Weiss) und Inhalt des UHC Uste
 - Secondary text: `#6B6B6B`
 - Accent (Marke): `#E4032E` (UHC-Rot, aus Logo abgeleitet) — sparsam eingesetzt, nur für CTAs, Live-Badges, aktive Zustände
 - Dunkler Kontrastblock: `#111111` (ersetzt das bisherige `#333` der Navbar) für Footer/dunkle Sections
-- Keine Verläufe, keine Schatten ausser sehr subtil (`0 1px 2px rgba(0,0,0,0.04)`)
+- Keine Verläufe ausser den zwei in Abschnitt 4 festgelegten Tokens (Hero-Überlagerung, Spielkarte); Schatten nur sehr subtil (`0 1px 2px rgba(0,0,0,0.04)`), Spielkarten etwas weicher (`--shadow-card-lg`)
 
 ### COMPONENTS
 - **Navbar**: transparent über dem Hero, wird beim Scrollen weiss mit feinem Bottom-Border; Logo links, 5–6 Hauptpunkte zentriert/rechts, ein einzelner roter CTA-Button rechts ("Tickets" o. ä.), Icons (Social, Account) in ein Overflow-Menü verschoben statt alle sichtbar
-- **Buttons**: Primär = schwarz gefüllt, weisser Text, radius 4px, Hover → Rot; Sekundär = outline, 1px `#111`, transparent bg
+- **Buttons**: Primär = schwarz gefüllt, weisser Text, radius 4px, Hover → Rot; Sekundär = outline, 1px `#111`, transparent bg. Im Ticketshop zusätzlich die **Pill-Form** (voll gerundet, `shape="pill"`) für die Ticket-Aufrufe im Hero und auf den Spielkarten – rot (`accent`), weil dort der Kauf der nächste Schritt ist
 - **Cards** (News/Spiele): weisser Hintergrund, radius 12px, Schatten `0 1px 3px rgba(0,0,0,0.06)`, grosszügiges Innenpolster (32px), Bild oben mit 16:9, Datum als kleines Label in Rot/Grau
 - **Testimonials/Zitate** (z. B. SRF-Erwähnung): grosses Zitat in editorial-Serif oder Grotesk-Light, 32px, zentriert, mit Quelle darunter in Kapitälchen
 
@@ -122,3 +122,33 @@ Schwarz/Weiss/Grau als Basis, und halte die Bedienung so reduziert wie möglich
 ```
 
 Passe die eckigen Klammern an das konkrete Tool an (z. B. "Ticket-Buchung für Heimspiele", "Mitglieder-Login mit Trainingsplänen", "Live-Ticker für Spiele").
+
+---
+
+## 4. Ticketshop-Redesign (September 2026) — Anordnung nach FC-Basel-Vorbild
+
+Der Ticketshop übernimmt die **Anordnung** des FC-Basel-Ticketshops, nicht dessen dunkle Optik: Farben, Schrift und Helligkeit bleiben wie in Abschnitt 2. Was sich ändert, ist, wie die Elemente auf der Seite stehen.
+
+### HERO (Startseite, Einzeltickets, Red Castle Club)
+- Ein Foto über die volle Breite (`public/hero/heimspiel.jpg`, ≤ 2400 px breit, JPEG). Bis das echte Foto da ist, liegt dort ein kleiner heller Verlauf als Platzhalter – die Datei wird ersetzt, der Code nicht.
+- Darüber eine **weisse Überlagerung** (`--gradient-hero-overlay`, 70–92 % Weiss, unten dichter). Text und Logos bleiben schwarz/rot; das Foto ist Stimmung, nicht Kontrastfläche.
+- Inhalt zentriert, von oben nach unten: Titel «SICHERE DIR DEINEN PLATZ» → Datum/Zeit/Halle → «UHC USTER - GEGNER» (rot) → beide Club-Logos → Countdown (TAGE : STD : MIN) → roter Pill-Button «Tickets kaufen».
+- Countdown: bis Anpfiff; ab Anpfiff bis +3 h «Spiel läuft - Heute!»; danach springt der Hero zum nächsten Heimspiel. Ohne kommendes Spiel: Titel, ein Satz, Pill-Link zur Eventfrog-Suche.
+- Red Castle Club: gleiches Foto, Club-Logo, Titel «RED CASTLE CLUB», Einleitungstext, Pill-Button «Mitglied werden» (Anker auf die Karten). Kein Countdown.
+
+### DISPLAY-TYPOGRAFIE
+- Weiterhin Inter, aber für Hero-Titel, Sektionstitel («KOMMENDE SPIELE») und Countdown-Ziffern: **Versalien, Weight 900, Tracking −0.02em**, Line-height 1. Tokens `--text-display-*`, `--text-section-title-size`, `--text-countdown-size`.
+- Ziffern immer `tabular-nums`, damit der Countdown nicht springt.
+
+### HEADER
+- Auf den drei Hero-Seiten **transparent über dem Foto** (Logo bleibt farbig, Links schwarz), ab 24 px Scroll die gewohnte weisse Leiste mit feiner Linie. Auf allen anderen Seiten von Anfang an weiss.
+- Logo links, drei Textlinks **zentriert** (Saisonkarten, Red Castle Club, Einzeltickets), rechts zwei Icons im **runden Rahmen** (Meine Tickets, Warenkorb mit rotem Zähler). Mobil: Burger-Menü, das zusätzlich «Meine Tickets» ausschreibt.
+
+### SPIELKARTEN
+- Raster: 3 pro Reihe ab 1024 px, 2 ab 640 px, sonst 1. Startseite zeigt die nächsten 3 mit «ALLE ANSEHEN», Einzeltickets alle kommenden Heimspiele.
+- Karte: weiss, Radius 24 px (`--radius-xl`), Schatten `--shadow-card-lg`, **roter Radialverlauf aus der Mitte** (`--gradient-match-card`, 35 % Rot im Zentrum, nach aussen weiss). Die Logos sitzen auf einem weissen Halo (`--gradient-crest-halo`), damit sie über dem stärksten Rot lesbar bleiben.
+- Inhalt zentriert: Datum/Zeit/Halle (fett) → «L-UPL» (grau) → Logos → roter Pill-Button «Tickets kaufen» (Eventfrog, neuer Tab) bzw. deaktiviert «Tickets folgen», solange kein Link hinterlegt ist. Kein zweiter Button: VIP gibt es nur als Red-Castle-Club-Saisonkarte.
+
+### SEKTIONEN
+- Titelzeile: Versal-Titel links, optional ein Versal-Link rechts, darunter ein kurzer Hinweis in Sekundärfarbe (`SectionHeader`).
+- Reihenfolge Startseite: Hero → Kommende Spiele → Saisonkarten → Red-Castle-Club-Teaser.

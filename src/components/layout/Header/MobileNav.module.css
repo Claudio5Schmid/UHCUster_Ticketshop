@@ -63,7 +63,7 @@
 
 .panel {
   position: fixed;
-  top: 64px;
+  top: var(--header-height);
   left: 0;
   right: 0;
   z-index: 45;

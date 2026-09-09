@@ -64,6 +64,18 @@
   font-size: var(--text-micro-size);
 }
 
+/* Fully rounded, a little wider - the shop's ticket calls to action. Padding
+   overrides the size classes above on purpose: a pill needs more room at the
+   ends or the text crowds the curve. */
+.pill {
+  border-radius: var(--radius-pill);
+  padding-inline: var(--space-6);
+}
+
+.pill.sizeSm {
+  padding-inline: var(--space-5);
+}
+
 .fullWidth {
   width: 100%;
 }

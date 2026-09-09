@@ -1,0 +1,48 @@
+.date {
+  font-size: var(--text-h3-size);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+.pairing {
+  font-size: var(--text-h2-size);
+  font-weight: 800;
+  line-height: var(--text-h2-line);
+  letter-spacing: var(--text-display-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.crests {
+  margin-block: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-pill);
+  background: var(--gradient-crest-halo);
+}
+
+.lead {
+  max-width: 48ch;
+  color: var(--color-text-secondary);
+}
+
+.action {
+  margin-top: var(--space-3);
+}
+
+/* The hero's button is the page's one loud call to action - wider than the
+   card buttons so it reads as such. */
+.action > * {
+  min-width: 240px;
+}
+
+@media (max-width: 640px) {
+  .date {
+    font-size: var(--text-body-size);
+  }
+
+  .pairing {
+    font-size: var(--text-h3-size);
+  }
+}

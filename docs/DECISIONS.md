@@ -758,3 +758,38 @@ SES (`v=spf1 include:amazonses.com`, MX `feedback-smtp.eu-central-1.amazonses.co
 receivers drop it silently - the exact failure D50 documents, just with the providers swapped.
 **Resolved in code; open on DNS and the Resend dashboard.**
 
+**D57 — The shop takes the FC Basel ticket shop's layout, and keeps UHC Uster's colours.** Claudio
+was unhappy with the fixture list and the shop's overall arrangement and pointed at FC Basel's
+shop as the model: a photo hero with a big capitalised headline, the date line, the pairing, both
+crests, a countdown and a single ticket button; below it the coming games as cards with date,
+league, crests and button. What is adopted is exactly that **arrangement**. What is not adopted is
+FCB's dark theme: the pages stay white, the accent stays red, the type stays Inter (heavier and in
+capitals for the display pieces, but no new font).
+
+The hero (`HeroShell`) carries one photo, `public/hero/heimspiel.jpg`, under a white veil, so the
+text on it is the same black as everywhere else. The file committed there is a light gradient
+placeholder until Claudio drops in the real photo under the same name - a file swap, not a code
+change. Three pages open with it: `/` and `/spielplan` with the next home game (`MatchHero`),
+`/red-castle-club` with the club's logo and a "Mitglied werden" anchor. The header floats
+transparently over the top of those three and turns into the usual white bar on scroll; on every
+other page it is the white bar from the start. It gained "Meine Tickets" as a second ring icon
+beside the cart, and its links moved to the centre.
+
+The countdown is the one piece that ticks, and it is built so a page revalidated every 60 s (ISR)
+cannot hydrate with different digits than it rendered: the data layer reads the clock once
+(`getShopGames`, since a render must be pure), the server renders with that instant, and the
+client's `useNow` hook hands React the very same instant as its server snapshot before starting
+to tick. Dates are formatted only on the server (`formatGameDateLine`) - a browser's ICU is not
+Node's. A game counts as "on" for three hours after kick-off ("Spiel läuft - Heute!"), then the
+hero moves to the next candidate on its own; the server passes it three so that works between two
+revalidations.
+
+The cards (`MatchCard`) replace `GameRow`. They are white with a red radial glow from the centre -
+the first gradients in this design system, so both are tokens, and the crests sit on a white halo
+so a black wordmark never has to be read against saturated red. `L-UPL` is a constant, not a
+column: every game in this shop is that team's (D-note on team 428535 above). One button per card,
+Eventfrog or a disabled "Tickets folgen" - there is no VIP single ticket to link to (D10, D22).
+
+Home page order became hero → coming games → season passes → Red Castle Club teaser, the FCB
+pattern; season passes remain one click away in the header. `docs/uhcusterdesignanalyse.md` #4
+records the visual rules. **Resolved in code; the real hero photo is still to come from Claudio.**

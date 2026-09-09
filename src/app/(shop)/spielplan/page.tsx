@@ -1,6 +1,8 @@
 import { Container } from "@/components/layout/Container/Container";
-import { GameRow } from "@/components/shop/GameRow/GameRow";
-import { getUpcomingGamesForSeason } from "@/lib/games";
+import { MatchHero } from "@/components/shop/MatchHero/MatchHero";
+import { MatchGrid } from "@/components/shop/MatchGrid/MatchGrid";
+import { SectionHeader } from "@/components/shop/SectionHeader/SectionHeader";
+import { getShopGames } from "@/lib/games";
 import { CURRENT_SEASON, CURRENT_SEASON_LABEL } from "@/lib/season";
 import { EVENTFROG_UHC_USTER_SEARCH_URL } from "@/lib/eventfrog";
 import styles from "../home.module.css";
@@ -12,30 +14,20 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function SpielplanPage() {
-  const games = await getUpcomingGamesForSeason(CURRENT_SEASON);
+  const { now, upcoming: games, heroCandidates } = await getShopGames(CURRENT_SEASON);
 
   return (
     <div>
-      <section className={styles.hero}>
-        <Container>
-          <span className={styles.heroEyebrow}>Saison {CURRENT_SEASON_LABEL}</span>
-          <h1>Heimspiele</h1>
-          <p className={styles.heroLead}>
-            Einzeltickets für die folgenden Heimspiele gibt es über Eventfrog. Mit
-            einer Saisonkarte oder Red-Castle-Club-Karte brauchst du hierfür kein
-            zusätzliches Ticket.
-          </p>
-        </Container>
-      </section>
+      <MatchHero games={heroCandidates} serverNow={now} />
 
       <section className={styles.section}>
         <Container>
+          <SectionHeader
+            title="Kommende Spiele"
+            note={`Einzeltickets für die Heimspiele der Saison ${CURRENT_SEASON_LABEL} gibt es über Eventfrog. Mit einer Saisonkarte oder Red-Castle-Club-Karte brauchst du hierfür kein zusätzliches Ticket.`}
+          />
           {games.length > 0 ? (
-            <div className={styles.gamesList}>
-              {games.map((game) => (
-                <GameRow key={game.id} game={game} />
-              ))}
-            </div>
+            <MatchGrid games={games} />
           ) : (
             <p className={styles.emptyState}>
               Die Heimspiele der Saison {CURRENT_SEASON_LABEL} werden in Kürze
@@ -44,7 +36,7 @@ export default async function SpielplanPage() {
           )}
           <p className={styles.emptyState}>
             Noch nicht jedes Spiel hat einen eigenen Ticket-Link. Alle Spiele des UHC
-            Uster sind gesammelt auf{" "}
+            Uster sind auf{" "}
             <a href={EVENTFROG_UHC_USTER_SEARCH_URL} target="_blank" rel="noopener noreferrer">
               Eventfrog
             </a>{" "}

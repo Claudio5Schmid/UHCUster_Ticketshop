@@ -2,15 +2,34 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid transparent;
+  transition: background-color var(--duration-base) var(--easing-standard),
+    border-color var(--duration-base) var(--easing-standard),
+    box-shadow var(--duration-base) var(--easing-standard);
 }
 
+/* Pulls the following hero up underneath the bar. HeroShell pads its own top
+   by --header-height, so nothing is actually covered. */
+.overHero {
+  margin-bottom: calc(-1 * var(--header-height));
+}
+
+.solid {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom-color: var(--color-border);
+}
+
+.transparent {
+  background: transparent;
+}
+
+/* Logo left, links dead centre, icons right - the centre column is the one
+   that grows, so the links sit in the middle of the bar, not of the leftover. */
 .bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-5);
   padding-block: var(--space-4);
 }
@@ -27,6 +46,7 @@
 
 .nav {
   display: none;
+  justify-self: center;
   align-items: center;
   gap: var(--space-6);
 }
@@ -45,12 +65,40 @@
   transition: color var(--duration-fast) var(--easing-standard);
 }
 
-.nav a:hover {
+/* Over the hero photo the links are already on a busy ground; full text
+   colour keeps them crisp there. */
+.transparent .nav a {
   color: var(--color-text);
+}
+
+.nav a:hover {
+  color: var(--color-accent);
 }
 
 .right {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
+}
+
+/* The icon links on the right - "Meine Tickets" here, the cart in
+   CartButton.module.css - share this ring. */
+.iconLink {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-text);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: border-color var(--duration-fast) var(--easing-standard),
+    color var(--duration-fast) var(--easing-standard);
+}
+
+.iconLink:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
