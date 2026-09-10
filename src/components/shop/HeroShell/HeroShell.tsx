@@ -8,11 +8,12 @@ import styles from "./HeroShell.module.css";
  * /red-castle-club): one full-width photo under a white veil, centred content
  * on top, the header floating transparently over its top edge.
  *
- * The photo is /public/hero/heimspiel.jpg. Until the club supplies one, the
- * file committed there is a soft light gradient - the CSS placeholder behind
- * it looks the same - so swapping in the real photo is a file replacement, not
- * a code change. Kept light on purpose: black text, red accents, exactly as on
- * the rest of the page (docs/uhcusterdesignanalyse.md #4).
+ * The photo is /public/hero/heimspiel.jpg - a home game in the Buchholz, the
+ * stand full behind the boards, 2400x1600. Swapping it for another is a file
+ * replacement, not a code change: same name, same width, and the CSS gradient
+ * on .media still stands in while it loads. Kept light on purpose: black text,
+ * red accents, exactly as on the rest of the page
+ * (docs/uhcusterdesignanalyse.md #4).
  */
 export function HeroShell({ children }: { children: ReactNode }) {
   return (

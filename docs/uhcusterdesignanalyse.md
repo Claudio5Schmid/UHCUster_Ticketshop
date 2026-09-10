@@ -130,7 +130,7 @@ Passe die eckigen Klammern an das konkrete Tool an (z. B. "Ticket-Buchung für H
 Der Ticketshop übernimmt die **Anordnung** des FC-Basel-Ticketshops, nicht dessen dunkle Optik: Farben, Schrift und Helligkeit bleiben wie in Abschnitt 2. Was sich ändert, ist, wie die Elemente auf der Seite stehen.
 
 ### HERO (Startseite, Einzeltickets, Red Castle Club)
-- Ein Foto über die volle Breite (`public/hero/heimspiel.jpg`, ≤ 2400 px breit, JPEG). Bis das echte Foto da ist, liegt dort ein kleiner heller Verlauf als Platzhalter – die Datei wird ersetzt, der Code nicht.
+- Ein Foto über die volle Breite (`public/hero/heimspiel.jpg`, ≤ 2400 px breit, JPEG): ein Heimspiel im Buchholz, volle Tribüne hinter der Bande, 2400 × 1600. Wird das Foto ersetzt, wird nur die Datei getauscht, nicht der Code – gleicher Name, gleiche Breite.
 - Darüber eine **weisse Überlagerung** (`--gradient-hero-overlay`, 70–92 % Weiss, unten dichter). Text und Logos bleiben schwarz/rot; das Foto ist Stimmung, nicht Kontrastfläche.
 - Inhalt zentriert, von oben nach unten: Titel «SICHERE DIR DEINEN PLATZ» (immer **eine Zeile**, skaliert mit der Breite, 56 px Desktop) → Datum/Zeit/Halle (18 px) → «UHC USTER - GEGNER» (rot, 24 px) → beide Club-Logos klein nebeneinander (44 px, ohne «vs.») → Countdown (36 px, TAGE : STD : MIN) → roter Pill-Button «Tickets kaufen». Hero-Höhe ca. 60 % des Fensters.
 - Countdown: bis Anpfiff; ab Anpfiff bis +3 h «Spiel läuft - Heute!»; danach springt der Hero zum nächsten Heimspiel. Ohne kommendes Spiel: Titel, ein Satz, Pill-Link zur Eventfrog-Suche.

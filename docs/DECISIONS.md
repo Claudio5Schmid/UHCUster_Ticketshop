@@ -802,7 +802,18 @@ and dropped: Uster's crest is a wordmark, and a badge over its last letter looke
 That only works because the crests with a baked-in white background - Uster, Zug United, Chur
 United, Köniz Bern - had it keyed out, flood-filled in from the edge so white inside a badge
 stays white; every other place a crest appears already puts it on white (the scanner's chip,
-admin tables), so nothing else changed. Kloten-Dietlikon's is on black and was left alone. The hero shrank to FCB's proportions
+admin tables), so nothing else changed. Kloten-Dietlikon's is on black and was left alone.
+
+Two of those turned out to be half-done, and only showed once the crests were off white. The
+edge-in fill cannot reach a white area a stroke closes off, so Zug United kept white in the
+counters of its monogram - the triangle in the bowl and the oval below it - which read as white
+blobs on the pink match card. Zug's mark is one flat blue, no white ink anywhere in it, so it is
+keyed on colour rather than from the edge. And `public/uhc-uster-logo.png` - the header, admin
+nav, scanner login and the ticket PDF, a different file from the `logos/uhc-uster.png` crest -
+was never keyed at all: a fully opaque white plate, invisible while the header sat on white and a
+white box the moment a photo went in under it. Keyed the same way; every place it is used draws
+it on white, and pdf-lib carries the alpha into the ticket unchanged. The hero shrank to FCB's proportions
 (title 56px and always one line, date 18px, pairing 24px, countdown 36px, ~60% viewport high), and
 the "Meine Tickets" icon became a person, since a ticket icon beside a cart read as "buy" rather
-than "mine". **Resolved in code; the real hero photo is still to come from Claudio.**
+than "mine". **Resolved.** Claudio's photo of a home game in the Buchholz - a full stand behind
+the boards - is in as `public/hero/heimspiel.jpg`, 2400x1600, the width the design note asks for.

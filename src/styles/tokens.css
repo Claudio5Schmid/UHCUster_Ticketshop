@@ -27,8 +27,8 @@
   /* Hero photo, kept light: the photo shows through a white veil so the black
      headline, crests and countdown read exactly as they do on the plain page.
      Slightly denser at the bottom, where the call to action sits. The
-     placeholder is what shows until public/hero/heimspiel.jpg is a real photo
-     (and behind it while it loads). */
+     placeholder sits behind the photo while it loads, so the hero never opens
+     on bare white. */
   --gradient-hero-overlay: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.7) 0%,
