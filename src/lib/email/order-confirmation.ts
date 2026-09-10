@@ -59,8 +59,8 @@ export function orderConfirmationText(input: OrderConfirmationEmailInput): strin
     "     innerhalb weniger Werktage an diese E-Mail-Adresse.",
     `  2. Du überweist den Betrag und gibst dabei die Bestellnummer ${input.orderNumber}`,
     "     als Referenz an.",
-    "  3. Sobald die Zahlung eingegangen ist, kannst du deine Karte(n) direkt",
-    "     herunterladen - unter demselben Link:",
+    "  3. Sobald die Zahlung eingegangen ist, schicken wir dir deine Karte(n) per",
+    "     E-Mail - und du findest sie ab dann jederzeit unter demselben Link:",
     "",
     `  ${input.statusUrl}`,
     "",
@@ -122,7 +122,7 @@ export function orderConfirmationHtml(input: OrderConfirmationEmailInput): strin
           <li>Du überweist den Betrag und gibst dabei die Bestellnummer <strong>${escapeHtml(
             input.orderNumber
           )}</strong> als Referenz an.</li>
-          <li>Sobald die Zahlung eingegangen ist, kannst du deine Karte(n) direkt herunterladen.</li>
+          <li>Sobald die Zahlung eingegangen ist, schicken wir dir deine Karte(n) per E-Mail - und du findest sie ab dann jederzeit in deinem Bereich im Shop.</li>
         </ol>
 
         <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">

@@ -817,3 +817,29 @@ it on white, and pdf-lib carries the alpha into the ticket unchanged. The hero s
 the "Meine Tickets" icon became a person, since a ticket icon beside a cart read as "buy" rather
 than "mine". **Resolved.** Claudio's photo of a home game in the Buchholz - a full stand behind
 the boards - is in as `public/hero/heimspiel.jpg`, 2400x1600, the width the design note asks for.
+
+**D58 — The confirmation screen hands over the order link as one button, not a URL to copy.** Claudio
+went through a purchase and did not like the screen it ends on. Three things were wrong with it. The
+order number was set at `--text-h2-size` in red, the largest thing on the page, which made a payment
+reference look like the point of the screen; it is now a bold line under the greeting at body size.
+The heading was `Bestellung eingegangen` at `--text-h1-size`, whose 68px desktop end wrapped a
+22-character heading onto two lines inside the 640px column; it now reads `Vielen Dank für deine
+Bestellung` and is held to one line by its own clamp - `clamp(15px, 4.75vw, 36px)`, the ceiling being
+what still fits the column beside the tick, which moved from a 56px badge above the heading to a 32px
+mark on the same line. Because a one-line heading has to shrink on a phone, the lead, the order number
+and the section titles track the same viewport scale a step below it under 640px: at 375px the
+untouched 18px body and 22px section titles both outsized a 17.8px heading, which reads as no
+hierarchy at all.
+
+The third was the copyable link (D54). The screen showed the signed URL in a `<code>` block with a
+"Link kopieren" button *and* a "Bestellung ansehen" button next to it - two ways to the same place,
+and the raw URL is the uglier one on a page a customer sees once. Only the button stays, moved into a
+panel of its own with the accent pill and a line saying it also works later, or via **Meine Tickets**
+with the order number. D54's "handed out in three places" is unchanged: the confirmation screen still
+hands over the link, as the button's target rather than as text.
+
+What the screen promises changed too. Both it and the confirmation e-mail said the customer downloads
+the cards themselves once the payment lands, which is now only half of it: the office sends the PDFs
+out by e-mail when it marks the order paid (D55), and the same cards stay on the order page for good
+(D54). Step 3 says both in both places, because the mail is written to say the same three things as
+the screen.

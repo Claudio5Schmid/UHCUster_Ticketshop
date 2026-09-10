@@ -168,33 +168,57 @@
   max-width: 640px;
 }
 
+/* Tick and heading on one line, so the confirmation reads as a single sentence.
+   The mark shrinks to the cap height of the heading rather than the badge it was. */
+.confirmationHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .successMark {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--color-success-bg);
   border: 1px solid var(--color-success-border);
   color: var(--color-success-text);
-  font-size: 28px;
+  font-size: 17px;
   font-weight: 700;
-  margin-bottom: var(--space-4);
+}
+
+/* One line at every width the panel can take: the heading gives up size before it
+   gives up the line. Sized against the space the mark leaves it rather than from
+   --text-h1-size, whose 68px desktop end would run this 32-character sentence well
+   past the 640px panel; the ceiling is what still fits there. */
+.confirmationTitle {
+  font-size: clamp(15px, 4.75vw, 36px);
+  white-space: nowrap;
 }
 
 .confirmationLead {
   color: var(--color-text-secondary);
   /* Global styles reset every heading margin to 0, so the lead needs its own gap. */
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
 }
 
+/* A quiet line under the greeting rather than the display-sized block it was - the
+   number is a reference to quote on a payment, not the headline of the page. */
 .orderNumber {
-  display: inline-block;
-  font-size: var(--text-h2-size);
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-5);
   font-weight: 700;
-  color: var(--color-accent);
-  margin-block: var(--space-4);
+}
+
+/* Only the number itself is unbreakable; the label may wrap away from it, because a
+   28-character nowrap run overflows the page on a 320px screen. */
+.orderNumberValue {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .confirmationList {
@@ -232,39 +256,64 @@
   flex-wrap: wrap;
 }
 
-/* The order link, given the same weight as the "how it continues" block: it is the
-   one thing on this screen the customer needs to keep. */
-.statusLink {
+/* The way back to the tickets, given a panel of its own: on a page of grey text it
+   is the one thing the customer came for, so it gets the accent edge and the only
+   loud button. */
+.ticketPanel {
   border: 1px solid var(--color-border);
+  border-top: 3px solid var(--color-accent);
   border-radius: var(--radius-lg);
   background: var(--color-bg-alt);
   padding: var(--space-5);
   margin-bottom: var(--space-6);
+  text-align: center;
 }
 
-.statusLinkText {
+.ticketPanelText {
   font-size: var(--text-small-size);
   color: var(--color-text-secondary);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-5);
+  /* Centred text reads badly across a full 640px, so hold it to a comfortable
+     measure and let the browser even out the line lengths. */
+  max-width: 54ch;
+  margin-inline: auto;
+  text-wrap: balance;
 }
 
-.statusLinkRow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+.ticketPanelAction {
+  min-width: 240px;
 }
 
-/* Long signed URL: wrap it rather than let it push the card sideways on mobile. */
-.statusLinkUrl {
-  flex: 1 1 240px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-size: var(--text-micro-size);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
+/* The mark gives room back to the heading where the line is tightest, so the
+   sentence can stay on one line without shrinking to below body size. */
+@media (max-width: 640px) {
+  .confirmationHead {
+    gap: var(--space-2);
+  }
+
+  .successMark {
+    width: 24px;
+    height: 24px;
+    font-size: 13px;
+  }
+
+  /* A heading held to one line has to shrink on a phone, so everything under it
+     comes down with it - at 375px the 18px body and the 22px section titles both
+     outsize a 17.8px heading, which reads as no hierarchy at all. Each of these
+     tracks the same viewport scale as .confirmationTitle, a step below it. */
+  .nextStepsTitle {
+    font-size: clamp(14px, 4.05vw, var(--text-h3-size));
+  }
+
+  .confirmationLead,
+  .orderNumber {
+    font-size: clamp(14px, 4.05vw, var(--text-body-size));
+  }
+
+  .ticketPanelAction {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 @media print {
@@ -274,7 +323,7 @@
   }
 
   .confirmationActions,
-  .statusLinkRow button {
+  .ticketPanelAction {
     display: none;
   }
 }
