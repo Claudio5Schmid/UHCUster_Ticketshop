@@ -31,9 +31,9 @@
      on bare white. */
   --gradient-hero-overlay: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.7) 0%,
-    rgba(255, 255, 255, 0.8) 60%,
-    rgba(255, 255, 255, 0.92) 100%
+    rgba(255, 255, 255, 0.63) 0%,
+    rgba(255, 255, 255, 0.72) 60%,
+    rgba(255, 255, 255, 0.83) 100%
   );
   --gradient-hero-placeholder: linear-gradient(160deg, #fafafa 0%, #fde6ea 100%);
 
