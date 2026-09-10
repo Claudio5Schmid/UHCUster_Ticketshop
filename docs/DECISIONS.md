@@ -751,12 +751,29 @@ Environment variables changed with it: `RESEND_API_KEY`, `MAIL_FROM_EMAIL`, `MAI
 API key name is provider-specific; the address ones are not, for the same reason the module was
 renamed. Sending address: `tickets@uhcuster.ch`.
 
-**Not resolved in code, and blocking real delivery:** `uhcuster.ch` has to be verified in Resend
-and its DKIM records added to DNS. As of this entry the domain's live DNS still points entirely at
+**Was not resolved in code, and blocked real delivery:** `uhcuster.ch` had to be verified in Resend
+and its DKIM records added to DNS. As of that entry the domain's live DNS still pointed entirely at
 SES (`v=spf1 include:amazonses.com`, MX `feedback-smtp.eu-central-1.amazonses.com` on
-`tickets.uhcuster.ch`), so until that is changed Resend-sent mail fails SPF/DKIM alignment and
-receivers drop it silently - the exact failure D50 documents, just with the providers swapped.
-**Resolved in code; open on DNS and the Resend dashboard.**
+`tickets.uhcuster.ch`), so until that changed Resend-sent mail failed SPF/DKIM alignment and
+receivers dropped it silently - the exact failure D50 documents, just with the providers swapped.
+
+**The DNS side is done** (checked 2026-09-10 against live DNS, not against the dashboard):
+`resend._domainkey.uhcuster.ch` carries Resend's DKIM key, and `send.uhcuster.ch` - the return-path
+Resend uses as MAIL FROM - has `MX send.forge.rmta.net` with an SPF record authorising Resend's
+sending IPs. Both are subdomains of `uhcuster.ch`, so both align with a `tickets@uhcuster.ch` From
+under relaxed alignment; `_dmarc.uhcuster.ch` is `v=DMARC1; p=none`. **Resolved.**
+
+Worth knowing, because it looks alarming and is not: the SES records are still live, but only on
+`tickets.uhcuster.ch` - SPF `include:amazonses.com` and the SES feedback MX. That subdomain is not
+the sending domain. The address is `tickets@uhcuster.ch` on the root, and alignment is judged
+against `uhcuster.ch`, so the leftovers are inert here. They are cleanup, not a blocker. (The root's
+own SPF, `v=spf1 mx include:spf.zynex.ch -all`, covers the club's ordinary mail host and does not
+need Resend in it, since Resend's envelope sender lives on `send.uhcuster.ch`.)
+
+One trap this entry warns about turned up in practice: a local `.env.local` was still carrying
+`SES_FROM_EMAIL` set to a gmail.com address. Renaming that key to `MAIL_FROM_EMAIL` would have kept
+a From nobody can authenticate - the club does not control gmail.com's DNS - and Resend would have
+reported every such send as successful. The name changed *and* the value had to.
 
 **D57 — The shop takes the FC Basel ticket shop's layout, and keeps UHC Uster's colours.** Claudio
 was unhappy with the fixture list and the shop's overall arrangement and pointed at FC Basel's
