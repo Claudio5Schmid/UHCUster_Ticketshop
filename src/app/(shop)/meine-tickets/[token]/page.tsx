@@ -7,6 +7,7 @@ import { verifyOrderAccessToken } from "@/lib/orders/access-token";
 import { getCustomerOrderView, type CustomerOrderView } from "@/lib/orders/customer-view";
 import { formatRappenAsChf } from "@/lib/pricing";
 import styles from "../meine-tickets.module.css";
+import { ticketDisplayName } from "@/lib/tickets/label";
 
 export const metadata: Metadata = {
   title: "Meine Tickets - UHC Uster Ticketshop",
@@ -113,7 +114,13 @@ export default async function OrderStatusPage({ params }: { params: Promise<{ to
               {order.tickets.map((ticket) => (
                 <div key={ticket.id} className={styles.ticketRow}>
                   <span>
-                    <span className={styles.ticketName}>{ticket.productName}</span>
+                    <span className={styles.ticketName}>
+                      {ticketDisplayName({
+                        productName: ticket.productName,
+                        transferable: ticket.transferable,
+                        transferableIndex: ticket.transferableIndex,
+                      })}
+                    </span>
                     <span className={styles.ticketMeta}>{ticket.holderName ?? "Ohne Namen"}</span>
                   </span>
                   <Button as="a" href={`/meine-tickets/${token}/tickets/${ticket.id}`} variant="secondary" size="sm">

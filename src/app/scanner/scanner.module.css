@@ -163,9 +163,26 @@
   color: #1a1a1a;
 }
 
+/* A card already let in *at another door* is a different thing from the same card
+   held up twice at this one, and the person at the door has to be able to tell them
+   apart across a crowded entrance in under a second. Darker than the plain rejection
+   red so it reads as its own state rather than a louder version of one, and white on
+   it is about 9:1. */
+.feedbackAlarm {
+  background: #7a0016;
+  color: #fff;
+}
+
 .feedbackIcon {
   font-size: 88px;
   line-height: 1;
+}
+
+/* The alarm's whole job is to be seen before anything is read. */
+.feedbackIconAlarm {
+  font-size: clamp(140px, 34vw, 220px);
+  font-weight: 800;
+  line-height: 0.9;
 }
 
 .feedbackTitle {

@@ -27,6 +27,9 @@ export interface CustomerOrderTicket {
   id: string;
   productName: string;
   holderName: string | null;
+  transferable: boolean;
+  /** Lets a customer tell four otherwise identical transferable cards apart. */
+  transferableIndex: number | null;
 }
 
 export interface CustomerOrderView {
@@ -82,9 +85,13 @@ async function getDownloadableTickets(orderId: string): Promise<CustomerOrderTic
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("tickets")
-    .select("id, holder_name, status, pdf_path, order_items!inner(order_id, product_name_snapshot)")
+    .select("id, holder_name, status, pdf_path, transferable, transferable_index, order_items!inner(order_id, product_name_snapshot)")
     .eq("order_items.order_id", orderId)
     .in("status", ["gueltig", "eingeloest"])
+    // Personal card first, then the transferable ones in numbered order, so the
+    // list reads the way the numbers do.
+    .order("transferable", { ascending: true })
+    .order("transferable_index", { ascending: true, nullsFirst: true })
     .order("issued_at", { ascending: true });
 
   if (error) return [];
@@ -97,6 +104,8 @@ async function getDownloadableTickets(orderId: string): Promise<CustomerOrderTic
         id: row.id,
         productName: orderItem?.product_name_snapshot ?? "Ticket",
         holderName: row.holder_name,
+        transferable: row.transferable,
+        transferableIndex: row.transferable_index,
       };
     });
 }

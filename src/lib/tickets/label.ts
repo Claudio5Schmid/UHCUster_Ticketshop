@@ -33,6 +33,19 @@ export function ticketTypeLabel({ productName, transferable, transferableIndex }
 }
 
 /**
+ * What a customer sees on their own page. Same running number as the admin
+ * table, but a personal card keeps its plain product name: "(nicht übertragbar)"
+ * answers a question only someone comparing kinds of card is asking.
+ */
+export function ticketDisplayName({ productName, transferable, transferableIndex }: TicketTypeLabelInput): string {
+  const base = ticketProductName(productName);
+
+  if (!transferable) return base;
+
+  return transferableIndex ? `${base} (übertragbar-${transferableIndex})` : `${base} (übertragbar)`;
+}
+
+/**
  * The short form printed in the card's eyebrow line, where the product name
  * already occupies the title right below it: "ÜBERTRAGBAR-2", never the whole
  * label again.

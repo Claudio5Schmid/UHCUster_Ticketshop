@@ -11,6 +11,10 @@ export interface ScannerTicket {
   productName: string;
   /** ISO timestamp if already scanned (accepted) for this specific game, else null. */
   redeemedAt: string | null;
+  /** Device that took the accepted scan. Null when not redeemed. Carried so a second
+   *  device can tell "this was let in here" from "this was let in at another door",
+   *  which is the difference between a double-tap and someone passing a code on. */
+  redeemedBy: string | null;
 }
 
 /**
@@ -40,7 +44,7 @@ export async function GET(request: Request) {
 
   const { data: scans, error: scansError } = await supabase
     .from("scan_events")
-    .select("scanned_token, scanned_at")
+    .select("scanned_token, scanned_at, device_id")
     .eq("game_id", session.gameId)
     .eq("result", "accepted");
   if (scansError) {
@@ -48,6 +52,7 @@ export async function GET(request: Request) {
   }
 
   const redeemedAtByToken = new Map(scans.map((scan) => [scan.scanned_token, scan.scanned_at]));
+  const redeemedByToken = new Map(scans.map((scan) => [scan.scanned_token, scan.device_id]));
 
   const result: ScannerTicket[] = tickets.map((ticket) => {
     const orderItem = Array.isArray(ticket.order_items) ? ticket.order_items[0] : ticket.order_items;
@@ -58,6 +63,7 @@ export async function GET(request: Request) {
       transferable: ticket.transferable,
       productName: orderItem?.product_name_snapshot ?? "-",
       redeemedAt: redeemedAtByToken.get(ticket.token) ?? null,
+      redeemedBy: redeemedByToken.get(ticket.token) ?? null,
     };
   });
 

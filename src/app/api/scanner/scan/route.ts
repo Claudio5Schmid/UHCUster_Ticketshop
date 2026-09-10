@@ -11,6 +11,10 @@ interface ScanResponse {
   transferable?: boolean;
   /** Set when result is already_redeemed - when the earlier accepted scan happened. */
   redeemedAt?: string;
+  /** Set when result is already_redeemed - which device took that earlier scan. A
+   *  different device than the one asking is the tell that a code was passed on
+   *  rather than a card being held up twice at the same door. */
+  redeemedBy?: string;
 }
 
 const UNIQUE_VIOLATION = "23505";
@@ -91,7 +95,7 @@ export async function POST(request: Request) {
   if ((insertError as { code?: string }).code === UNIQUE_VIOLATION) {
     const { data: earlierScan } = await supabase
       .from("scan_events")
-      .select("scanned_at")
+      .select("scanned_at, device_id")
       .eq("ticket_id", ticket.id)
       .eq("game_id", session.gameId)
       .eq("result", "accepted")
@@ -111,6 +115,7 @@ export async function POST(request: Request) {
       result: "already_redeemed",
       ...ticketInfo,
       redeemedAt: earlierScan?.scanned_at,
+      redeemedBy: earlierScan?.device_id,
     });
   }
 

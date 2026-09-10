@@ -103,6 +103,22 @@ function ScanningView({ session, onExit }: { session: StoredScannerSession; onEx
     );
   }
 
+  /**
+   * The same card held up twice at this door is someone fumbling; the same card
+   * turning up at a *different* door is a code that was passed on while the first
+   * person is already inside. Only the second one is worth alarming about, so the
+   * two are never shown alike.
+   *
+   * Requires knowing which device took the first scan. That is unknown when this
+   * device decided offline from a download older than the redemption - it then shows
+   * the ordinary "already scanned" until the server answers, rather than guessing.
+   * Unknown is treated as "same door": a false alarm accuses a paying visitor.
+   */
+  const isForeignDoor =
+    lastResult?.kind === "already_redeemed" &&
+    Boolean(lastResult.redeemedBy) &&
+    lastResult.redeemedBy !== session.deviceLabel;
+
   const feedback = lastResult && locked ? FEEDBACK_TEXT[lastResult.kind] : null;
   const feedbackClass =
     lastResult?.kind === "accepted"
@@ -110,7 +126,9 @@ function ScanningView({ session, onExit }: { session: StoredScannerSession; onEx
       : lastResult?.kind === "checking"
         ? styles.feedbackChecking
         : lastResult?.kind === "already_redeemed"
-          ? styles.feedbackWarning
+          ? isForeignDoor
+            ? styles.feedbackAlarm
+            : styles.feedbackWarning
           : styles.feedbackRejected;
 
   /**
@@ -180,10 +198,13 @@ function ScanningView({ session, onExit }: { session: StoredScannerSession; onEx
             }
           }}
         >
-          <span className={styles.feedbackIcon} aria-hidden="true">
-            {feedback.icon}
+          <span
+            className={isForeignDoor ? `${styles.feedbackIcon} ${styles.feedbackIconAlarm}` : styles.feedbackIcon}
+            aria-hidden="true"
+          >
+            {isForeignDoor ? "!" : feedback.icon}
           </span>
-          <p className={styles.feedbackTitle}>{feedback.title}</p>
+          <p className={styles.feedbackTitle}>{isForeignDoor ? "Bereits am anderen Eingang" : feedback.title}</p>
           {lastResult.holderName && <p className={styles.feedbackDetail}>{lastResult.holderName}</p>}
           {lastResult.productName && <p className={styles.feedbackDetail}>{lastResult.productName}</p>}
           {/* already_redeemed can only ever mean an earlier scan was accepted - the
@@ -195,6 +216,7 @@ function ScanningView({ session, onExit }: { session: StoredScannerSession; onEx
               {lastResult.redeemedAt
                 ? `Erster Scan: Zutritt gewährt um ${formatTime(lastResult.redeemedAt)}`
                 : "Erster Scan: Zutritt gewährt"}
+              {isForeignDoor && ` · ${lastResult.redeemedBy}`}
             </p>
           )}
           {isTerminal && <p className={styles.feedbackHint}>Zum Weiterscannen tippen</p>}

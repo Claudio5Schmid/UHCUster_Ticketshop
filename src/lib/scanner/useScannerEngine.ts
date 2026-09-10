@@ -14,6 +14,10 @@ export interface ScanFeedback {
   productName?: string;
   holderName?: string | null;
   redeemedAt?: string | null;
+  /** Which device took the earlier accepted scan, when that is known. Null while it
+   *  isn't - a device that decided offline from a download predating the redemption
+   *  has no way to know until the server answers. */
+  redeemedBy?: string | null;
 }
 
 interface LocalTicket {
@@ -22,11 +26,16 @@ interface LocalTicket {
   transferable: boolean;
   productName: string;
   redeemedAt: string | null;
+  redeemedBy: string | null;
 }
 
 interface BroadcastPayload {
   scannedToken: string;
   redeemedAt: string;
+  /** Added so the door that hears this knows whose scan it was. Without it a second
+   *  device could tell that a code was already in, but not that it went in somewhere
+   *  else - which is the whole signal. Older senders omit it; treated as unknown. */
+  deviceLabel?: string;
 }
 
 const REALTIME_EVENT = "redeemed";
@@ -45,6 +54,7 @@ async function postScan(session: StoredScannerSession, scannedToken: string) {
     productName?: string;
     holderName?: string | null;
     redeemedAt?: string;
+    redeemedBy?: string;
   };
 }
 
@@ -107,6 +117,7 @@ export function useScannerEngine(session: StoredScannerSession) {
             transferable: ticket.transferable,
             productName: ticket.productName,
             redeemedAt: ticket.redeemedAt,
+            redeemedBy: ticket.redeemedBy,
           });
         }
         ticketsRef.current = map;
@@ -135,6 +146,7 @@ export function useScannerEngine(session: StoredScannerSession) {
         const ticket = ticketsRef.current.get(payload.scannedToken);
         if (ticket && !ticket.redeemedAt) {
           ticket.redeemedAt = payload.redeemedAt;
+          ticket.redeemedBy = payload.deviceLabel ?? null;
         }
       })
       .subscribe();
@@ -154,19 +166,50 @@ export function useScannerEngine(session: StoredScannerSession) {
     };
   }, [flushPending]);
 
+  /**
+   * The response used to be thrown away - the local decision had already been shown
+   * and the call was only there to log. It still is, with one exception: when this
+   * device decided "already scanned" from a download that predates the redemption,
+   * the server's answer is the only place the redeeming device's name exists. That
+   * turns a plain "already in" into "already in at another door", so it is worth
+   * upgrading the result that is still on screen.
+   *
+   * Guarded on the token: by the time this lands, the person at the door may have
+   * tapped on and scanned someone else, and their result must not be overwritten.
+   */
   const submitInBackground = useCallback(
     (scannedToken: string) => {
-      postScan(session, scannedToken).catch(() => {
-        pendingRef.current.push({ scannedToken, attempts: 1 });
-        setPendingSyncCount(pendingRef.current.length);
-      });
+      postScan(session, scannedToken)
+        .then((response) => {
+          if (response.result !== "already_redeemed" || !response.redeemedBy) return;
+
+          const ticket = ticketsRef.current.get(scannedToken);
+          if (ticket) ticket.redeemedBy = response.redeemedBy;
+
+          setLastResult((current) =>
+            current && current.token === scannedToken && current.kind === "already_redeemed" && !current.redeemedBy
+              ? { ...current, redeemedBy: response.redeemedBy, redeemedAt: current.redeemedAt ?? response.redeemedAt }
+              : current
+          );
+        })
+        .catch(() => {
+          pendingRef.current.push({ scannedToken, attempts: 1 });
+          setPendingSyncCount(pendingRef.current.length);
+        });
     },
     [session]
   );
 
-  const broadcastRedemption = useCallback((scannedToken: string, redeemedAt: string) => {
-    channelRef.current?.send({ type: "broadcast", event: REALTIME_EVENT, payload: { scannedToken, redeemedAt } });
-  }, []);
+  const broadcastRedemption = useCallback(
+    (scannedToken: string, redeemedAt: string) => {
+      channelRef.current?.send({
+        type: "broadcast",
+        event: REALTIME_EVENT,
+        payload: { scannedToken, redeemedAt, deviceLabel: session.deviceLabel },
+      });
+    },
+    [session.deviceLabel]
+  );
 
   const processScan = useCallback(
     (rawToken: string) => {
@@ -190,6 +233,7 @@ export function useScannerEngine(session: StoredScannerSession) {
                 transferable: Boolean(response.holderName),
                 productName: response.productName ?? "-",
                 redeemedAt: new Date().toISOString(),
+                redeemedBy: session.deviceLabel,
               });
               setTicketCount(ticketsRef.current.size);
             }
@@ -199,6 +243,7 @@ export function useScannerEngine(session: StoredScannerSession) {
               productName: response.productName,
               holderName: response.holderName,
               redeemedAt: response.redeemedAt,
+              redeemedBy: response.redeemedBy,
             });
           })
           .catch(() => {
@@ -220,6 +265,7 @@ export function useScannerEngine(session: StoredScannerSession) {
           productName: ticket.productName,
           holderName: ticket.holderName,
           redeemedAt: ticket.redeemedAt,
+          redeemedBy: ticket.redeemedBy,
         });
         submitInBackground(scannedToken);
         return;
@@ -227,6 +273,7 @@ export function useScannerEngine(session: StoredScannerSession) {
 
       const now = new Date().toISOString();
       ticket.redeemedAt = now;
+      ticket.redeemedBy = session.deviceLabel;
       setLastResult({ kind: "accepted", token: scannedToken, productName: ticket.productName, holderName: ticket.holderName });
       submitInBackground(scannedToken);
       broadcastRedemption(scannedToken, now);
