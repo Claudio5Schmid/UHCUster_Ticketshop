@@ -251,9 +251,9 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   let cursor = cardTop - px(36);
 
   // Every card says in its top row whether it may change hands: a pill on the
-  // right, in the accent for a transferable card and muted for a personal one.
+  // right, white for a transferable card and muted for a personal one.
   const badgeText = data.transferable ? (ticketTypeEyebrowSuffix(data.transferableIndex) ?? "ÜBERTRAGBAR") : "NICHT ÜBERTRAGBAR";
-  const badgeStyle: TextStyle = { font: fontBold, size: px(10), color: data.transferable ? accent : MUTED_ON_BLACK, tracking: px(10) * 0.1 };
+  const badgeStyle: TextStyle = { font: fontBold, size: px(10), color: data.transferable ? WHITE : MUTED_ON_BLACK, tracking: px(10) * 0.1 };
   const badgeWidth = textWidth(badgeText, badgeStyle) + px(20);
   const badgeHeight = px(18);
   const drawBadge = (rowTop: number, rowHeight: number) => {
@@ -316,8 +316,10 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   const columnWidth = (panelWidth - px(24)) / 2;
   const secondColumnX = panelX + columnWidth + px(24);
 
+  // A season pass - member cards included - always names one person; a Red
+  // Castle Club card is bought by a person or a company.
   const holderName = data.holderName ?? "-";
-  drawText(page, data.transferable ? "FIRMA / GRUPPE" : "INHABER", panelX, labelTop, fieldLabelStyle);
+  drawText(page, membership ? "NAME / FIRMA" : "NAME", panelX, labelTop, fieldLabelStyle);
   drawText(page, holderName, panelX, valueTop, fitted(holderName, fieldValueStyle, columnWidth, px(13)));
   drawText(page, "BESTELLUNG", secondColumnX, labelTop, fieldLabelStyle);
   drawText(page, data.orderNumber, secondColumnX, valueTop, fitted(data.orderNumber, fieldValueStyle, columnWidth, px(13)));

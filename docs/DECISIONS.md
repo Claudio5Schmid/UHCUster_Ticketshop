@@ -889,7 +889,9 @@ the season as a hollow outline behind the text, club logo and season up top, "G�
 geht's" below), and then asked for exactly that in the PDF. `src/lib/tickets/pdf.ts` now draws it
 with pdf-lib's own primitives: rounded corners as SVG paths, the perforation as a dashed line with
 white die-cut notches, a pill in the top row of every card saying "ÜBERTRAGBAR-2" or "NICHT
-ÜBERTRAGBAR" (Claudio asked for the season pass to say this outright, not only in the small note), the outline number through the outline text-rendering mode, tracking through
+ÜBERTRAGBAR" (Claudio asked for the season pass to say this outright, not only in the small note; the
+transferable pill is white, the personal one muted), the holder line labelled "NAME" on season
+passes - a member card is always one person's - and "NAME / FIRMA" on club cards, the outline number through the outline text-rendering mode, tracking through
 the character-spacing operator. Every measurement is written in the design's CSS px and scaled by
 0.75 to points, so the code and the canvas can be compared number by number.
 
