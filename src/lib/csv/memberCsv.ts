@@ -5,9 +5,17 @@
  * the server. src/lib/admin/members.ts applies the confirmed mapping.
  */
 
-export type CsvField = "vorname" | "nachname" | "email" | "kategorie" | "mitgliederkarte" | "transferableCodeCount";
+export type CsvField =
+  | "externalId"
+  | "vorname"
+  | "nachname"
+  | "email"
+  | "kategorie"
+  | "mitgliederkarte"
+  | "transferableCodeCount";
 
 export const CSV_FIELDS: Array<{ key: CsvField; label: string; required: boolean }> = [
+  { key: "externalId", label: "Mitglieds-ID", required: true },
   { key: "vorname", label: "Vorname", required: false },
   { key: "nachname", label: "Name", required: true },
   { key: "email", label: "E-Mail", required: true },
@@ -20,6 +28,9 @@ export const CSV_FIELDS: Array<{ key: CsvField; label: string; required: boolean
 export type CsvColumnMapping = Partial<Record<CsvField, number>>;
 
 export interface MemberCsvRow {
+  /** The club's member number. Identity for the whole import - see the migration
+   *  add_member_external_id for why this rather than the e-mail address. */
+  externalId: string;
   vorname: string;
   nachname: string;
   email: string;
@@ -29,6 +40,18 @@ export interface MemberCsvRow {
 }
 
 const HEADER_ALIASES: Record<string, CsvField> = {
+  // The club's own member number, under the names an export is likely to give it.
+  // Anything unrecognised is still mappable by hand in the import dialog.
+  id: "externalId",
+  "mitglieds-id": "externalId",
+  mitgliedsid: "externalId",
+  mitgliedsnummer: "externalId",
+  mitgliedernummer: "externalId",
+  mitgliednummer: "externalId",
+  "mitglieds-nr": "externalId",
+  "mitglieder-nr": "externalId",
+  nummer: "externalId",
+  nr: "externalId",
   vorname: "vorname",
   nachname: "nachname",
   name: "nachname",
@@ -108,8 +131,16 @@ export function parseMemberCsvRows(content: string, mapping: CsvColumnMapping): 
       return index === undefined ? undefined : cells[index]?.trim();
     };
 
+    const externalId = get("externalId");
     const nachname = get("nachname");
     const email = get("email");
+    // Without the member number a row cannot be matched against anything, now or
+    // in a later import - importing it anyway would plant the duplicate this whole
+    // mechanism exists to prevent. Reported rather than quietly dropped.
+    if (!externalId) {
+      errors.push(`Zeile ${i + 1}: Mitglieds-ID fehlt - übersprungen.`);
+      continue;
+    }
     if (!nachname || !email) {
       errors.push(`Zeile ${i + 1}: Name und E-Mail sind erforderlich - übersprungen.`);
       continue;
@@ -120,6 +151,7 @@ export function parseMemberCsvRows(content: string, mapping: CsvColumnMapping): 
     const transferableRaw = get("transferableCodeCount");
 
     rows.push({
+      externalId,
       vorname: get("vorname") ?? "",
       nachname,
       email,

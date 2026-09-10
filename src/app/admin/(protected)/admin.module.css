@@ -376,3 +376,32 @@
   font-size: var(--text-small-size);
   color: var(--color-text-secondary);
 }
+
+/* The conflict list can run to a few dozen rows on a real club export, so it
+   scrolls inside the dialog rather than pushing the buttons off the screen -
+   the decision is worthless if you cannot reach "Importieren" from it. */
+.csvConflictList {
+  max-height: 46vh;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.csvConflictRow {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.csvConflictRow:last-child {
+  border-bottom: none;
+}
+
+.csvConflictDetail {
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+}
+

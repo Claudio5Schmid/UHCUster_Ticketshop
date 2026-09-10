@@ -10,6 +10,7 @@ import {
   EMPTY_COUNTS,
   countCards,
   isLiveTicket,
+  planCardReconciliation,
   applyMemberFilters,
   type CountableTicket,
   type Member,
@@ -20,6 +21,9 @@ export type { Member, MemberCardCounts, MemberSendState, MemberFilters } from "@
 export { memberSendState, applyMemberFilters, countCards } from "@/lib/admin/member-state";
 
 export interface MemberInput {
+  /** The club's member number. Optional here because the single-member form has no
+   *  such number to offer - only the CSV import carries one. */
+  externalId?: string | null;
   vorname: string;
   nachname: string;
   email: string;
@@ -146,6 +150,7 @@ export async function createMemberAndIssueCards(input: MemberInput): Promise<Mem
   const { data: member, error: memberError } = await supabase
     .from("members")
     .insert({
+      external_id: input.externalId ?? null,
       vorname: input.vorname,
       nachname: input.nachname,
       email: input.email,
@@ -258,30 +263,231 @@ export interface CsvImportResult {
   failed: Array<{ row: number; reason: string }>;
 }
 
-export async function importMembersFromCsv(content: string, mapping: CsvColumnMapping): Promise<CsvImportResult> {
+export interface CsvImportCounts {
+  personal: number;
+  transferable: number;
+}
+
+/** One CSV row whose member number already exists, with both sides of the
+ *  comparison so the admin decides against what is actually there rather than
+ *  against a summary of it. */
+export interface CsvImportMatch {
+  externalId: string;
+  memberId: string;
+  csv: { vorname: string; nachname: string; email: string; kategorie: string | null } & CsvImportCounts;
+  current: { vorname: string; nachname: string; email: string; kategorie: string | null } & CsvImportCounts;
+}
+
+export interface CsvImportPlan {
+  /** Rows whose member number is new. Listed as a count only, by decision - on a
+   *  first import of the whole club this is hundreds of rows and nothing to decide. */
+  newCount: number;
+  matches: CsvImportMatch[];
+  errors: Array<{ row: number; reason: string }>;
+}
+
+/**
+ * The read-only half of the import: works out what *would* happen, changes
+ * nothing. Splitting the import in two exists so a re-import can no longer
+ * silently duplicate a member - the admin sees every row that resolves to
+ * somebody already here and says what to do with it.
+ *
+ * Matching is on the club's member number and nothing else. E-mail was the
+ * obvious alternative and is deliberately not used: families share an address.
+ */
+export async function planMemberCsvImport(content: string, mapping: CsvColumnMapping): Promise<CsvImportPlan> {
+  const { rows, errors } = parseMemberCsvRows(content, mapping);
+  const plan: CsvImportPlan = {
+    newCount: 0,
+    matches: [],
+    errors: errors.map((reason, index) => ({ row: index, reason })),
+  };
+  if (rows.length === 0) return plan;
+
+  const supabase = await getSupabaseServerClient();
+  const { data: existing, error } = await supabase
+    .from("members")
+    .select("id, external_id, vorname, nachname, email, kategorie, order_id")
+    .in("external_id", rows.map((row) => row.externalId));
+  if (error) throw new Error(`Failed to load members: ${error.message}`);
+
+  const byExternalId = new Map((existing ?? []).map((member) => [member.external_id as string, member]));
+
+  for (const row of rows) {
+    const member = byExternalId.get(row.externalId);
+    if (!member) {
+      plan.newCount++;
+      continue;
+    }
+
+    const tickets = member.order_id ? await getOrderTickets(member.order_id as string) : [];
+    const counts = countCards(tickets);
+
+    plan.matches.push({
+      externalId: row.externalId,
+      memberId: member.id as string,
+      csv: {
+        vorname: row.vorname,
+        nachname: row.nachname,
+        email: row.email,
+        kategorie: row.kategorie,
+        personal: row.mitgliederkarte ? 1 : 0,
+        transferable: row.transferableCodeCount,
+      },
+      current: {
+        vorname: member.vorname as string,
+        nachname: member.nachname as string,
+        email: member.email as string,
+        kategorie: (member.kategorie as string | null) ?? null,
+        personal: counts.personal,
+        transferable: counts.transferable,
+      },
+    });
+  }
+
+  return plan;
+}
+
+/**
+ * Brings one member's live cards to the counts the CSV asks for, by difference
+ * rather than by replacement: cards that are already right are left completely
+ * alone, so a QR code sitting in somebody's inbox keeps working. Replacing the
+ * whole set on every import would invalidate every card the club has already
+ * sent, for members whose entry did not even change.
+ *
+ * Surplus cards are voided rather than deleted - scan_events references tickets
+ * with on delete restrict, and the door log is not something an import may edit.
+ * Which ones go is not arbitrary: never-sent first, then sent, and a card that
+ * has already been through the door last, so the least useful card is always the
+ * one taken away.
+ */
+async function reconcileCards(
+  member: { id: string; order_id: string | null; vorname: string; nachname: string; email: string },
+  target: CsvImportCounts
+): Promise<string | null> {
+  const supabase = await getSupabaseServerClient();
+  const fullName = `${member.vorname} ${member.nachname}`.trim();
+
+  let orderId = member.order_id;
+  if (!orderId) {
+    if (target.personal + target.transferable === 0) return null;
+    orderId = await createOrderForMember(fullName, member.email, target.personal, target.transferable);
+    const { error } = await supabase.from("members").update({ order_id: orderId }).eq("id", member.id);
+    if (error) throw new Error(error.message);
+    return orderId;
+  }
+
+  const live = (await getOrderTickets(orderId)).filter(isLiveTicket);
+  const { toVoid, toAdd } = planCardReconciliation(live, target);
+
+  for (const ticketId of toVoid) {
+    const { error } = await supabase.rpc("void_ticket", { p_ticket_id: ticketId });
+    if (error) throw new Error(error.message);
+  }
+
+  if (toAdd.personal + toAdd.transferable > 0) {
+    await addMemberTickets(orderId, toAdd, fullName);
+  }
+
+  return orderId;
+}
+
+export interface CsvImportResult {
+  imported: number;
+  updated: number;
+  skipped: number;
+  failed: Array<{ row: number; reason: string }>;
+}
+
+/**
+ * The writing half. Re-parses the file rather than trusting a plan sent back from
+ * the browser - the selection is only a filter over what the server works out for
+ * itself, so a tampered payload can at most import less than it should.
+ *
+ * A member number present in the database but absent from `applyExternalIds` is
+ * skipped whole: not updated, not duplicated, not touched.
+ */
+export async function applyMemberCsvImport(
+  content: string,
+  mapping: CsvColumnMapping,
+  applyExternalIds: string[]
+): Promise<CsvImportResult> {
   const { rows, errors } = parseMemberCsvRows(content, mapping);
   const failed: Array<{ row: number; reason: string }> = errors.map((reason, index) => ({ row: index, reason }));
+  const selected = new Set(applyExternalIds);
+
+  const supabase = await getSupabaseServerClient();
+  const { data: existing, error } = await supabase
+    .from("members")
+    .select("id, external_id, vorname, nachname, email, kategorie, order_id")
+    .in("external_id", rows.map((row) => row.externalId));
+  if (error) throw new Error(`Failed to load members: ${error.message}`);
+  const byExternalId = new Map((existing ?? []).map((member) => [member.external_id as string, member]));
 
   let imported = 0;
+  let updated = 0;
+  let skipped = 0;
+
   for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const target = { personal: row.mitgliederkarte ? 1 : 0, transferable: row.transferableCodeCount };
+
     try {
-      await createMemberAndIssueCards({
-        vorname: rows[i].vorname,
-        nachname: rows[i].nachname,
-        email: rows[i].email,
-        kategorie: rows[i].kategorie,
-        // The CSV's "Mitgliederkarte ja/nein" column is a yes/no by nature -
-        // one personal card or none.
-        personalCardCount: rows[i].mitgliederkarte ? 1 : 0,
-        transferableCardCount: rows[i].transferableCodeCount,
-      });
-      imported++;
-    } catch (error) {
-      failed.push({ row: i + 2, reason: error instanceof Error ? error.message : "Unbekannter Fehler" });
+      const existingMember = byExternalId.get(row.externalId);
+
+      if (!existingMember) {
+        await createMemberAndIssueCards({
+          externalId: row.externalId,
+          vorname: row.vorname,
+          nachname: row.nachname,
+          email: row.email,
+          kategorie: row.kategorie,
+          personalCardCount: target.personal,
+          transferableCardCount: target.transferable,
+        });
+        imported++;
+        continue;
+      }
+
+      if (!selected.has(row.externalId)) {
+        skipped++;
+        continue;
+      }
+
+      // The CSV is the club's list of record, so its name and category win - that
+      // was the decision. Written before the cards, so a card failure leaves the
+      // corrected details behind rather than nothing at all.
+      const { error: updateError } = await supabase
+        .from("members")
+        .update({
+          vorname: row.vorname,
+          nachname: row.nachname,
+          email: row.email,
+          kategorie: row.kategorie,
+          mitgliederkarte: target.personal > 0,
+          personal_card_count: target.personal,
+          transferable_code_count: target.transferable,
+        })
+        .eq("id", existingMember.id);
+      if (updateError) throw new Error(updateError.message);
+
+      await reconcileCards(
+        {
+          id: existingMember.id as string,
+          order_id: (existingMember.order_id as string | null) ?? null,
+          vorname: row.vorname,
+          nachname: row.nachname,
+          email: row.email,
+        },
+        target
+      );
+      updated++;
+    } catch (importError) {
+      failed.push({ row: i + 2, reason: importError instanceof Error ? importError.message : "Unbekannter Fehler" });
     }
   }
 
-  return { imported, failed };
+  return { imported, updated, skipped, failed };
 }
 
 export interface SendCardsResult {

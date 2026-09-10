@@ -11,12 +11,14 @@ import { Table, type TableColumn } from "@/components/ui/Table/Table";
 import {
   createMemberAction,
   importCsvAction,
+  planCsvImportAction,
   sendMemberCardsAction,
   updateMemberKategorieAction,
   deleteMembersAction,
 } from "./actions";
 import { memberSendState, type Member, type MemberSendState } from "@/lib/admin/member-state";
 import { CSV_FIELDS, parseCsvHeader, detectColumnMapping, type CsvColumnMapping, type CsvField } from "@/lib/csv/memberCsv";
+import type { CsvImportPlan } from "@/lib/admin/members";
 import { matchesSendConfirmation } from "@/lib/admin/send-confirmation";
 import styles from "../admin.module.css";
 
@@ -66,6 +68,11 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
   const [csvHeader, setCsvHeader] = useState<string[]>([]);
   const [csvMapping, setCsvMapping] = useState<CsvColumnMapping>({});
   const [csvResultMessage, setCsvResultMessage] = useState<string | null>(null);
+  /* The import is two-stage now: a plan is fetched first and, if it resolves any row
+     to a member who already exists, the admin says row by row what to do with them
+     before anything is written. csvSelected holds the member numbers to apply. */
+  const [csvPlan, setCsvPlan] = useState<CsvImportPlan | null>(null);
+  const [csvSelected, setCsvSelected] = useState<Set<string>>(new Set());
 
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [body, setBody] = useState(DEFAULT_BODY);
@@ -134,22 +141,65 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
     setCsvContent(null);
     setCsvHeader([]);
     setCsvMapping({});
+    setCsvPlan(null);
+    setCsvSelected(new Set());
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  function handleCsvImport() {
+  /** Nothing is written here - this only asks the server what the file would do. */
+  function handleCsvPlan() {
     if (!csvContent) return;
     setError(null);
     setCsvResultMessage(null);
     startTransition(async () => {
       try {
-        const result = await importCsvAction(csvContent, csvMapping);
-        setCsvResultMessage(
-          `${result.imported} Mitglieder importiert.` +
-            (result.failed.length > 0 ? ` ${result.failed.length} Zeilen übersprungen: ${result.failed.map((f) => f.reason).join("; ")}` : "")
-        );
-        handleCsvCancel();
-        setShowCsvImport(false);
+        const plan = await planCsvImportAction(csvContent, csvMapping);
+        // Nothing to decide means nothing to ask about: a file of purely new members
+        // goes straight through rather than through an empty confirmation step.
+        if (plan.matches.length === 0) {
+          await runCsvImport([]);
+          return;
+        }
+        setCsvPlan(plan);
+        setCsvSelected(new Set(plan.matches.map((match) => match.externalId)));
+      } catch (submitError) {
+        setError(submitError instanceof Error ? submitError.message : "Fehler beim Prüfen der Datei.");
+      }
+    });
+  }
+
+  async function runCsvImport(applyExternalIds: string[]) {
+    if (!csvContent) return;
+    const result = await importCsvAction(csvContent, csvMapping, applyExternalIds);
+    setCsvResultMessage(
+      [
+        `${result.imported} neu importiert`,
+        `${result.updated} aktualisiert`,
+        ...(result.skipped > 0 ? [`${result.skipped} übersprungen`] : []),
+      ].join(", ") +
+        "." +
+        (result.failed.length > 0
+          ? ` ${result.failed.length} Zeilen mit Fehler: ${result.failed.map((f) => f.reason).join("; ")}`
+          : "")
+    );
+    handleCsvCancel();
+    setShowCsvImport(false);
+  }
+
+  function toggleCsvRow(externalId: string) {
+    setCsvSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(externalId)) next.delete(externalId);
+      else next.add(externalId);
+      return next;
+    });
+  }
+
+  function handleCsvImport() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await runCsvImport([...csvSelected]);
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "Fehler beim Import.");
       }
@@ -482,12 +532,94 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
               <Button
                 type="button"
                 disabled={isPending || CSV_FIELDS.some((f) => f.required && csvMapping[f.key] === undefined)}
-                onClick={handleCsvImport}
+                onClick={handleCsvPlan}
               >
-                Importieren
+                Weiter
               </Button>
               <Button type="button" variant="secondary" onClick={handleCsvCancel}>
                 Andere Datei wählen
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Step three, and only when there is something to decide: every row whose
+          member number is already in the database, with what is there and what the
+          file wants, so nobody is duplicated or overwritten unseen. */}
+      <Modal
+        open={csvPlan !== null}
+        onClose={() => setCsvPlan(null)}
+        title="Bereits vorhandene Mitglieder"
+      >
+        {csvPlan && (
+          <div className={styles.form}>
+            <p style={{ color: "var(--color-text-secondary)" }}>
+              {csvPlan.matches.length} {csvPlan.matches.length === 1 ? "Zeile betrifft ein Mitglied" : "Zeilen betreffen Mitglieder"},
+              das es bereits gibt. Angehakte werden aktualisiert, nicht angehakte bleiben unverändert.
+              {csvPlan.newCount > 0 && ` ${csvPlan.newCount} neue Mitglieder werden in jedem Fall angelegt.`}
+            </p>
+
+            <div className={styles.actions}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setCsvSelected(new Set(csvPlan.matches.map((m) => m.externalId)))}
+              >
+                Alle auswählen
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setCsvSelected(new Set())}>
+                Alle ignorieren
+              </Button>
+            </div>
+
+            <div className={styles.csvConflictList}>
+              {csvPlan.matches.map((match) => {
+                const nameChanged =
+                  match.csv.vorname !== match.current.vorname || match.csv.nachname !== match.current.nachname;
+                const kategorieChanged = (match.csv.kategorie ?? "") !== (match.current.kategorie ?? "");
+                const cardsChanged =
+                  match.csv.personal !== match.current.personal || match.csv.transferable !== match.current.transferable;
+
+                return (
+                  <label key={match.externalId} className={styles.csvConflictRow}>
+                    <input
+                      type="checkbox"
+                      checked={csvSelected.has(match.externalId)}
+                      onChange={() => toggleCsvRow(match.externalId)}
+                    />
+                    <div>
+                      <strong>
+                        ID {match.externalId} · {match.csv.vorname} {match.csv.nachname}
+                      </strong>
+                      <div className={styles.csvConflictDetail}>{match.csv.email}</div>
+                      {nameChanged && (
+                        <div className={styles.csvConflictDetail}>
+                          Name: {match.current.vorname} {match.current.nachname} → {match.csv.vorname} {match.csv.nachname}
+                        </div>
+                      )}
+                      {kategorieChanged && (
+                        <div className={styles.csvConflictDetail}>
+                          Kategorie: {match.current.kategorie ?? "–"} → {match.csv.kategorie ?? "–"}
+                        </div>
+                      )}
+                      <div className={styles.csvConflictDetail}>
+                        Karten: {match.current.personal} persönlich / {match.current.transferable} übertragbar
+                        {cardsChanged ? ` → ${match.csv.personal} / ${match.csv.transferable}` : " (unverändert)"}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className={styles.actions}>
+              <Button type="button" disabled={isPending} onClick={handleCsvImport}>
+                Importieren
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setCsvPlan(null)}>
+                Abbrechen
               </Button>
             </div>
           </div>

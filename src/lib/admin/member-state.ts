@@ -26,6 +26,9 @@ export type MemberSendState = "ohne" | "offen" | "teilweise" | "vollstaendig";
 
 export interface Member {
   id: string;
+  /** The club's own member number, from the import CSV. Null for members created
+   *  before it existed. The key an import matches on - see members.ts. */
+  external_id: string | null;
   vorname: string;
   nachname: string;
   email: string;
@@ -104,3 +107,53 @@ export function applyMemberFilters(members: Member[], filters: MemberFilters): M
     return true;
   });
 }
+
+export interface CardReconciliation {
+  /** Ticket ids to void, in the order they should go. */
+  toVoid: string[];
+  toAdd: { personal: number; transferable: number };
+}
+
+/**
+ * Works out how to bring a member's live cards to the counts an import asks for,
+ * without touching the ones that are already right - a QR code sitting in
+ * somebody's inbox keeps working, which replacing the whole set on every import
+ * would not allow.
+ *
+ * Which surplus card goes is not arbitrary: the least committed one. A card
+ * nobody has received yet costs nothing to withdraw, a delivered one stops
+ * working in somebody's inbox, and one that has already been through the door
+ * belongs to a person who may be standing in the hall - so cards are kept in that
+ * order and voided from the other end.
+ *
+ * Pure so that ordering can be tested without a database, which is how the first
+ * version was caught keeping the unsent cards and voiding the delivered ones.
+ * members.ts does the voiding itself.
+ */
+export function planCardReconciliation(
+  live: Array<{ id: string; transferable: boolean; status: string; card_sent_at: string | null }>,
+  target: { personal: number; transferable: number }
+): CardReconciliation {
+  const rank = (ticket: { status: string; card_sent_at: string | null }) =>
+    ticket.status === "eingeloest" ? 2 : ticket.card_sent_at ? 1 : 0;
+
+  const toVoid: string[] = [];
+  for (const [transferable, wanted] of [
+    [false, Math.max(0, Math.trunc(target.personal))],
+    [true, Math.max(0, Math.trunc(target.transferable))],
+  ] as Array<[boolean, number]>) {
+    // Descending: the most committed card sorts first and is kept, the surplus is
+    // taken from the tail where the never-sent ones are.
+    const held = live.filter((ticket) => ticket.transferable === transferable).sort((a, b) => rank(b) - rank(a));
+    for (const ticket of held.slice(wanted)) toVoid.push(ticket.id);
+  }
+
+  return {
+    toVoid,
+    toAdd: {
+      personal: Math.max(0, Math.trunc(target.personal) - live.filter((t) => !t.transferable).length),
+      transferable: Math.max(0, Math.trunc(target.transferable) - live.filter((t) => t.transferable).length),
+    },
+  };
+}
+

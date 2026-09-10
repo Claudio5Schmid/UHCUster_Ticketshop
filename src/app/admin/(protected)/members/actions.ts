@@ -3,13 +3,15 @@
 import { revalidatePath } from "next/cache";
 import {
   createMemberAndIssueCards,
-  importMembersFromCsv,
+  planMemberCsvImport,
+  applyMemberCsvImport,
   sendMemberCards,
   updateMemberKategorie,
   deleteMembers,
   addCardsToMember,
   type MemberInput,
   type CsvImportResult,
+  type CsvImportPlan,
   type SendCardsResult,
 } from "@/lib/admin/members";
 import type { CsvColumnMapping } from "@/lib/csv/memberCsv";
@@ -20,8 +22,18 @@ export async function createMemberAction(input: MemberInput) {
   revalidatePath("/admin/members");
 }
 
-export async function importCsvAction(csvContent: string, mapping: CsvColumnMapping): Promise<CsvImportResult> {
-  const result = await importMembersFromCsv(csvContent, mapping);
+/** Read-only: works out what the file would do, so the admin can confirm the rows
+ *  that resolve to an existing member before anything is written. */
+export async function planCsvImportAction(csvContent: string, mapping: CsvColumnMapping): Promise<CsvImportPlan> {
+  return planMemberCsvImport(csvContent, mapping);
+}
+
+export async function importCsvAction(
+  csvContent: string,
+  mapping: CsvColumnMapping,
+  applyExternalIds: string[]
+): Promise<CsvImportResult> {
+  const result = await applyMemberCsvImport(csvContent, mapping, applyExternalIds);
   revalidatePath("/admin/members");
   return result;
 }
