@@ -42,3 +42,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+
+# Unprocessed source photography. The versions the shop actually serves are
+# committed under public/ - these are the full-size originals kept only for
+# re-cropping, and one of them is larger than the whole rest of the repo.
+/Bilder_Videos/heimspiel.jpg
