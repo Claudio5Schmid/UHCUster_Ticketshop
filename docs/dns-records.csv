@@ -1,0 +1,7 @@
+Typ,Name,Wert
+CNAME,rz5k26kjwjtojbo2w2ldo2gzgjix7r5s._domainkey.uhcuster.ch,rz5k26kjwjtojbo2w2ldo2gzgjix7r5s.dkim.amazonses.com
+CNAME,ytptgrh44nehm6q25hqsxgf4evj3fa7t._domainkey.uhcuster.ch,ytptgrh44nehm6q25hqsxgf4evj3fa7t.dkim.amazonses.com
+CNAME,3tg425ue6hmrr3b7sxpj2zgisq6kvhri._domainkey.uhcuster.ch,3tg425ue6hmrr3b7sxpj2zgisq6kvhri.dkim.amazonses.com
+MX,tickets.uhcuster.ch,10 feedback-smtp.eu-central-1.amazonses.com
+TXT,tickets.uhcuster.ch,"v=spf1 include:amazonses.com ~all"
+TXT,_dmarc.uhcuster.ch,"v=DMARC1; p=none;"
