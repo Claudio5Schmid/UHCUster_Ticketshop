@@ -61,16 +61,111 @@
   justify-self: end;
 }
 
-.links a {
+/* Entries and group buttons are one row of controls, so they share every type
+   and colour rule - a <button> only needs the element defaults reset for that. */
+.link,
+.groupButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-family: inherit;
+  font-size: var(--text-small-size);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--easing-standard);
+}
+
+.link:hover,
+.groupButton:hover {
+  color: var(--color-accent);
+}
+
+.link:focus-visible,
+.groupButton:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* Where you are. Also set on a group whose menu holds the open page, so the bar
+   still says it once the menu is shut. */
+.link[data-current],
+.groupButton[data-current] {
+  color: var(--color-text);
+}
+
+.group {
+  position: relative;
+  display: inline-flex;
+}
+
+.chevron {
+  transition: transform var(--duration-fast) var(--easing-standard);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* Hangs off .group rather than the bar, so it opens under its own button. */
+.menu {
+  position: absolute;
+  top: calc(100% + var(--space-3));
+  left: 0;
+  z-index: 30;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card-lg);
+}
+
+/* The author `display: flex` above beats the user-agent rule that [hidden]
+   relies on, so without this the menu renders open and never closes. */
+.menu[hidden] {
+  display: none;
+}
+
+.menuItem {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   text-decoration: none;
   font-size: var(--text-small-size);
   font-weight: 600;
-  transition: color var(--duration-fast) var(--easing-standard);
+  white-space: nowrap;
 }
 
-.links a:hover {
+.menuItem:hover {
+  background: var(--color-bg-alt);
   color: var(--color-accent);
+}
+
+.menuItem[data-current] {
+  color: var(--color-text);
+  background: var(--color-bg-alt);
+}
+
+.menuItem:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Below 768px the bar stacks and the brand sits above the links, so a menu
+   anchored to the right edge of the viewport would be cut off. Left-aligned
+   under its button is safe at every width the bar takes. */
+@media (max-width: 480px) {
+  .menu {
+    min-width: 160px;
+  }
 }
 
 .logoutButton {
