@@ -882,3 +882,26 @@ shows the ordinary "already scanned" and upgrades to the alarm only if the serve
 different door. Guessing the other way round would mean accusing a paying visitor of cheating in
 front of a queue, which is far worse than missing one attempt. **Resolved.**
 
+
+**D59 — The printed card is redrawn after the "Editorial Pass" design.** Claudio asked for a fresh,
+modern ticket, chose the direction from a design canvas (a black landscape card with a tear-off stub,
+the season as a hollow outline behind the text, club logo and season up top, "Gültigkeit" and "So
+geht's" below), and then asked for exactly that in the PDF. `src/lib/tickets/pdf.ts` now draws it
+with pdf-lib's own primitives: rounded corners as SVG paths, the perforation as a dashed line with
+white die-cut notches, a pill in the top row of every card saying "ÜBERTRAGBAR-2" or "NICHT
+ÜBERTRAGBAR" (Claudio asked for the season pass to say this outright, not only in the small note), the outline number through the outline text-rendering mode, tracking through
+the character-spacing operator. Every measurement is written in the design's CSS px and scaled by
+0.75 to points, so the code and the canvas can be compared number by number.
+
+What the card no longer prints: the membership highlights. Claudio decided the benefits do not belong
+on the pass - the Red Castle Club crest does, and it takes the eyebrow's place on club cards. D29's
+metal tones stay, and reach further: the badge, the perforation, the stub's tint, the outline number
+and the tier word of the title ("CLUB **GOLD**") all take the tier's metal; season passes and the
+"Normal" tier stay on the site's red. D30 (Helvetica, not Inter) holds: the design's Inter 900
+headline is Helvetica Bold in capitals. The transferable member product's own "(übertragbar)" is
+stripped from the headline, since the eyebrow's running number and the note under the holder both
+say it and a third headline line left no room for the outline number.
+
+Cards already in Storage keep the old layout until `scripts/rerender-ticket-pdfs.ts` runs; it
+re-renders in place without touching ids, tokens or QR codes. Single-match tickets (the third
+artboard on the canvas) are a proposal only - there is no product type for them yet. **Resolved.**
