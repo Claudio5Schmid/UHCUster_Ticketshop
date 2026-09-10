@@ -860,3 +860,25 @@ the cards themselves once the payment lands, which is now only half of it: the o
 out by e-mail when it marks the order paid (D55), and the same cards stay on the order page for good
 (D54). Step 3 says both in both places, because the mail is written to say the same three things as
 the screen.
+
+## 2026-09-10
+
+**D57 — A ticket that turns up at a second door gets its own alarm screen.** Same card, same
+door, twice over is someone fumbling with their phone. Same card at a *different* door means the
+code was handed on while the first person is already inside - and until now the scanner showed both
+as the same amber "Bereits gescannt", so the second case was invisible to the staff who could
+actually act on it. The second one now takes over the screen in dark red with an outsized "!",
+naming the door that let the card in and when.
+
+The device that redeemed a ticket was already in `scan_events.device_id`; it simply never reached
+the scanner. It now arrives by all three routes the scanner learns about a redemption, so the alarm
+does not depend on connectivity at the moment of the scan: the pre-doors ticket download, the
+Realtime broadcast between devices (which gained the sending device's label), and the server's
+answer to the scan itself.
+
+**An unknown redeeming device is treated as the same door, never as an alarm.** A device that
+decided offline from a download older than the redemption cannot know who took the first scan; it
+shows the ordinary "already scanned" and upgrades to the alarm only if the server later names a
+different door. Guessing the other way round would mean accusing a paying visitor of cheating in
+front of a queue, which is far worse than missing one attempt. **Resolved.**
+
