@@ -76,23 +76,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         </dl>
       </div>
 
-      <h2>Positionen</h2>
-      <div className={styles.copyBlock}>
-        {order.items.map((item) => (
-          <div key={item.id}>
-            {item.quantity}x {item.product_name_snapshot}
-            {item.holder_name ? ` - ${item.holder_name}` : ""} -{" "}
-            {formatRappenAsChf(item.line_total_rappen)}
-          </div>
-        ))}
-      </div>
-
-      <TicketsPanel
-        orderId={order.id}
-        orderNumber={order.order_number}
-        tickets={tickets}
-        filesHandedOverAt={order.files_handed_over_at}
-      />
+      {/* "Positionen" - the ordered lines with their prices - used to sit here,
+          above the same cards listed again as tickets. The office reads this page
+          to answer "what does this person hold and did they get it", and the Total
+          above already answers what was charged. */}
+      <TicketsPanel orderNumber={order.order_number} tickets={tickets} />
     </div>
   );
 }

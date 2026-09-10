@@ -1,24 +1,3 @@
-.nameInput {
-  width: 100%;
-  min-width: 140px;
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font: inherit;
-  color: inherit;
-}
-
-.nameInput:hover:not(:disabled),
-.nameInput:focus {
-  border-color: var(--color-border);
-  background: var(--color-surface);
-}
-
-.nameInput:disabled {
-  color: var(--color-text-secondary);
-}
-
 .pending {
   color: var(--color-text-secondary);
 }

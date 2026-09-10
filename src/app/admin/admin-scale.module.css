@@ -1,0 +1,46 @@
+/*
+  The admin's own type scale.
+
+  Everything in this app reads its sizes from the tokens in src/styles/tokens.css,
+  and those are set for the shop: a headline that has to carry a photo hero, a
+  68px h1, an 18px body meant to be read from across a room. The admin inherited
+  them by default, and it is the opposite kind of screen - tables of orders, lists
+  of members, a form full of fields - where that scale pushes half the page below
+  the fold and makes a heading shout over the data it labels.
+
+  Rather than restyle each admin page, the tokens themselves are re-declared on
+  the admin wrapper. Everything underneath - globals.css's h1/h2/h3 rules, every
+  component that reaches for --text-*-size, pages nobody has looked at yet - picks
+  the new values up through the cascade, and the shop is untouched because the
+  override never leaves this subtree.
+
+  Only sizes and their line-heights change here. Colors, spacing, radii and
+  weights stay exactly as the design system defines them.
+*/
+.adminScale {
+  /* 68px -> 28px. Still the largest thing on the page, no longer the loudest. */
+  --text-h1-size: 1.75rem;
+  --text-h1-line: 1.2;
+
+  /* 44px -> 20px: a section label above a table, not a second headline. */
+  --text-h2-size: 1.25rem;
+  --text-h2-line: 1.3;
+
+  /* 22px -> 16px, i.e. one clear step above body without becoming a heading. */
+  --text-h3-size: 1rem;
+  --text-h3-line: 1.4;
+
+  /* 18px -> 15px. The working size of the whole area. */
+  --text-body-size: 0.9375rem;
+  --text-body-line: 1.5;
+
+  /* --text-small-size (14px) and --text-micro-size (12px) are deliberately left
+     alone. Tables, badges and field labels already used them, so they were never
+     part of the problem - and with the body coming down to 15px, a table row at
+     14px now sits just below its surroundings instead of far below them. */
+
+  /* body sets its font-size on the element itself, so the token override above
+     would not reach anything by inheritance without this line. */
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-line);
+}
