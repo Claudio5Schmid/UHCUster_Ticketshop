@@ -71,9 +71,22 @@ export function IdleLogout() {
     const now = Date.now();
     fallbackRef.current = now;
     try {
-      // An existing shared timestamp is left alone on purpose: reloading a page
-      // should not silently extend a session another tab is counting down.
-      if (!window.localStorage.getItem(STORAGE_KEY)) {
+      const stored = Number(window.localStorage.getItem(STORAGE_KEY));
+      const belongsToThisSession =
+        Number.isFinite(stored) && stored > 0 && now - stored < ADMIN_INACTIVITY_TIMEOUT_MS;
+
+      // A timestamp still inside the window is left alone on purpose: reloading a
+      // page should not silently extend a session another tab is counting down.
+      //
+      // One already past the window is a different thing entirely, and treating it
+      // the same locked admins out of their own shop. This component only mounts
+      // inside the protected layout, which the server renders after checking the
+      // session is live - so a stamp that looks long expired cannot belong to the
+      // session being rendered. It is the leftover of an earlier one, and nothing
+      // clears it: sign-out does not, and a closed browser cannot. Counting from it
+      // made the first check after logging in see days of idleness and sign the
+      // admin straight back out, every time, until they cleared their site data.
+      if (!belongsToThisSession) {
         window.localStorage.setItem(STORAGE_KEY, String(now));
       }
     } catch {
