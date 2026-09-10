@@ -5,6 +5,7 @@ import { Table, type TableColumn } from "@/components/ui/Table/Table";
 import { Badge } from "@/components/ui/Badge/Badge";
 import { Button } from "@/components/ui/Button/Button";
 import { Modal } from "@/components/ui/Modal/Modal";
+import { Input } from "@/components/ui/Input/Input";
 import { ticketTypeLabel } from "@/lib/tickets/label";
 import type { OrderTicket } from "@/lib/admin/tickets";
 import {
@@ -46,6 +47,13 @@ export function TicketTable({ tickets, orderNumber, target }: TicketTableProps) 
   const [error, setError] = useState<string | null>(null);
   const [deactivating, setDeactivating] = useState<OrderTicket | null>(null);
   const [regenerating, setRegenerating] = useState<OrderTicket | null>(null);
+  const [renaming, setRenaming] = useState<OrderTicket | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
+  function startRename(ticket: OrderTicket) {
+    setRenameValue(ticket.holder_name ?? "");
+    setRenaming(ticket);
+  }
 
   function run(action: () => Promise<void>, failureMessage: string, done?: () => void) {
     setError(null);
@@ -60,10 +68,17 @@ export function TicketTable({ tickets, orderNumber, target }: TicketTableProps) 
     });
   }
 
-  function handleRenameBlur(ticket: OrderTicket, event: React.FocusEvent<HTMLInputElement>) {
-    const newName = event.target.value.trim();
-    if (!newName || newName === ticket.holder_name) return;
-    run(() => renameTicketHolderAction(ticket.id, newName, target), "Fehler beim Umbenennen.");
+  function handleRenameSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!renaming) return;
+    const newName = renameValue.trim();
+    if (!newName || newName === renaming.holder_name) {
+      setRenaming(null);
+      return;
+    }
+    run(() => renameTicketHolderAction(renaming.id, newName, target), "Fehler beim Umbenennen.", () =>
+      setRenaming(null)
+    );
   }
 
   const columns: TableColumn<OrderTicket>[] = [
@@ -80,17 +95,15 @@ export function TicketTable({ tickets, orderNumber, target }: TicketTableProps) 
     {
       key: "name",
       header: "Vor- und Nachname",
-      render: (ticket) => (
-        <input
-          type="text"
-          defaultValue={ticket.holder_name ?? ""}
-          placeholder="–"
-          disabled={ticket.status === "storniert" || ticket.status === "ersetzt"}
-          onBlur={(event) => handleRenameBlur(ticket, event)}
-          className={styles.nameInput}
-          aria-label="Name auf der Karte"
-        />
-      ),
+      /*
+       * Plain text, not a field. This is the name the customer typed in the shop
+       * and it is printed on the card, so it is a record of what was ordered
+       * rather than something to adjust in passing - as an always-open input in
+       * every row it could be changed by a stray click and saved on blur, with
+       * nothing to confirm. Correcting a typo is still possible, but it is now an
+       * action of its own next to "Deaktivieren", with a dialog.
+       */
+      render: (ticket) => ticket.holder_name || "–",
     },
     {
       key: "qr",
@@ -147,6 +160,11 @@ export function TicketTable({ tickets, orderNumber, target }: TicketTableProps) 
         return (
           <div className={styles.rowActions}>
             {ticket.status !== "storniert" && (
+              <button type="button" className={styles.rowAction} onClick={() => startRename(ticket)} disabled={isPending}>
+                Name korrigieren
+              </button>
+            )}
+            {ticket.status !== "storniert" && (
               <button type="button" className={styles.rowAction} onClick={() => setDeactivating(ticket)} disabled={isPending}>
                 Deaktivieren
               </button>
@@ -174,6 +192,34 @@ export function TicketTable({ tickets, orderNumber, target }: TicketTableProps) 
     <>
       <Table caption="Karten" columns={columns} rows={tickets} getRowKey={(ticket) => ticket.id} />
       {error && <p className={styles.error}>{error}</p>}
+
+      <Modal open={!!renaming} onClose={() => setRenaming(null)} title="Name auf der Karte korrigieren">
+        <form onSubmit={handleRenameSubmit}>
+          <p className={styles.dialogText}>
+            Dieser Name kommt aus der Bestellung im Webshop und wird auf die Karte gedruckt. Ändere ihn nur, um einen
+            Tippfehler zu berichtigen — für eine andere Person gehört eine eigene Karte bestellt.
+          </p>
+          <Input
+            label="Vor- und Nachname"
+            value={renameValue}
+            onChange={(event) => setRenameValue(event.target.value)}
+            autoFocus
+            required
+          />
+          <p className={styles.dialogNote}>
+            Eine bereits gedruckte oder versendete Karte trägt weiterhin den alten Namen. Ist sie schon draussen, muss
+            sie nach der Korrektur neu erzeugt und nochmals versendet werden.
+          </p>
+          <div className={styles.dialogActions}>
+            <Button type="submit" disabled={isPending || !renameValue.trim()}>
+              Ändern
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setRenaming(null)}>
+              Abbrechen
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal open={!!deactivating} onClose={() => setDeactivating(null)} title="Karte deaktivieren">
         <p className={styles.dialogText}>

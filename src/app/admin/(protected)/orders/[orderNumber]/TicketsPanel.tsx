@@ -1,38 +1,26 @@
-"use client";
-
-import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button/Button";
-import { Badge } from "@/components/ui/Badge/Badge";
 import { TicketTable } from "@/components/admin/TicketTable/TicketTable";
-import { updateFilesHandedOver } from "../actions";
 import type { OrderTicket } from "@/lib/admin/tickets";
 import styles from "../../admin.module.css";
 
 interface TicketsPanelProps {
-  orderId: string;
   orderNumber: string;
   tickets: OrderTicket[];
-  filesHandedOverAt: string | null;
 }
 
-const dateFormatter = new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", dateStyle: "medium", timeStyle: "short" });
-
-export function TicketsPanel({ orderId, orderNumber, tickets, filesHandedOverAt }: TicketsPanelProps) {
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const handedOver = Boolean(filesHandedOverAt);
-
-  function handleToggle() {
-    setError(null);
-    startTransition(async () => {
-      try {
-        await updateFilesHandedOver(orderId, orderNumber, !handedOver);
-      } catch (submitError) {
-        setError(submitError instanceof Error ? submitError.message : "Fehler beim Speichern.");
-      }
-    });
-  }
-
+/**
+ * The cards on an order: the same table a member's page shows, plus the ZIP.
+ *
+ * No longer a client component. It held state only for the "Übergeben / Nicht
+ * übergeben" switch that used to sit beside the download; with that gone there is
+ * nothing here to run in the browser. The table itself is still a client
+ * component and brings its own interactivity.
+ *
+ * Whether a card has reached its holder is per card, in the table's Versendet
+ * column. orders.files_handed_over_at still exists and is still set when a
+ * member's cards are e-mailed - it just has no switch on this page any more.
+ */
+export function TicketsPanel({ orderNumber, tickets }: TicketsPanelProps) {
   if (tickets.length === 0) {
     return null;
   }
@@ -43,28 +31,13 @@ export function TicketsPanel({ orderId, orderNumber, tickets, filesHandedOverAt 
         <h2>Tickets</h2>
       </div>
 
-      {/* The same table a member's page shows. Whether a card has been e-mailed
-          is per card now, so the panel no longer carries a single "versendet"
-          badge for the whole order - the Versendet column says it per row. */}
       <TicketTable tickets={tickets} orderNumber={orderNumber} target={{ orderNumber }} />
 
-      <div className={styles.actions} style={{ alignItems: "center" }}>
+      <div className={styles.actions}>
         <Button as="a" href={`/admin/orders/${orderNumber}/tickets-zip`} variant="secondary">
           Alle als ZIP herunterladen
         </Button>
-        <button
-          type="button"
-          onClick={handleToggle}
-          disabled={isPending}
-          style={{ all: "unset", cursor: isPending ? "default" : "pointer" }}
-          aria-label={handedOver ? "Als nicht übergeben markieren" : "Als übergeben markieren"}
-        >
-          <Badge variant={handedOver ? "accent" : "outline"}>
-            {handedOver && filesHandedOverAt ? `Übergeben ${dateFormatter.format(new Date(filesHandedOverAt))}` : "Nicht übergeben"}
-          </Badge>
-        </button>
       </div>
-      {error && <p style={{ color: "var(--color-error-text)" }}>{error}</p>}
     </div>
   );
 }

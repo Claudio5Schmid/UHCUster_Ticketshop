@@ -26,19 +26,20 @@ export function CustomerLinkButton({ url }: { url: string }) {
   }
 
   return (
-    <div className={styles.section}>
-      <h2>Kundenlink</h2>
-      <div className={styles.actions} style={{ alignItems: "center" }}>
-        <code
-          className={styles.copyBlock}
-          style={{ flex: "1 1 320px", minWidth: 0, overflowWrap: "anywhere", margin: 0 }}
-        >
-          {url}
-        </code>
-        <Button variant="secondary" onClick={handleCopy}>
-          {copied ? "Kopiert" : "Link kopieren"}
-        </Button>
-      </div>
+    <div className={styles.customerLink}>
+      {/* The full URL used to be set as a wrapping code block the width of the
+          page - a signed token is long, so it took three lines and became the
+          biggest thing on the screen, to be read by nobody. It stays on one
+          line, truncated, as a label for the button beside it; the button is
+          what anybody actually uses, and the title attribute still shows the
+          whole thing on hover. */}
+      <span className={styles.customerLinkLabel}>Kundenlink</span>
+      <code className={styles.customerLinkUrl} title={url}>
+        {url}
+      </code>
+      <Button variant="secondary" size="sm" onClick={handleCopy}>
+        {copied ? "Kopiert" : "Link kopieren"}
+      </Button>
     </div>
   );
 }
