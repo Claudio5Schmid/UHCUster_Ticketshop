@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import { Container } from "@/components/layout/Container/Container";
 import { Button } from "@/components/ui/Button/Button";
 import { Input } from "@/components/ui/Input/Input";
-import { TurnstileWidget } from "@/components/shop/TurnstileWidget/TurnstileWidget";
+import { TurnstileWidget, type TurnstileState } from "@/components/shop/TurnstileWidget/TurnstileWidget";
 import { CheckoutSteps } from "@/components/shop/CheckoutSteps/CheckoutSteps";
 import { useToast } from "@/components/ui/Toast/Toast";
 import { useCart } from "@/lib/cart";
@@ -15,12 +15,44 @@ import styles from "./kasse.module.css";
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
+/**
+ * What to say for each way the challenge can fail to hand over a token. Only
+ * "loading" is worth waiting out; the rest are told plainly, because a customer
+ * staring at "bitte warte" has no way to know the wait will never end.
+ */
+const TURNSTILE_MESSAGES: Record<TurnstileState, string> = {
+  unconfigured:
+    "Die Sicherheitsprüfung ist auf dieser Seite nicht eingerichtet, deshalb können wir die Bestellung nicht entgegennehmen. Bitte melde dich beim Vereinsbüro - deine Angaben gehen dabei nicht verloren.",
+  loading: "Bitte warte, bis die Sicherheitsprüfung geladen ist.",
+  ready: "",
+  error:
+    "Die Sicherheitsprüfung konnte nicht geladen werden. Prüfe deine Internetverbindung und versuche es erneut.",
+  expired: "Die Sicherheitsprüfung ist abgelaufen. Bitte starte sie neu.",
+};
+
 export default function KassePage() {
   const { lines, clear } = useCart();
   const formRef = useRef<HTMLFormElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<OrderConfirmation | null>(null);
+  // The challenge reports its own state, so the page can name the failure instead
+  // of calling every one of them "still loading" - see TurnstileWidget's comment.
+  const [turnstile, setTurnstile] = useState<TurnstileState>("loading");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileAttempt, setTurnstileAttempt] = useState(0);
+
+  const handleTurnstile = useCallback((state: TurnstileState, token: string) => {
+    setTurnstile(state);
+    setTurnstileToken(token);
+  }, []);
+
+  function retryTurnstile() {
+    setError(null);
+    setTurnstile("loading");
+    setTurnstileToken("");
+    setTurnstileAttempt((n) => n + 1);
+  }
   // Assembled here rather than inside the confirmation view: an event handler is
   // the one place window.location can be read without an effect or a render-phase
   // browser access.
@@ -35,10 +67,9 @@ export default function KassePage() {
     const form = formRef.current;
     if (!form) return;
     const formData = new FormData(form);
-    const turnstileToken = String(formData.get("cf-turnstile-response") ?? "");
 
     if (!turnstileToken) {
-      setError("Bitte warte, bis die Sicherheitsprüfung geladen ist.");
+      setError(TURNSTILE_MESSAGES[turnstile] ?? TURNSTILE_MESSAGES.loading);
       return;
     }
 
@@ -185,12 +216,29 @@ export default function KassePage() {
             </fieldset>
 
             <div className={styles.turnstile}>
-              <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} />
+              <TurnstileWidget
+                siteKey={TURNSTILE_SITE_KEY}
+                onStateChange={handleTurnstile}
+                resetSignal={turnstileAttempt}
+              />
+              {/* Stated up front, not only after a click: an unconfigured or broken
+                  challenge means this form cannot be sent at all, and saying so
+                  before the address is typed respects the customer's time. */}
+              {(turnstile === "unconfigured" || turnstile === "error" || turnstile === "expired") && (
+                <div className={styles.turnstileProblem} role="alert">
+                  <p>{TURNSTILE_MESSAGES[turnstile]}</p>
+                  {turnstile !== "unconfigured" && (
+                    <button type="button" className={styles.retryButton} onClick={retryTurnstile}>
+                      Erneut versuchen
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {error && <p className={styles.error}>{error}</p>}
 
-            <Button type="submit" disabled={submitting} fullWidth>
+            <Button type="submit" disabled={submitting || turnstile === "unconfigured"} fullWidth>
               {submitting ? "Wird gesendet …" : "Bestellung abschicken"}
             </Button>
             <p className={styles.reassurance}>

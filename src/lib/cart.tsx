@@ -19,6 +19,14 @@ interface CartContextValue {
   removeLine: (lineId: string) => void;
   setHolderName: (lineId: string, holderName: string) => void;
   clear: () => void;
+  /**
+   * Whether the cart drawer is showing. It lives here rather than in the drawer
+   * because the thing that opens it - adding a card, from any product card on any
+   * page - is this context, not the drawer's own UI.
+   */
+  isOpen: boolean;
+  openCart: () => void;
+  closeCart: () => void;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -27,6 +35,7 @@ const CartContext = createContext<CartContextValue | null>(null);
 // cart is lost on a full page reload; that's an accepted tradeoff, not an oversight.
 export function CartProvider({ children }: { children: ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
 
   const addLine: CartContextValue["addLine"] = (product) => {
     setLines((current) => [
@@ -40,19 +49,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
         holderName: "",
       },
     ]);
+    // Adding a card is the one moment the customer has no other confirmation that
+    // anything happened - before this, "Auswählen" only ticked the header count up.
+    setIsOpen(true);
   };
 
   const removeLine: CartContextValue["removeLine"] = (lineId) => {
-    setLines((current) => current.filter((line) => line.id !== lineId));
+    setLines((current) => {
+      const next = current.filter((line) => line.id !== lineId);
+      // Emptying the cart from inside the drawer leaves nothing to look at.
+      if (next.length === 0) setIsOpen(false);
+      return next;
+    });
   };
 
   const setHolderName: CartContextValue["setHolderName"] = (lineId, holderName) => {
     setLines((current) => current.map((line) => (line.id === lineId ? { ...line, holderName } : line)));
   };
 
-  const clear = () => setLines([]);
+  const clear = () => {
+    setLines([]);
+    setIsOpen(false);
+  };
 
-  const value = useMemo(() => ({ lines, addLine, removeLine, setHolderName, clear }), [lines]);
+  const openCart = () => setIsOpen(true);
+  const closeCart = () => setIsOpen(false);
+
+  const value = useMemo(
+    () => ({ lines, addLine, removeLine, setHolderName, clear, isOpen, openCart, closeCart }),
+    [lines, isOpen]
+  );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

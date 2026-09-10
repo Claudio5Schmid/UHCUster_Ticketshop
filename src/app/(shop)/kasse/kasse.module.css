@@ -109,6 +109,39 @@
 
 .turnstile {
   margin-block: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Same colours as .error below - a challenge that cannot be solved stops the
+   order just as surely as a rejected one, so it is not dressed as a hint. */
+.turnstileProblem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  color: var(--color-error-text);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-text);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-small-size);
+}
+
+.retryButton {
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-error-text);
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+
+.retryButton:hover {
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .error {
