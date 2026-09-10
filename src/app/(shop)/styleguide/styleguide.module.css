@@ -26,6 +26,28 @@
   align-items: flex-start;
 }
 
+.row + .row {
+  margin-top: var(--space-5);
+}
+
+.note {
+  margin-top: var(--space-5);
+  max-width: 60ch;
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+}
+
+.swatchGrid + .swatchGrid {
+  margin-top: var(--space-6);
+}
+
+.countdownDemo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-bottom: var(--space-6);
+}
+
 .swatchGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

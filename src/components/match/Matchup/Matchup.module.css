@@ -68,3 +68,43 @@
 .sm .name {
   font-size: var(--text-small-size);
 }
+
+/*
+ * The shop's pairing: both crests at one small height, side by side with just
+ * a hair of space between - two badges on a match poster, not a fixture list.
+ * Sized from --crest-height so the hero and the cards pick their own.
+ */
+.compact {
+  --crest-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.compactSide {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Beats TeamLogo's own .logo height (a class alone) by class + element. */
+.compact img {
+  height: var(--crest-height);
+  width: auto;
+  max-width: none;
+}
+
+.compact .name {
+  margin-left: var(--space-2);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

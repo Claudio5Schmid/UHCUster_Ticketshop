@@ -1,0 +1,56 @@
+.hero {
+  position: relative;
+  overflow: hidden;
+  /* The header sits transparently over the top of this block (negative margin
+     on .overlay in Header.module.css), so the content pads past it. */
+  padding-top: calc(var(--header-height) + var(--space-6));
+  padding-bottom: var(--space-7);
+  min-height: clamp(420px, 60vh, 640px);
+  display: flex;
+  align-items: center;
+}
+
+.media {
+  position: absolute;
+  inset: 0;
+  background: var(--gradient-hero-placeholder);
+}
+
+.photo {
+  object-fit: cover;
+  object-position: center;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--gradient-hero-overlay);
+}
+
+.content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.title {
+  font-size: var(--text-display-size);
+  font-weight: var(--text-display-weight);
+  line-height: var(--text-display-line);
+  letter-spacing: var(--text-display-tracking);
+  text-transform: uppercase;
+  /* One line, always - the size token scales with the viewport for that. */
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .hero {
+    min-height: 0;
+    padding-top: calc(var(--header-height) + var(--space-5));
+    padding-bottom: var(--space-6);
+  }
+}

@@ -1,0 +1,202 @@
+/* Same two layers MobileNav uses, one step above it: the drawer is the topmost
+   thing on the page while it is open, header included, because it is a response
+   to something the customer just did. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(17, 17, 17, 0.32);
+}
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 65;
+  width: min(380px, 100vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-modal);
+  /* Parked off-screen rather than unmounted, so opening and closing both animate. */
+  transform: translateX(100%);
+  transition: transform var(--duration-base) var(--easing-standard);
+}
+
+.panelOpen {
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    transition: none;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  font-size: var(--text-small-size);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--color-bg-alt);
+}
+
+.close:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* The only part that scrolls: a long cart must never push the total and the
+   buttons below the fold, which is the whole point of the drawer. */
+.lines {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.line + .line {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+}
+
+.lineText {
+  min-width: 0;
+}
+
+.lineTitle {
+  font-weight: 600;
+}
+
+.lineHolder,
+.lineHolderMissing {
+  margin-top: var(--space-1);
+  font-size: var(--text-small-size);
+}
+
+.lineHolder {
+  color: var(--color-text-secondary);
+}
+
+/* Says the card is not finished yet, matching the button that then reads
+   "Namen eintragen" rather than "Zur Kasse". */
+.lineHolderMissing {
+  color: var(--color-accent);
+}
+
+.lineRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.linePrice {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.remove {
+  font: inherit;
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.remove:hover {
+  color: var(--color-accent);
+}
+
+.foot {
+  padding: var(--space-5);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.totalRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.total {
+  font-size: var(--text-h3-size);
+}
+
+.hint {
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+/* Secondary on purpose: staying in the shop is the quieter of the two exits. */
+.continue {
+  font: inherit;
+  font-size: var(--text-small-size);
+  font-weight: 600;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+
+.continue:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.continue:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.editLink {
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+  text-align: center;
+}

@@ -53,6 +53,12 @@ a {
   color: inherit;
 }
 
+/* In-page anchors (/#saisonkarten, #mitgliedschaften) land below the sticky
+   header instead of underneath it. */
+[id] {
+  scroll-margin-top: var(--header-height);
+}
+
 button {
   font-family: inherit;
 }

@@ -3,13 +3,10 @@
 import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { MOBILE_EXTRA_LINKS, NAV_LINKS } from "./links";
 import styles from "./MobileNav.module.css";
 
-const LINKS = [
-  { href: "/#saisonkarten", label: "Saisonkarten" },
-  { href: "/red-castle-club", label: "Red Castle Club" },
-  { href: "/spielplan", label: "Einzeltickets" },
-];
+const LINKS = [...NAV_LINKS, ...MOBILE_EXTRA_LINKS];
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);

@@ -758,3 +758,62 @@ SES (`v=spf1 include:amazonses.com`, MX `feedback-smtp.eu-central-1.amazonses.co
 receivers drop it silently - the exact failure D50 documents, just with the providers swapped.
 **Resolved in code; open on DNS and the Resend dashboard.**
 
+**D57 — The shop takes the FC Basel ticket shop's layout, and keeps UHC Uster's colours.** Claudio
+was unhappy with the fixture list and the shop's overall arrangement and pointed at FC Basel's
+shop as the model: a photo hero with a big capitalised headline, the date line, the pairing, both
+crests, a countdown and a single ticket button; below it the coming games as cards with date,
+league, crests and button. What is adopted is exactly that **arrangement**. What is not adopted is
+FCB's dark theme: the pages stay white, the accent stays red, the type stays Inter (heavier and in
+capitals for the display pieces, but no new font).
+
+The hero (`HeroShell`) carries one photo, `public/hero/heimspiel.jpg`, under a white veil, so the
+text on it is the same black as everywhere else. The file committed there is a light gradient
+placeholder until Claudio drops in the real photo under the same name - a file swap, not a code
+change. Three pages open with it: `/` and `/spielplan` with the next home game (`MatchHero`),
+`/red-castle-club` with the club's logo and a "Mitglied werden" anchor. The header floats
+transparently over the top of those three and turns into the usual white bar on scroll; on every
+other page it is the white bar from the start. It gained "Meine Tickets" as a second ring icon
+beside the cart, and its links moved to the centre.
+
+The countdown is the one piece that ticks, and it is built so a page revalidated every 60 s (ISR)
+cannot hydrate with different digits than it rendered: the data layer reads the clock once
+(`getShopGames`, since a render must be pure), the server renders with that instant, and the
+client's `useNow` hook hands React the very same instant as its server snapshot before starting
+to tick. Dates are formatted only on the server (`formatGameDateLine`) - a browser's ICU is not
+Node's. A game counts as "on" for three hours after kick-off ("Spiel läuft - Heute!"), then the
+hero moves to the next candidate on its own; the server passes it three so that works between two
+revalidations.
+
+The cards (`MatchCard`) replace `GameRow`. They are white with a red radial glow from the centre -
+the first gradients in this design system, so both are tokens, and the crests sit on a white halo
+so a black wordmark never has to be read against saturated red. `L-UPL` is a constant, not a
+column: every game in this shop is that team's (D-note on team 428535 above). One button per card,
+Eventfrog or a disabled "Tickets folgen" - there is no VIP single ticket to link to (D10, D22).
+
+Home page order became hero → coming games → season passes → Red Castle Club teaser, the FCB
+pattern; season passes remain one click away in the header. `docs/uhcusterdesignanalyse.md` #4
+records the visual rules.
+
+Adjusted after the first preview, again against the FCB page: the crests had been the loudest
+thing on the page. They are now small (36px in a card, 44px in the hero) and sit side by side with a hair
+of space, like two badges on a match poster, with no "vs." - `Matchup layout="compact"`; the
+columns layout the admin and scanner use is untouched. (An overlapping version was tried first
+and dropped: Uster's crest is a wordmark, and a badge over its last letter looked like a mistake.)
+That only works because the crests with a baked-in white background - Uster, Zug United, Chur
+United, Köniz Bern - had it keyed out, flood-filled in from the edge so white inside a badge
+stays white; every other place a crest appears already puts it on white (the scanner's chip,
+admin tables), so nothing else changed. Kloten-Dietlikon's is on black and was left alone.
+
+Two of those turned out to be half-done, and only showed once the crests were off white. The
+edge-in fill cannot reach a white area a stroke closes off, so Zug United kept white in the
+counters of its monogram - the triangle in the bowl and the oval below it - which read as white
+blobs on the pink match card. Zug's mark is one flat blue, no white ink anywhere in it, so it is
+keyed on colour rather than from the edge. And `public/uhc-uster-logo.png` - the header, admin
+nav, scanner login and the ticket PDF, a different file from the `logos/uhc-uster.png` crest -
+was never keyed at all: a fully opaque white plate, invisible while the header sat on white and a
+white box the moment a photo went in under it. Keyed the same way; every place it is used draws
+it on white, and pdf-lib carries the alpha into the ticket unchanged. The hero shrank to FCB's proportions
+(title 56px and always one line, date 18px, pairing 24px, countdown 36px, ~60% viewport high), and
+the "Meine Tickets" icon became a person, since a ticket icon beside a cart read as "buy" rather
+than "mine". **Resolved.** Claudio's photo of a home game in the Buchholz - a full stand behind
+the boards - is in as `public/hero/heimspiel.jpg`, 2400x1600, the width the design note asks for.

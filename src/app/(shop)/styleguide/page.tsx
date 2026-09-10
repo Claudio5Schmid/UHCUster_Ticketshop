@@ -10,6 +10,10 @@ import { Select } from "@/components/ui/Select/Select";
 import { Modal } from "@/components/ui/Modal/Modal";
 import { Table, type TableColumn } from "@/components/ui/Table/Table";
 import { useToast } from "@/components/ui/Toast/Toast";
+import { Countdown } from "@/components/shop/Countdown/Countdown";
+import { MatchGrid } from "@/components/shop/MatchGrid/MatchGrid";
+import { SectionHeader } from "@/components/shop/SectionHeader/SectionHeader";
+import type { Game } from "@/lib/games";
 import { TIER_MAX } from "@/lib/tier";
 import styles from "./styleguide.module.css";
 
@@ -20,6 +24,46 @@ const colorTokens = [
   { name: "--color-text-secondary", value: "#6b6b6b" },
   { name: "--color-accent", value: "#e4032e" },
   { name: "--color-dark", value: "#111111" },
+];
+
+// The two gradients allowed in the shop (tokens.css): the hero's white veil and
+// the match card's red glow. Shown as swatches so nobody has to guess them.
+const gradientTokens = [
+  { name: "--gradient-hero-overlay", value: "var(--gradient-hero-overlay)" },
+  { name: "--gradient-hero-placeholder", value: "var(--gradient-hero-placeholder)" },
+  { name: "--gradient-match-card", value: "var(--gradient-match-card)" },
+];
+
+// Fixed instants, so the countdown and the cards never change between renders
+// and screenshots of this page stay comparable.
+const SAMPLE_NOW = Date.parse("2026-09-05T12:47:00Z");
+const SAMPLE_KICKOFF = "2026-09-09T17:00:00Z";
+
+const sampleGames: Game[] = [
+  {
+    id: "sample-1",
+    season: "2627",
+    opponent: "Grasshopper Club Zürich",
+    played_at: SAMPLE_KICKOFF,
+    venue: "Buchholz",
+    eventfrog_url: "https://eventfrog.ch/",
+  },
+  {
+    id: "sample-2",
+    season: "2627",
+    opponent: "SV Wiler-Ersigen",
+    played_at: "2026-09-20T14:30:00Z",
+    venue: "Buchholz",
+    eventfrog_url: null,
+  },
+  {
+    id: "sample-3",
+    season: "2627",
+    opponent: "UHC Alligator Malans",
+    played_at: "2026-10-04T15:00:00Z",
+    venue: "Buchholz",
+    eventfrog_url: "https://eventfrog.ch/",
+  },
 ];
 
 const typeTokens = [
@@ -94,6 +138,15 @@ export default function StyleguidePage() {
               </div>
             ))}
           </div>
+          <div className={styles.swatchGrid}>
+            {gradientTokens.map((token) => (
+              <div key={token.name}>
+                <div className={styles.swatch} style={{ background: token.value }} />
+                <div className={styles.swatchName}>{token.name}</div>
+                <div className={styles.swatchLabel}>Verlauf</div>
+              </div>
+            ))}
+          </div>
         </Container>
       </section>
 
@@ -131,6 +184,48 @@ export default function StyleguidePage() {
               Als Link
             </Button>
           </div>
+          <p className={styles.note}>
+            Pill-Form: die Ticket-Aufrufe im Hero und auf den Spielkarten. Rot nur dort,
+            wo der Kauf der nächste Schritt ist.
+          </p>
+          <div className={styles.row}>
+            <Button variant="accent" shape="pill">
+              Tickets kaufen
+            </Button>
+            <Button variant="secondary" shape="pill">
+              Red Castle Club entdecken
+            </Button>
+            <Button variant="accent" shape="pill" disabled>
+              Tickets folgen
+            </Button>
+            <Button variant="accent" shape="pill" size="sm">
+              Klein
+            </Button>
+          </div>
+        </Container>
+      </section>
+
+      <section className={styles.section}>
+        <Container>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionEyebrow}>Shop</span>
+            <h2>Spiele: Titelzeile, Countdown, Karten</h2>
+            <p className={styles.note}>
+              Die Anordnung des Spielplans: Sektionstitel in Versalien, der Countdown
+              aus dem Hero, und die Spielkarten mit rotem Verlauf und Logo-Halo. Mit
+              festen Beispieldaten.
+            </p>
+          </div>
+          <SectionHeader
+            title="Kommende Spiele"
+            action={{ href: "#", label: "Alle ansehen" }}
+            note="Einzeltickets gibt es über Eventfrog. Mit einer Saisonkarte brauchst du kein zusätzliches Ticket."
+          />
+          <div className={styles.countdownDemo}>
+            <Countdown playedAt={SAMPLE_KICKOFF} now={SAMPLE_NOW} />
+            <Countdown playedAt={SAMPLE_KICKOFF} now={Date.parse(SAMPLE_KICKOFF) + 30 * 60 * 1000} />
+          </div>
+          <MatchGrid games={sampleGames} />
         </Container>
       </section>
 

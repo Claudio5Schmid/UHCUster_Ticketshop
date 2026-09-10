@@ -1,21 +1,33 @@
+/* Same ring as the "Meine Tickets" icon beside it (Header.module.css .iconLink).
+   Rendered as an <a> when the cart is empty and a <button> when it opens the
+   drawer, so the button resets below are what keep the two looking identical. */
 .cartButton {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-bg);
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-text);
+  background: transparent;
   color: var(--color-text);
+  font: inherit;
   text-decoration: none;
-  transition: border-color var(--duration-fast) var(--easing-standard);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--easing-standard),
+    color var(--duration-fast) var(--easing-standard);
 }
 
 .cartButton:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+.cartButton:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .cartCount {
@@ -27,7 +39,7 @@
   padding-inline: 4px;
   border-radius: var(--radius-pill);
   background: var(--color-accent);
-  color: #ffffff;
+  color: var(--color-dark-text);
   font-size: 11px;
   font-weight: 700;
   display: flex;

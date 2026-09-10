@@ -1,46 +1,39 @@
-.hero {
-  padding-block: var(--space-8);
-}
-
+/* Hero content pieces used inside HeroShell (the photo hero itself lives in
+   src/components/shop/HeroShell). Centred, like everything in that hero. */
 .heroLogo {
-  height: 72px;
+  height: 56px;
   width: auto;
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-2);
 }
 
 .heroEyebrow {
   font-size: var(--text-micro-size);
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-accent);
 }
 
 .heroLead {
-  margin-top: var(--space-5);
   max-width: 56ch;
   color: var(--color-text-secondary);
 }
 
 .heroActions {
-  margin-top: var(--space-6);
+  margin-top: var(--space-3);
   display: flex;
+  justify-content: center;
   gap: var(--space-4);
   flex-wrap: wrap;
+}
+
+.heroActions > * {
+  min-width: 240px;
 }
 
 .section {
   padding-block: var(--space-8);
   border-top: 1px solid var(--color-border);
-}
-
-.sectionHeader {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
-  flex-wrap: wrap;
 }
 
 .sectionEyebrow {
@@ -90,10 +83,6 @@
   .teaserIcon {
     height: 56px;
   }
-}
-
-.gamesList {
-  border-top: 1px solid var(--color-border);
 }
 
 .emptyState {
