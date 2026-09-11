@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { fillAndSubmitCheckout, makeTestCustomer } from "./fixtures/test-data";
 import { createServiceRoleClient } from "./fixtures/cleanup";
-import { addProductToCart } from "../shared/cart";
+import { addProductToCart, openCartPage } from "../shared/cart";
 
 // Cheapest, non-transferable Red Castle Club tier - a real product (no dedicated test
 // product exists for memberships), but no payment is actually taken (no payment
@@ -10,14 +10,57 @@ import { addProductToCart } from "../shared/cart";
 const PRODUCT_NAME = "Red Castle Club Normal";
 const PRODUCT_PRICE_RAPPEN = 30000;
 
+/**
+ * Red Castle is sold on uhcuster.ch while the shop has no payment provider, so the
+ * card links out and there is no "Auswählen" to click. The checkout still exists and
+ * still has to work, so this test puts the group back in the shop for its own run and
+ * restores it afterwards - through the admin page, because that is what clears the
+ * cached shop pages; writing the row directly would leave a stale page behind.
+ */
+async function setRedCastleChannel(page: import("@playwright/test").Page, redirect: boolean) {
+  await page.goto("/admin/login");
+  await page.getByLabel("E-Mail").fill(process.env.PLAYWRIGHT_ADMIN_EMAIL!);
+  await page.getByLabel("Passwort").fill(process.env.PLAYWRIGHT_ADMIN_PASSWORD!);
+  await page.getByRole("button", { name: "Anmelden" }).click();
+  await page.waitForURL("**/admin");
+
+  await page.goto("/admin/sales");
+  const row = page.locator("section").filter({ hasText: "Red Castle Club" }).first();
+  if ((await row.getByRole("switch").getAttribute("aria-checked")) !== String(redirect)) {
+    await row.getByRole("switch").click();
+    await row.getByRole("button", { name: "Speichern" }).click();
+    await expect(row.getByText(/Gespeichert/)).toBeVisible();
+  }
+}
+
+/** Whatever the switch was set to before this test borrowed it. */
+let redirectBefore = true;
+
+test.beforeEach(async () => {
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from("sales_channels")
+    .select("redirect_to_website")
+    .eq("product_type", "membership")
+    .single();
+  redirectBefore = data?.redirect_to_website ?? true;
+});
+
+// Restores the real setting even when the test above fails part-way: leaving the
+// shop selling Red Castle would mean real orders nobody is ready to book.
+test.afterEach(async ({ page }) => {
+  await setRedCastleChannel(page, redirectBefore);
+});
+
 test("Red Castle Club Membership Bestellung: analog zum Season-Pass-Flow, eigene Produktseite", async ({ page }) => {
   const customer = makeTestCustomer("rcc-membership");
   const holderName = "Playwright RCC Mitglied";
 
+  await setRedCastleChannel(page, false);
   await page.goto("/red-castle-club");
   await addProductToCart(page, PRODUCT_NAME);
 
-  await page.getByRole("link", { name: /Warenkorb, 1 Artikel/ }).click();
+  await openCartPage(page);
   await expect(page).toHaveURL(/\/warenkorb$/);
   // Non-transferable tier: same "Name Karteninhaber:in" label as a season pass, not the
   // "Name (z.B. Firma)" bundle label (that only applies to transferable RCC tiers).
@@ -27,7 +70,7 @@ test("Red Castle Club Membership Bestellung: analog zum Season-Pass-Flow, eigene
   await expect(page).toHaveURL(/\/kasse$/);
   await fillAndSubmitCheckout(page, customer);
 
-  await expect(page.getByRole("heading", { name: "Bestellung eingegangen" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Vielen Dank für deine Bestellung" })).toBeVisible();
   const orderNumberLocator = page.locator("text=/^UHCU-\\d{4}-\\d{4}$/");
   await expect(orderNumberLocator).toBeVisible();
   const orderNumber = (await orderNumberLocator.textContent())?.trim() ?? "";

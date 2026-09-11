@@ -1,5 +1,7 @@
 import { Card } from "@/components/ui/Card/Card";
+import { Button } from "@/components/ui/Button/Button";
 import { AddToCartButton } from "@/components/shop/AddToCartButton/AddToCartButton";
+import { redirectButtonLabel } from "@/lib/shop/sales-channels";
 import type { Product } from "@/lib/products";
 import { calculateSavings, formatRappenAsChf } from "@/lib/pricing";
 import { getTicketAccentColor } from "@/lib/tier-colors";
@@ -10,9 +12,15 @@ interface ProductCardProps {
   /** Number of scheduled home games this season - drives the savings calculation. */
   gameCount: number;
   eyebrow?: string;
+  /**
+   * Set when this kind of product is sold on uhcuster.ch rather than here: the
+   * card still shows what is on offer, but the button leads across instead of
+   * into the cart. Null means the shop sells it itself.
+   */
+  redirectUrl?: string | null;
 }
 
-export function ProductCard({ product, gameCount, eyebrow }: ProductCardProps) {
+export function ProductCard({ product, gameCount, eyebrow, redirectUrl }: ProductCardProps) {
   const highlights = product.benefits?.highlights ?? [];
   const savings = calculateSavings(product.price_rappen, product.benefits?.single_ticket_price_rappen, gameCount);
   const includedPasses = product.benefits?.included_passes ?? 1;
@@ -39,13 +47,22 @@ export function ProductCard({ product, gameCount, eyebrow }: ProductCardProps) {
               <span className={styles.savingsValue}>du sparst {formatRappenAsChf(savings.savingsRappen)}</span>
             )}
           </div>
-          <AddToCartButton
-            productId={product.id}
-            productName={product.name}
-            priceRappen={product.price_rappen}
-            transferable={transferable}
-            fullWidth
-          />
+          {redirectUrl ? (
+            // A new tab, and a label that names where it goes: leaving the shop
+            // should be the visitor's decision, not a surprise, and their place
+            // here is kept.
+            <Button as="a" href={redirectUrl} target="_blank" rel="noopener noreferrer" size="sm" fullWidth>
+              {redirectButtonLabel(redirectUrl)}
+            </Button>
+          ) : (
+            <AddToCartButton
+              productId={product.id}
+              productName={product.name}
+              priceRappen={product.price_rappen}
+              transferable={transferable}
+              fullWidth
+            />
+          )}
         </>
       }
     >

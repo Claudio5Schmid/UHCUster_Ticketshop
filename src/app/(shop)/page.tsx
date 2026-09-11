@@ -6,6 +6,7 @@ import { MatchHero } from "@/components/shop/MatchHero/MatchHero";
 import { MatchGrid } from "@/components/shop/MatchGrid/MatchGrid";
 import { SectionHeader } from "@/components/shop/SectionHeader/SectionHeader";
 import { getActiveProducts } from "@/lib/products";
+import { getSalesChannels, resolveRedirectUrl } from "@/lib/shop/sales-channels";
 import { getShopGames } from "@/lib/games";
 import { CURRENT_SEASON, CURRENT_SEASON_LABEL } from "@/lib/season";
 import styles from "./home.module.css";
@@ -15,9 +16,10 @@ import styles from "./home.module.css";
 export const revalidate = 60;
 
 export default async function Home() {
-  const [products, { now, upcoming: games, heroCandidates }] = await Promise.all([
+  const [products, { now, upcoming: games, heroCandidates }, salesChannels] = await Promise.all([
     getActiveProducts(),
     getShopGames(CURRENT_SEASON),
+    getSalesChannels(),
   ]);
 
   const seasonPasses = products.filter((product) => product.type === "season_pass");
@@ -55,7 +57,12 @@ export default async function Home() {
           />
           <div className={styles.cardGrid}>
             {seasonPasses.map((product) => (
-              <ProductCard key={product.id} product={product} gameCount={games.length} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                gameCount={games.length}
+                redirectUrl={resolveRedirectUrl(product, salesChannels)}
+              />
             ))}
           </div>
         </Container>

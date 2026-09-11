@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button/Button";
 import { ProductCard } from "@/components/shop/ProductCard/ProductCard";
 import { HeroShell, HeroTitle } from "@/components/shop/HeroShell/HeroShell";
 import { getActiveProducts } from "@/lib/products";
+import { getSalesChannels, resolveRedirectUrl } from "@/lib/shop/sales-channels";
 import { getUpcomingGamesForSeason } from "@/lib/games";
 import { CURRENT_SEASON, CURRENT_SEASON_LABEL } from "@/lib/season";
 import styles from "../home.module.css";
@@ -15,9 +16,10 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function RedCastleClubPage() {
-  const [products, games] = await Promise.all([
+  const [products, games, salesChannels] = await Promise.all([
     getActiveProducts(),
     getUpcomingGamesForSeason(CURRENT_SEASON),
+    getSalesChannels(),
   ]);
 
   const memberships = products.filter((product) => product.type === "membership");
@@ -52,7 +54,12 @@ export default async function RedCastleClubPage() {
         <Container>
           <div className={styles.cardGrid}>
             {memberships.map((product) => (
-              <ProductCard key={product.id} product={product} gameCount={games.length} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                gameCount={games.length}
+                redirectUrl={resolveRedirectUrl(product, salesChannels)}
+              />
             ))}
           </div>
         </Container>

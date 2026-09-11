@@ -44,6 +44,7 @@ export const ADMIN_NAV: AdminNavEntry[] = [
     label: "Einstellungen",
     items: [
       { label: "Preise", href: "/admin/products" },
+      { label: "Verkauf", href: "/admin/sales" },
       { label: "Export", href: "/admin/export" },
       { label: "Admins", href: "/admin/admins" },
     ],
