@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { fillAndSubmitCheckout, makeTestCustomer } from "./fixtures/test-data";
 import { createServiceRoleClient } from "./fixtures/cleanup";
-import { addProductToCart } from "../shared/cart";
+import { addProductToCart, openCartPage } from "../shared/cart";
 
 // Deliberately uses the "TEST - Bitte nicht kaufen" season-pass product (CHF 1.00, active in
 // the catalog specifically for this purpose - see decisions/playwright-retrofit-decisions.md).
@@ -17,7 +17,7 @@ test("Season-Pass-Bestellung E2E: Produkt wählen, Formular ausfüllen, absenden
   await page.goto("/");
   await addProductToCart(page, PRODUCT_NAME);
 
-  await page.getByRole("link", { name: /Warenkorb, 1 Artikel/ }).click();
+  await openCartPage(page);
   await expect(page).toHaveURL(/\/warenkorb$/);
   await page.getByLabel("Name Karteninhaber:in").fill(holderName);
   await page.getByRole("button", { name: "Zur Kasse" }).click();
@@ -25,7 +25,7 @@ test("Season-Pass-Bestellung E2E: Produkt wählen, Formular ausfüllen, absenden
   await expect(page).toHaveURL(/\/kasse$/);
   await fillAndSubmitCheckout(page, customer);
 
-  await expect(page.getByRole("heading", { name: "Bestellung eingegangen" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Vielen Dank für deine Bestellung" })).toBeVisible();
   const orderNumberLocator = page.locator("text=/^UHCU-\\d{4}-\\d{4}$/");
   await expect(orderNumberLocator).toBeVisible();
   const orderNumber = (await orderNumberLocator.textContent())?.trim() ?? "";

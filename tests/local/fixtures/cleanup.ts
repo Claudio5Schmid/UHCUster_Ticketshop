@@ -86,14 +86,29 @@ export async function sweepTestData() {
 
 /**
  * checkOrderRateLimit() (src/lib/rate-limit.ts) allows 5 checkout attempts per 10 minutes,
- * keyed by client IP. Local dev never sets x-forwarded-for, so every local checkout attempt
- * - the season-pass test and the RCC membership test alike - shares one "unknown" bucket.
- * Without clearing it, a handful of local test runs in a row would start failing for real
- * (not a test bug, an actual rate-limit rejection), so this runs alongside sweepTestData()
- * in both global-setup and global-teardown.
+ * keyed by client IP, and every local run shares one bucket. Without clearing it, a handful
+ * of runs in a row start failing for real - an actual rate-limit rejection, not a test bug -
+ * so this runs alongside sweepTestData() in both global-setup and global-teardown.
+ *
+ * "unknown" was the only key this cleared for a long time, and it silently stopped matching
+ * when the dev server began reporting ::1. The counter then accumulated across runs until
+ * the suite failed halfway through on a rejection nobody had caused.
+ *
+ * Only loopback is ever deleted. A real visitor's attempts are not this suite's to clear,
+ * and this runs against the production project.
  */
+const LOOPBACK_IPS = ["unknown", "::1", "127.0.0.1"];
+
 export async function resetLocalRateLimit() {
   const supabase = createServiceRoleClient();
-  const { error } = await supabase.from("order_rate_limits").delete().eq("ip_address", "unknown");
+
+  const { error } = await supabase.from("order_rate_limits").delete().in("ip_address", LOOPBACK_IPS);
   if (error) throw error;
+
+  // The same table keys the order lookup and the scanner login under their own
+  // prefixes ("order-lookup:::1", "scanner-session:::1").
+  for (const ip of LOOPBACK_IPS) {
+    const { error: prefixedError } = await supabase.from("order_rate_limits").delete().like("ip_address", `%:${ip}`);
+    if (prefixedError) throw prefixedError;
+  }
 }

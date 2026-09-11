@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { addProductToCart } from "../shared/cart";
+import { addProductToCart, openCartPage } from "../shared/cart";
 
 // The dedicated test product (CHF 1.00, "please don't buy" by name) already active in the
 // same Supabase project this preview deployment reads from - see
@@ -11,7 +11,7 @@ test("Checkout-Formular ist erreichbar, clientseitige Validierung greift, OHNE A
   await page.goto("/");
   await addProductToCart(page, PRODUCT_NAME);
 
-  await page.getByRole("link", { name: /Warenkorb, 1 Artikel/ }).click();
+  await openCartPage(page);
   await expect(page).toHaveURL(/\/warenkorb$/);
   await page.getByLabel("Name Karteninhaber:in").fill("Preview Test Holder");
   await page.getByRole("button", { name: "Zur Kasse" }).click();
