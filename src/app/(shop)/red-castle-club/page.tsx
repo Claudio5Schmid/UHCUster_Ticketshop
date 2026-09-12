@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/Button/Button";
 import { ProductCard } from "@/components/shop/ProductCard/ProductCard";
 import { HeroShell, HeroTitle } from "@/components/shop/HeroShell/HeroShell";
 import { getActiveProducts } from "@/lib/products";
-import { getSalesChannels, resolveRedirectUrl } from "@/lib/shop/sales-channels";
+import { getSalesChannels, resolvePurchase } from "@/lib/shop/sales-channels";
 import { getUpcomingGamesForSeason } from "@/lib/games";
 import { CURRENT_SEASON, CURRENT_SEASON_LABEL } from "@/lib/season";
 import styles from "../home.module.css";
@@ -58,7 +58,7 @@ export default async function RedCastleClubPage() {
                 key={product.id}
                 product={product}
                 gameCount={games.length}
-                redirectUrl={resolveRedirectUrl(product, salesChannels)}
+                purchase={resolvePurchase(product, salesChannels)}
               />
             ))}
           </div>

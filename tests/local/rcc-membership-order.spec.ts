@@ -17,7 +17,7 @@ const PRODUCT_PRICE_RAPPEN = 30000;
  * restores it afterwards - through the admin page, because that is what clears the
  * cached shop pages; writing the row directly would leave a stale page behind.
  */
-async function setRedCastleChannel(page: import("@playwright/test").Page, redirect: boolean) {
+async function setRedCastleChannel(page: import("@playwright/test").Page, mode: "shop" | "website" | "disabled") {
   await page.goto("/admin/login");
   await page.getByLabel("E-Mail").fill(process.env.PLAYWRIGHT_ADMIN_EMAIL!);
   await page.getByLabel("Passwort").fill(process.env.PLAYWRIGHT_ADMIN_PASSWORD!);
@@ -26,37 +26,36 @@ async function setRedCastleChannel(page: import("@playwright/test").Page, redire
 
   await page.goto("/admin/sales");
   const row = page.locator("section").filter({ hasText: "Red Castle Club" }).first();
-  if ((await row.getByRole("switch").getAttribute("aria-checked")) !== String(redirect)) {
-    await row.getByRole("switch").click();
+  const labels = { shop: "Im Shop kaufen", website: "Auf der Website kaufen", disabled: "Kauf deaktiviert" };
+  const radio = row.locator(`input[type="radio"][value="${mode}"]`);
+  if (!(await radio.isChecked())) {
+    // The radio is visually hidden; the label is what a person clicks.
+    await row.locator("label").filter({ hasText: labels[mode] }).click();
     await row.getByRole("button", { name: "Speichern" }).click();
     await expect(row.getByText(/Gespeichert/)).toBeVisible();
   }
 }
 
-/** Whatever the switch was set to before this test borrowed it. */
-let redirectBefore = true;
+/** Whatever the setting was before this test borrowed it. */
+let modeBefore: "shop" | "website" | "disabled" = "website";
 
 test.beforeEach(async () => {
   const supabase = createServiceRoleClient();
-  const { data } = await supabase
-    .from("sales_channels")
-    .select("redirect_to_website")
-    .eq("product_type", "membership")
-    .single();
-  redirectBefore = data?.redirect_to_website ?? true;
+  const { data } = await supabase.from("sales_channels").select("mode").eq("product_type", "membership").single();
+  modeBefore = (data?.mode as typeof modeBefore) ?? "website";
 });
 
 // Restores the real setting even when the test above fails part-way: leaving the
 // shop selling Red Castle would mean real orders nobody is ready to book.
 test.afterEach(async ({ page }) => {
-  await setRedCastleChannel(page, redirectBefore);
+  await setRedCastleChannel(page, modeBefore);
 });
 
 test("Red Castle Club Membership Bestellung: analog zum Season-Pass-Flow, eigene Produktseite", async ({ page }) => {
   const customer = makeTestCustomer("rcc-membership");
   const holderName = "Playwright RCC Mitglied";
 
-  await setRedCastleChannel(page, false);
+  await setRedCastleChannel(page, "shop");
   await page.goto("/red-castle-club");
   await addProductToCart(page, PRODUCT_NAME);
 

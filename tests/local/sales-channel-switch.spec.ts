@@ -2,16 +2,18 @@ import { test, expect, type Page } from "@playwright/test";
 import { createServiceRoleClient } from "./fixtures/cleanup";
 
 /**
- * The switch in Admin → Einstellungen → Verkauf has to reach the shop, or it is
- * decoration. This flips it both ways and reads the button a visitor would see.
+ * The setting in Admin → Einstellungen → Verkauf has to reach the shop, or it is
+ * decoration. This walks all three modes and reads the button a visitor sees.
  *
- * It writes to the one shared settings row there is, so the original state is
- * captured first and put back in a finally - through the service-role client,
- * which bypasses RLS, so the restore works even if the UI is the thing at fault.
+ * It writes to the one shared settings row there is, so the original is captured
+ * first and put back in a finally - through the service-role client, which
+ * bypasses RLS, so the restore works even if the UI is the thing at fault.
  */
 
 const SEASON_PASS_CARD = "Saisonkarte Erwachsene";
 const TEST_PRODUCT_CARD = "TEST - Bitte nicht kaufen";
+
+type Mode = "shop" | "website" | "disabled";
 
 async function loginAsAdmin(page: Page) {
   await page.goto("/admin/login");
@@ -21,73 +23,83 @@ async function loginAsAdmin(page: Page) {
   await page.waitForURL("**/admin");
 }
 
-/** The button inside the card whose title is `title`. */
-function cardButton(page: Page, title: string) {
-  return page
-    .locator("article, li, div")
-    .filter({ hasText: title })
-    .last()
-    .getByRole("link", { name: /kaufen/ })
-    .or(page.locator("article, li, div").filter({ hasText: title }).last().getByRole("button", { name: "Auswählen" }));
+/** The radio itself is visually hidden, so this clicks the label - what a person does. */
+const MODE_LABELS: Record<Mode, string> = {
+  shop: "Im Shop kaufen",
+  website: "Auf der Website kaufen",
+  disabled: "Kauf deaktiviert",
+};
+
+async function setMode(page: Page, group: string, mode: Mode) {
+  await page.goto("/admin/sales");
+  const row = page.locator("section").filter({ hasText: group }).first();
+  await row.locator("label").filter({ hasText: MODE_LABELS[mode] }).click();
+  await expect(row.locator(`input[type="radio"][value="${mode}"]`)).toBeChecked();
+  await row.getByRole("button", { name: "Speichern" }).click();
+  await expect(row.getByText(/Gespeichert/)).toBeVisible();
 }
 
-test("the Verkauf switch decides whether a season pass goes in the cart or to uhcuster.ch", async ({ page }) => {
+/** The buy control inside the card whose title is `title`, whatever shape it has. */
+function cardControl(page: Page, title: string) {
+  const card = page.locator("article, li, div").filter({ hasText: title }).last();
+  return card.getByRole("link", { name: /kaufen/ }).or(card.getByRole("button", { name: "Auswählen" }));
+}
+
+test("the three Verkauf modes each reach the shop", async ({ page }) => {
   const supabase = createServiceRoleClient();
   const { data: before } = await supabase
     .from("sales_channels")
-    .select("redirect_to_website, website_url")
+    .select("mode, website_url")
     .eq("product_type", "season_pass")
     .single();
 
   try {
     await loginAsAdmin(page);
-    await page.goto("/admin/sales");
 
-    const row = page.locator("section").filter({ hasText: "Saisonkarten" }).first();
-    const toggle = row.getByRole("switch");
-
-    // --- left: the shop sells it itself
-    if ((await toggle.getAttribute("aria-checked")) === "true") {
-      await toggle.click();
-    }
-    await row.getByRole("button", { name: "Speichern" }).click();
-    await expect(row.getByText(/Kauf läuft im Shop/)).toBeVisible();
-
+    // --- shop: the cart, as originally built
+    await setMode(page, "Saisonkarten", "shop");
     await page.goto("/");
-    await expect(cardButton(page, SEASON_PASS_CARD)).toHaveText("Auswählen");
+    const cartButton = cardControl(page, SEASON_PASS_CARD);
+    await expect(cartButton).toHaveText("Auswählen");
+    await expect(cartButton).toBeEnabled();
 
-    // --- right: the visitor is sent to the club's own site
-    await page.goto("/admin/sales");
-    const rowAgain = page.locator("section").filter({ hasText: "Saisonkarten" }).first();
-    await rowAgain.getByRole("switch").click();
-    await rowAgain.getByRole("button", { name: "Speichern" }).click();
-    await expect(rowAgain.getByText(/über die Website/)).toBeVisible();
-
+    // --- website: away to the club's own page, in a new tab
+    await setMode(page, "Saisonkarten", "website");
     await page.goto("/");
-    const link = cardButton(page, SEASON_PASS_CARD);
+    const link = cardControl(page, SEASON_PASS_CARD);
     await expect(link).toHaveText("Auf uhcuster.ch kaufen");
     await expect(link).toHaveAttribute("href", /^https:\/\/uhcuster\.ch\//);
-    // A new tab, so the shop stays open behind it.
     await expect(link).toHaveAttribute("target", "_blank");
 
-    // The test product is exempt by design: without it there would be no way to
-    // walk the checkout while everything else points away.
-    await expect(cardButton(page, TEST_PRODUCT_CARD)).toHaveText("Auswählen");
+    // --- disabled: the offer stays on display, the button stops working
+    await setMode(page, "Saisonkarten", "disabled");
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: SEASON_PASS_CARD, exact: true })).toBeVisible();
+    // The price is still there: someone looking at the offer wants to know what
+    // it is, even where they cannot buy it here.
+    await expect(page.getByText("CHF 150.–").first()).toBeVisible();
+    const dead = cardControl(page, SEASON_PASS_CARD);
+    await expect(dead).toHaveText("Auswählen");
+    await expect(dead).toBeDisabled();
+
+    // The test product is exempt in every mode: without it there would be no way
+    // to walk the checkout while everything else is switched off.
+    await expect(cardControl(page, TEST_PRODUCT_CARD)).toBeEnabled();
   } finally {
     if (before) {
       await supabase
         .from("sales_channels")
-        .update({ redirect_to_website: before.redirect_to_website, website_url: before.website_url })
+        .update({ mode: before.mode, website_url: before.website_url })
         .eq("product_type", "season_pass");
     }
   }
 });
 
-test("a redirect cannot be saved without an https address", async ({ page }) => {
+test("the website mode cannot be saved without an https address", async ({ page }) => {
   const supabase = createServiceRoleClient();
   const { data: before } = await supabase
     .from("sales_channels")
-    .select("redirect_to_website, website_url")
+    .select("mode, website_url")
     .eq("product_type", "membership")
     .single();
 
@@ -96,9 +108,7 @@ test("a redirect cannot be saved without an https address", async ({ page }) => 
     await page.goto("/admin/sales");
 
     const row = page.locator("section").filter({ hasText: "Red Castle Club" }).first();
-    if ((await row.getByRole("switch").getAttribute("aria-checked")) !== "true") {
-      await row.getByRole("switch").click();
-    }
+    await row.locator("label").filter({ hasText: "Auf der Website kaufen" }).click();
 
     // Plain http would drop a visitor from a secure page onto an insecure one.
     await row.getByLabel("Adresse auf uhcuster.ch").fill("http://uhcuster.ch/de/fanzone/red_castle/red_castle.htm");
@@ -116,7 +126,7 @@ test("a redirect cannot be saved without an https address", async ({ page }) => 
     if (before) {
       await supabase
         .from("sales_channels")
-        .update({ redirect_to_website: before.redirect_to_website, website_url: before.website_url })
+        .update({ mode: before.mode, website_url: before.website_url })
         .eq("product_type", "membership");
     }
   }

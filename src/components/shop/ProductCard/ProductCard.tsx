@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/Card/Card";
 import { Button } from "@/components/ui/Button/Button";
 import { AddToCartButton } from "@/components/shop/AddToCartButton/AddToCartButton";
-import { redirectButtonLabel } from "@/lib/shop/sales-channels";
+import { redirectButtonLabel, type ProductPurchase } from "@/lib/shop/sales-channels";
 import type { Product } from "@/lib/products";
 import { calculateSavings, formatRappenAsChf } from "@/lib/pricing";
 import { getTicketAccentColor } from "@/lib/tier-colors";
@@ -13,14 +13,14 @@ interface ProductCardProps {
   gameCount: number;
   eyebrow?: string;
   /**
-   * Set when this kind of product is sold on uhcuster.ch rather than here: the
-   * card still shows what is on offer, but the button leads across instead of
-   * into the cart. Null means the shop sells it itself.
+   * What this card's button does. The card itself is the same either way - price,
+   * benefits and savings stay on display - because someone looking at the offer
+   * still wants to know what it is, even where they cannot buy it here.
    */
-  redirectUrl?: string | null;
+  purchase?: ProductPurchase;
 }
 
-export function ProductCard({ product, gameCount, eyebrow, redirectUrl }: ProductCardProps) {
+export function ProductCard({ product, gameCount, eyebrow, purchase = { kind: "cart" } }: ProductCardProps) {
   const highlights = product.benefits?.highlights ?? [];
   const savings = calculateSavings(product.price_rappen, product.benefits?.single_ticket_price_rappen, gameCount);
   const includedPasses = product.benefits?.included_passes ?? 1;
@@ -47,12 +47,16 @@ export function ProductCard({ product, gameCount, eyebrow, redirectUrl }: Produc
               <span className={styles.savingsValue}>du sparst {formatRappenAsChf(savings.savingsRappen)}</span>
             )}
           </div>
-          {redirectUrl ? (
+          {purchase.kind === "link" ? (
             // A new tab, and a label that names where it goes: leaving the shop
             // should be the visitor's decision, not a surprise, and their place
             // here is kept.
-            <Button as="a" href={redirectUrl} target="_blank" rel="noopener noreferrer" size="sm" fullWidth>
-              {redirectButtonLabel(redirectUrl)}
+            <Button as="a" href={purchase.url} target="_blank" rel="noopener noreferrer" size="sm" fullWidth>
+              {redirectButtonLabel(purchase.url)}
+            </Button>
+          ) : purchase.kind === "disabled" ? (
+            <Button type="button" size="sm" fullWidth disabled>
+              Auswählen
             </Button>
           ) : (
             <AddToCartButton

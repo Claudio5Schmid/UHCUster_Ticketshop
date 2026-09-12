@@ -13,11 +13,54 @@
 }
 
 .rowHead {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.segmented {
+  display: inline-flex;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.segmented:disabled {
+  opacity: 0.5;
+}
+
+.segment {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  border-right: 1px solid var(--color-border);
+}
+
+.segment:last-child {
+  border-right: none;
+}
+
+.segment[data-active="true"] {
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Focus lands on the hidden radio, so the segment has to show it instead. */
+.segment:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .rowTitle {

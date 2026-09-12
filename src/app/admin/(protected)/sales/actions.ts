@@ -2,22 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
-import type { SalesChannelType } from "@/lib/shop/sales-channels";
+import type { SalesChannelType, SalesMode } from "@/lib/shop/sales-channels";
 
 /**
- * Flips where one kind of product is sold, and where the button leads when it is
- * sold elsewhere. The database refuses a redirect without an https address, so a
- * dead button cannot be saved.
+ * Sets how one kind of product is bought, and where the button leads when that
+ * is somewhere else. The database refuses a website mode without an https
+ * address, so a link to nowhere cannot be saved.
  */
-export async function setSalesChannelAction(
-  productType: SalesChannelType,
-  redirectToWebsite: boolean,
-  websiteUrl: string
-) {
+export async function setSalesChannelAction(productType: SalesChannelType, mode: SalesMode, websiteUrl: string) {
   const supabase = await getSupabaseServerClient();
   const { error } = await supabase.rpc("set_sales_channel", {
     p_product_type: productType,
-    p_redirect_to_website: redirectToWebsite,
+    p_mode: mode,
     p_website_url: websiteUrl,
   });
 
