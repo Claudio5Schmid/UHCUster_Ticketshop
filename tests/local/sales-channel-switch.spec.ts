@@ -49,7 +49,7 @@ test("the three Verkauf modes each reach the shop", async ({ page }) => {
   const supabase = createServiceRoleClient();
   const { data: before } = await supabase
     .from("sales_channels")
-    .select("mode, website_url")
+    .select("mode, website_url, note")
     .eq("product_type", "season_pass")
     .single();
 
@@ -82,14 +82,26 @@ test("the three Verkauf modes each reach the shop", async ({ page }) => {
     await expect(dead).toHaveText("Auswählen");
     await expect(dead).toBeDisabled();
 
+    // A dead button with nothing beside it just looks broken, so the note from
+    // the admin sits under it and says why.
+    if (before?.note) {
+      await expect(page.getByText(before.note).first()).toBeVisible();
+    }
+
     // The test product is exempt in every mode: without it there would be no way
-    // to walk the checkout while everything else is switched off.
+    // to walk the checkout while everything else is switched off. The note is
+    // part of that exemption - a line about season-pass ordering being closed
+    // has no business under a card that is still on sale.
+    const testCard = page.locator("article, li, div").filter({ hasText: TEST_PRODUCT_CARD }).last();
     await expect(cardControl(page, TEST_PRODUCT_CARD)).toBeEnabled();
+    if (before?.note) {
+      await expect(testCard.getByText(before.note)).toHaveCount(0);
+    }
   } finally {
     if (before) {
       await supabase
         .from("sales_channels")
-        .update({ mode: before.mode, website_url: before.website_url })
+        .update({ mode: before.mode, website_url: before.website_url, note: before.note })
         .eq("product_type", "season_pass");
     }
   }
@@ -99,7 +111,7 @@ test("the website mode cannot be saved without an https address", async ({ page 
   const supabase = createServiceRoleClient();
   const { data: before } = await supabase
     .from("sales_channels")
-    .select("mode, website_url")
+    .select("mode, website_url, note")
     .eq("product_type", "membership")
     .single();
 
@@ -126,7 +138,7 @@ test("the website mode cannot be saved without an https address", async ({ page 
     if (before) {
       await supabase
         .from("sales_channels")
-        .update({ mode: before.mode, website_url: before.website_url })
+        .update({ mode: before.mode, website_url: before.website_url, note: before.note })
         .eq("product_type", "membership");
     }
   }

@@ -20,7 +20,7 @@ interface ProductCardProps {
   purchase?: ProductPurchase;
 }
 
-export function ProductCard({ product, gameCount, eyebrow, purchase = { kind: "cart" } }: ProductCardProps) {
+export function ProductCard({ product, gameCount, eyebrow, purchase = { kind: "cart", note: null } }: ProductCardProps) {
   const highlights = product.benefits?.highlights ?? [];
   const savings = calculateSavings(product.price_rappen, product.benefits?.single_ticket_price_rappen, gameCount);
   const includedPasses = product.benefits?.included_passes ?? 1;
@@ -67,6 +67,7 @@ export function ProductCard({ product, gameCount, eyebrow, purchase = { kind: "c
               fullWidth
             />
           )}
+          {purchase.note && <p className={styles.purchaseNote}>{purchase.note}</p>}
         </>
       }
     >

@@ -9,12 +9,18 @@ import type { SalesChannelType, SalesMode } from "@/lib/shop/sales-channels";
  * is somewhere else. The database refuses a website mode without an https
  * address, so a link to nowhere cannot be saved.
  */
-export async function setSalesChannelAction(productType: SalesChannelType, mode: SalesMode, websiteUrl: string) {
+export async function setSalesChannelAction(
+  productType: SalesChannelType,
+  mode: SalesMode,
+  websiteUrl: string,
+  note: string
+) {
   const supabase = await getSupabaseServerClient();
   const { error } = await supabase.rpc("set_sales_channel", {
     p_product_type: productType,
     p_mode: mode,
     p_website_url: websiteUrl,
+    p_note: note,
   });
 
   if (error) throw new Error(error.message);

@@ -23,10 +23,21 @@ export interface SalesChannel {
   productType: SalesChannelType;
   mode: SalesMode;
   websiteUrl: string | null;
+  /** A line under the button - an ordering deadline, say. Null means none. */
+  note: string | null;
 }
 
-/** What one product's button should do. */
-export type ProductPurchase = { kind: "cart" } | { kind: "link"; url: string } | { kind: "disabled" };
+/**
+ * What one product's button should do, and the line under it.
+ *
+ * The note travels with the decision rather than beside it, because the two are
+ * one thought: a button that does not work and no word about why is what makes
+ * the office's phone ring.
+ */
+export type ProductPurchase =
+  | { kind: "cart"; note: string | null }
+  | { kind: "link"; url: string; note: string | null }
+  | { kind: "disabled"; note: string | null };
 
 /**
  * Products the setting never touches.
@@ -39,7 +50,7 @@ export const ALWAYS_IN_SHOP_SLUGS: readonly string[] = ["test-saisonkarte"];
 
 export async function getSalesChannels(): Promise<SalesChannel[]> {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from("sales_channels").select("product_type, mode, website_url");
+  const { data, error } = await supabase.from("sales_channels").select("product_type, mode, website_url, note");
 
   if (error) {
     throw new Error(`Failed to load sales channels: ${error.message}`);
@@ -49,25 +60,30 @@ export async function getSalesChannels(): Promise<SalesChannel[]> {
     productType: row.product_type as SalesChannelType,
     mode: row.mode as SalesMode,
     websiteUrl: row.website_url,
+    note: row.note,
   }));
 }
 
 export function resolvePurchase(product: Product, channels: SalesChannel[]): ProductPurchase {
-  if (ALWAYS_IN_SHOP_SLUGS.includes(product.slug)) return { kind: "cart" };
+  // An exempt product carries no note either: a line about season-pass ordering
+  // being closed has nothing to do with a card that is still on sale here.
+  if (ALWAYS_IN_SHOP_SLUGS.includes(product.slug)) return { kind: "cart", note: null };
 
   const channel = channels.find((entry) => entry.productType === product.type);
-  if (!channel) return { kind: "cart" };
+  if (!channel) return { kind: "cart", note: null };
 
-  if (channel.mode === "disabled") return { kind: "disabled" };
+  const note = channel.note;
+
+  if (channel.mode === "disabled") return { kind: "disabled", note };
 
   // A website mode without an address cannot be saved - the database refuses the
   // combination - but it is handled rather than trusted, so a misconfiguration
   // shows up as a dead button rather than a link to nowhere.
   if (channel.mode === "website") {
-    return channel.websiteUrl ? { kind: "link", url: channel.websiteUrl } : { kind: "disabled" };
+    return channel.websiteUrl ? { kind: "link", url: channel.websiteUrl, note } : { kind: "disabled", note };
   }
 
-  return { kind: "cart" };
+  return { kind: "cart", note };
 }
 
 /**

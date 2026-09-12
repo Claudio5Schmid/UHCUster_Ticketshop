@@ -46,6 +46,7 @@ interface Row extends SalesChannel {
   /** What is on screen, which may differ from what is saved until Speichern. */
   draftMode: SalesMode;
   draftUrl: string;
+  draftNote: string;
   message: string | null;
   error: string | null;
 }
@@ -57,6 +58,7 @@ export function SalesChannelsClient({ channels }: { channels: SalesChannel[] }) 
       ...channel,
       draftMode: channel.mode,
       draftUrl: channel.websiteUrl ?? "",
+      draftNote: channel.note ?? "",
       message: null,
       error: null,
     }))
@@ -70,10 +72,11 @@ export function SalesChannelsClient({ channels }: { channels: SalesChannel[] }) 
     update(row.productType, { message: null, error: null });
     startTransition(async () => {
       try {
-        await setSalesChannelAction(row.productType, row.draftMode, row.draftUrl);
+        await setSalesChannelAction(row.productType, row.draftMode, row.draftUrl, row.draftNote);
         update(row.productType, {
           mode: row.draftMode,
           websiteUrl: row.draftUrl.trim() || null,
+          note: row.draftNote.trim() || null,
           message: `Gespeichert - ${MODES.find((mode) => mode.value === row.draftMode)?.label.toLowerCase()}.`,
         });
       } catch (saveError) {
@@ -88,7 +91,10 @@ export function SalesChannelsClient({ channels }: { channels: SalesChannel[] }) 
     <div className={styles.rows}>
       {rows.map((row) => {
         const group = GROUPS[row.productType];
-        const dirty = row.draftMode !== row.mode || row.draftUrl.trim() !== (row.websiteUrl ?? "");
+        const dirty =
+          row.draftMode !== row.mode ||
+          row.draftUrl.trim() !== (row.websiteUrl ?? "") ||
+          row.draftNote.trim() !== (row.note ?? "");
         const explains = MODES.find((mode) => mode.value === row.draftMode)?.explains;
 
         return (
@@ -130,6 +136,16 @@ export function SalesChannelsClient({ channels }: { channels: SalesChannel[] }) 
                 placeholder="https://uhcuster.ch/de/fanzone/..."
                 hint={row.draftMode === "website" ? undefined : "Wird gemerkt, auch wenn sie gerade nicht gebraucht wird."}
                 error={row.error ?? undefined}
+              />
+            </div>
+
+            <div className={styles.rowForm}>
+              <Input
+                label="Hinweis unter dem Knopf"
+                value={row.draftNote}
+                onChange={(event) => update(row.productType, { draftNote: event.target.value, message: null, error: null })}
+                placeholder="z.B. Saisonkarten bestellbar bis 5. September 2026"
+                hint="Erscheint auf jeder Karte dieser Gruppe, in jeder Stellung. Leer lassen für keinen Hinweis."
               />
               <Button type="button" size="sm" disabled={isPending || !dirty} onClick={() => save(row)}>
                 Speichern

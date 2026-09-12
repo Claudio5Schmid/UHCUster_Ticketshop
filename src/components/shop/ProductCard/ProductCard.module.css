@@ -65,3 +65,12 @@
   color: var(--color-text-secondary);
   font-style: italic;
 }
+
+/* Sits under the buy button and explains it - most usefully when the button is
+   greyed out, where otherwise it just looks broken. */
+.purchaseNote {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-small-size);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
