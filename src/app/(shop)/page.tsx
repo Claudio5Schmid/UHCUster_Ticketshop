@@ -23,6 +23,11 @@ export default async function Home() {
   ]);
 
   const seasonPasses = products.filter((product) => product.type === "season_pass");
+
+  // One card carrying a note and the next not would leave their buttons at
+  // different heights, so a card without one reserves the room the others use.
+  const seasonPassesNote =
+    seasonPasses.map((product) => resolvePurchase(product, salesChannels).note).find(Boolean) ?? null;
   const memberships = products.filter((product) => product.type === "membership");
   const cheapestMembership = memberships[0];
   const upcomingGames = games.slice(0, 3);
@@ -62,6 +67,7 @@ export default async function Home() {
                 product={product}
                 gameCount={games.length}
                 purchase={resolvePurchase(product, salesChannels)}
+                reserveNote={seasonPassesNote}
               />
             ))}
           </div>

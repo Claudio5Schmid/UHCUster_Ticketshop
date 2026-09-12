@@ -92,10 +92,14 @@ test("the three Verkauf modes each reach the shop", async ({ page }) => {
     // to walk the checkout while everything else is switched off. The note is
     // part of that exemption - a line about season-pass ordering being closed
     // has no business under a card that is still on sale.
+    //
+    // Hidden rather than absent: the card carries the same text invisibly, so
+    // its button lines up with its neighbours' instead of sitting a line lower.
+    // What matters is that nobody reads it here.
     const testCard = page.locator("article, li, div").filter({ hasText: TEST_PRODUCT_CARD }).last();
     await expect(cardControl(page, TEST_PRODUCT_CARD)).toBeEnabled();
     if (before?.note) {
-      await expect(testCard.getByText(before.note)).toHaveCount(0);
+      await expect(testCard.getByText(before.note)).toBeHidden();
     }
   } finally {
     if (before) {

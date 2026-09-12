@@ -18,9 +18,21 @@ interface ProductCardProps {
    * still wants to know what it is, even where they cannot buy it here.
    */
   purchase?: ProductPurchase;
+  /**
+   * The note the other cards in this row carry, for a card that has none of its
+   * own. Rendered invisibly so it reserves exactly the height that text takes -
+   * a blank line would not, because a note long enough to wrap takes two.
+   */
+  reserveNote?: string | null;
 }
 
-export function ProductCard({ product, gameCount, eyebrow, purchase = { kind: "cart", note: null } }: ProductCardProps) {
+export function ProductCard({
+  product,
+  gameCount,
+  eyebrow,
+  purchase = { kind: "cart", note: null },
+  reserveNote,
+}: ProductCardProps) {
   const highlights = product.benefits?.highlights ?? [];
   const savings = calculateSavings(product.price_rappen, product.benefits?.single_ticket_price_rappen, gameCount);
   const includedPasses = product.benefits?.included_passes ?? 1;
@@ -67,7 +79,16 @@ export function ProductCard({ product, gameCount, eyebrow, purchase = { kind: "c
               fullWidth
             />
           )}
-          {purchase.note && <p className={styles.purchaseNote}>{purchase.note}</p>}
+          {purchase.note ? (
+            <p className={styles.purchaseNote}>{purchase.note}</p>
+          ) : reserveNote ? (
+            // Holds the footer open so the buttons in a row stay level. Hidden
+            // from screen readers, which would otherwise read a note that does
+            // not apply to this card.
+            <p className={`${styles.purchaseNote} ${styles.purchaseNotePlaceholder}`} aria-hidden="true">
+              {reserveNote}
+            </p>
+          ) : null}
         </>
       }
     >

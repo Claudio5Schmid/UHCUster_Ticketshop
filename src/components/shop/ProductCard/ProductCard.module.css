@@ -74,3 +74,9 @@
   color: var(--color-text-secondary);
   text-align: center;
 }
+
+/* Takes up the note's exact height without showing it - visibility rather than
+   display, which would collapse the space this exists to hold. */
+.purchaseNotePlaceholder {
+  visibility: hidden;
+}

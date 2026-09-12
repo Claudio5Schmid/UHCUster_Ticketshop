@@ -24,6 +24,11 @@ export default async function RedCastleClubPage() {
 
   const memberships = products.filter((product) => product.type === "membership");
 
+  // One card carrying a note and the next not would leave their buttons at
+  // different heights, so a card without one reserves the room the others use.
+  const membershipsNote =
+    memberships.map((product) => resolvePurchase(product, salesChannels).note).find(Boolean) ?? null;
+
   return (
     <div>
       <HeroShell>
@@ -59,6 +64,7 @@ export default async function RedCastleClubPage() {
                 product={product}
                 gameCount={games.length}
                 purchase={resolvePurchase(product, salesChannels)}
+                reserveNote={membershipsNote}
               />
             ))}
           </div>
