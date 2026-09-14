@@ -100,7 +100,10 @@ export function ProductCard({
           ))}
         </ul>
       )}
-      {transferable && includedPasses > 1 && (
+      {/* Only where the checkout is actually this shop's. Once the button leads to
+          uhcuster.ch, or does nothing at all, describing a step here that the
+          visitor will never reach is just a wrong instruction. */}
+      {transferable && includedPasses > 1 && purchase.kind === "cart" && (
         <p className={styles.bundleNote}>
           Im Checkout hinterlegst du einen Namen (z.B. eure Firma) für alle {includedPasses} Karten.
         </p>

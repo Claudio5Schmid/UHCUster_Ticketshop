@@ -57,6 +57,11 @@ test("Red Castle Club Membership Bestellung: analog zum Season-Pass-Flow, eigene
 
   await setRedCastleChannel(page, "shop");
   await page.goto("/red-castle-club");
+
+  // The bundle instruction belongs on the card only while the checkout is this
+  // shop's - which it is for the length of this test. Asserted here so hiding it
+  // in the other two modes cannot quietly turn into hiding it everywhere.
+  await expect(page.getByText(/Im Checkout hinterlegst du einen Namen/).first()).toBeVisible();
   await addProductToCart(page, PRODUCT_NAME);
 
   await openCartPage(page);
