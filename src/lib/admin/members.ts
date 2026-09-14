@@ -11,6 +11,7 @@ import {
   countCards,
   isLiveTicket,
   planCardReconciliation,
+  type MemberCardCounts,
   applyMemberFilters,
   type CountableTicket,
   type Member,
@@ -24,6 +25,9 @@ export interface MemberInput {
   /** The club's member number. Optional here because the single-member form has no
    *  such number to offer - only the CSV import carries one. */
   externalId?: string | null;
+  /** Set by the CSV import, left alone by the admin form - that difference is what
+   *  makes "who came from the last import" answerable afterwards. */
+  importedAt?: string | null;
   vorname: string;
   nachname: string;
   email: string;
@@ -151,6 +155,7 @@ export async function createMemberAndIssueCards(input: MemberInput): Promise<Mem
     .from("members")
     .insert({
       external_id: input.externalId ?? null,
+      imported_at: input.importedAt ?? null,
       vorname: input.vorname,
       nachname: input.nachname,
       email: input.email,
@@ -263,6 +268,33 @@ export interface CsvImportResult {
   failed: Array<{ row: number; reason: string }>;
 }
 
+/** Card counts for many orders in a single query - the per-order helper is fine for
+ *  one member's detail page and quietly quadratic behind an import. */
+async function countCardsByOrder(orderIds: string[]): Promise<Map<string, MemberCardCounts>> {
+  const counts = new Map<string, MemberCardCounts>();
+  if (orderIds.length === 0) return counts;
+
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("tickets")
+    .select("order_id, status, transferable, card_sent_at")
+    .in("order_id", [...new Set(orderIds)]);
+  if (error) throw new Error(`Failed to load tickets: ${error.message}`);
+
+  const byOrder = new Map<string, CountableTicket[]>();
+  for (const row of data ?? []) {
+    const list = byOrder.get(row.order_id as string) ?? [];
+    list.push(row as CountableTicket);
+    byOrder.set(row.order_id as string, list);
+  }
+  for (const [orderId, tickets] of byOrder) counts.set(orderId, countCards(tickets));
+  return counts;
+}
+
+/** Members are written a few at a time. Each still renders a PDF per card, so this
+ *  stays small enough not to swamp Storage or the connection pool. */
+const IMPORT_CONCURRENCY = 4;
+
 export interface CsvImportCounts {
   personal: number;
   transferable: number;
@@ -313,6 +345,14 @@ export async function planMemberCsvImport(content: string, mapping: CsvColumnMap
 
   const byExternalId = new Map((existing ?? []).map((member) => [member.external_id as string, member]));
 
+  // One query for every matched member's cards instead of one per member. At ten
+  // members that was ten sequential round trips before a dialog could open, and it
+  // grew with the list - the club's real export is hundreds of rows.
+  const orderIds = rows
+    .map((row) => byExternalId.get(row.externalId)?.order_id as string | undefined)
+    .filter((id): id is string => Boolean(id));
+  const countsByOrder = await countCardsByOrder(orderIds);
+
   for (const row of rows) {
     const member = byExternalId.get(row.externalId);
     if (!member) {
@@ -320,8 +360,7 @@ export async function planMemberCsvImport(content: string, mapping: CsvColumnMap
       continue;
     }
 
-    const tickets = member.order_id ? await getOrderTickets(member.order_id as string) : [];
-    const counts = countCards(tickets);
+    const counts = countsByOrder.get(member.order_id as string) ?? { ...EMPTY_COUNTS };
 
     plan.matches.push({
       externalId: row.externalId,
@@ -428,8 +467,23 @@ export async function applyMemberCsvImport(
   let updated = 0;
   let skipped = 0;
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+  // The same stamp for every row of one file, so a batch is one value to look for
+  // rather than a spread of timestamps a second apart.
+  const importedAt = new Date().toISOString();
+
+  /* Members are independent of one another - separate orders, separate cards, and
+     order numbers come from an atomic sequence - so they are processed a few at a
+     time rather than strictly one after the other. Capped, because each one still
+     renders and uploads a PDF per card, and an unbounded fan-out over a real club
+     export would open hundreds of connections at once. */
+  const queue = rows.map((row, index) => ({ row, index }));
+  const workers = Array.from({ length: Math.min(IMPORT_CONCURRENCY, queue.length) }, async () => {
+    for (let job = queue.shift(); job; job = queue.shift()) {
+      await handleRow(job.row, job.index);
+    }
+  });
+
+  async function handleRow(row: (typeof rows)[number], i: number) {
     const target = { personal: row.mitgliederkarte ? 1 : 0, transferable: row.transferableCodeCount };
 
     try {
@@ -438,6 +492,7 @@ export async function applyMemberCsvImport(
       if (!existingMember) {
         await createMemberAndIssueCards({
           externalId: row.externalId,
+          importedAt,
           vorname: row.vorname,
           nachname: row.nachname,
           email: row.email,
@@ -446,12 +501,12 @@ export async function applyMemberCsvImport(
           transferableCardCount: target.transferable,
         });
         imported++;
-        continue;
+        return;
       }
 
       if (!selected.has(row.externalId)) {
         skipped++;
-        continue;
+        return;
       }
 
       // The CSV is the club's list of record, so its name and category win - that
@@ -467,6 +522,7 @@ export async function applyMemberCsvImport(
           mitgliederkarte: target.personal > 0,
           personal_card_count: target.personal,
           transferable_code_count: target.transferable,
+          imported_at: importedAt,
         })
         .eq("id", existingMember.id);
       if (updateError) throw new Error(updateError.message);
@@ -486,6 +542,8 @@ export async function applyMemberCsvImport(
       failed.push({ row: i + 2, reason: importError instanceof Error ? importError.message : "Unbekannter Fehler" });
     }
   }
+
+  await Promise.all(workers);
 
   return { imported, updated, skipped, failed };
 }

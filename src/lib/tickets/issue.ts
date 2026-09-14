@@ -99,16 +99,25 @@ type SupabaseClient = Awaited<ReturnType<typeof getSupabaseServerClient>>;
  * harmless, because every path is keyed by a freshly minted ticket id, so a
  * retry writes to a new path and `upsert: false` keeps it from colliding.
  */
+/** Capped rather than unbounded: an order of a few cards should not wait out a
+ *  round trip per card, and a member import of hundreds should not open hundreds
+ *  of uploads at once either. */
+const UPLOAD_CONCURRENCY = 4;
+
 async function uploadAll(supabase: SupabaseClient, built: BuiltTicket[]): Promise<void> {
-  for (const ticket of built) {
-    const { error } = await supabase.storage.from("tickets").upload(ticket.pdfPath, ticket.bytes, {
-      contentType: "application/pdf",
-      upsert: false,
-    });
-    if (error) {
-      throw new Error(`Failed to upload ${ticket.pdfPath}: ${error.message}`);
+  const queue = [...built];
+  const workers = Array.from({ length: Math.min(UPLOAD_CONCURRENCY, queue.length) }, async () => {
+    for (let ticket = queue.shift(); ticket; ticket = queue.shift()) {
+      const { error } = await supabase.storage.from("tickets").upload(ticket.pdfPath, ticket.bytes, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
+      if (error) {
+        throw new Error(`Failed to upload ${ticket.pdfPath}: ${error.message}`);
+      }
     }
-  }
+  });
+  await Promise.all(workers);
 }
 
 /**

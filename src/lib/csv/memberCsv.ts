@@ -123,6 +123,10 @@ export function parseMemberCsvRows(content: string, mapping: CsvColumnMapping): 
 
   const rows: MemberCsvRow[] = [];
   const errors: string[] = [];
+  /* A number repeated inside one file is a fault in the file, not two members. The
+     import writes several rows at a time, so both would race at the unique index and
+     one would come back as a raw constraint violation - said plainly here instead. */
+  const seenIds = new Map<string, number>();
 
   for (let i = 1; i < table.length; i++) {
     const cells = table[i];
@@ -145,6 +149,12 @@ export function parseMemberCsvRows(content: string, mapping: CsvColumnMapping): 
       errors.push(`Zeile ${i + 1}: Name und E-Mail sind erforderlich - übersprungen.`);
       continue;
     }
+    const firstSeen = seenIds.get(externalId);
+    if (firstSeen !== undefined) {
+      errors.push(`Zeile ${i + 1}: Mitglieds-ID ${externalId} kommt schon in Zeile ${firstSeen} vor - übersprungen.`);
+      continue;
+    }
+    seenIds.set(externalId, i + 1);
 
     const kategorie = get("kategorie");
     const mitgliederkarteRaw = get("mitgliederkarte");

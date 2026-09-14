@@ -22,7 +22,13 @@ import type { CsvImportPlan } from "@/lib/admin/members";
 import { matchesSendConfirmation } from "@/lib/admin/send-confirmation";
 import styles from "../admin.module.css";
 
-type SortKey = "name" | "email" | "kategorie" | "karten" | "versand";
+type SortKey = "name" | "email" | "kategorie" | "karten" | "versand" | "importiert";
+
+const importDateFormatter = new Intl.DateTimeFormat("de-CH", {
+  timeZone: "Europe/Zurich",
+  dateStyle: "short",
+  timeStyle: "short",
+});
 
 const DEFAULT_SUBJECT = "Deine Mitgliederkarte UHC Uster";
 const DEFAULT_BODY = `Hallo {{vorname}},
@@ -73,6 +79,13 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
      before anything is written. csvSelected holds the member numbers to apply. */
   const [csvPlan, setCsvPlan] = useState<CsvImportPlan | null>(null);
   const [csvSelected, setCsvSelected] = useState<Set<string>>(new Set());
+  /* A second, deliberate step before anything is overwritten. The list behind it is
+     long enough to scroll, so the button at the bottom can be reached without the
+     top of it still being in mind - the count is restated here, in words. */
+  const [csvConfirmOpen, setCsvConfirmOpen] = useState(false);
+  /* Off by default: it matters when tracing which batch somebody arrived in, and is
+     noise the rest of the time. */
+  const [showImportedAt, setShowImportedAt] = useState(false);
 
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [body, setBody] = useState(DEFAULT_BODY);
@@ -143,6 +156,7 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
     setCsvMapping({});
     setCsvPlan(null);
     setCsvSelected(new Set());
+    setCsvConfirmOpen(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -255,6 +269,10 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
         // Sorted by how much work is left rather than alphabetically, so the
         // members still waiting for something come first.
         return ["offen", "teilweise", "vollstaendig", "ohne"].indexOf(memberSendState(member));
+      case "importiert":
+        // Empty sorts last rather than ahead of every real date: a member added by
+        // hand has no import to compare against.
+        return member.imported_at ?? "";
     }
   }
 
@@ -409,6 +427,15 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
         return <Badge variant={state.variant}>{state.label}</Badge>;
       },
     },
+    ...(showImportedAt
+      ? [
+          {
+            key: "importiert",
+            header: sortableHeader("Importiert", "importiert"),
+            render: (m: Member) => (m.imported_at ? importDateFormatter.format(new Date(m.imported_at)) : "–"),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -448,6 +475,9 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
           </Button>
           <Button type="button" variant="secondary" size="sm" onClick={() => setShowCsvImport(true)}>
             CSV importieren
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => setShowImportedAt((shown) => !shown)}>
+            {showImportedAt ? "Importdatum ausblenden" : "Importdatum einblenden"}
           </Button>
         </div>
       </div>
@@ -555,8 +585,10 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
         {csvPlan && (
           <div className={styles.form}>
             <p style={{ color: "var(--color-text-secondary)" }}>
-              {csvPlan.matches.length} {csvPlan.matches.length === 1 ? "Zeile betrifft ein Mitglied" : "Zeilen betreffen Mitglieder"},
-              das es bereits gibt. Angehakte werden aktualisiert, nicht angehakte bleiben unverändert.
+              Diese {csvPlan.matches.length === 1 ? "Zeile hat" : `${csvPlan.matches.length} Zeilen haben`} eine
+              Mitglieds-ID, die es bereits gibt. <strong>Angehakte Zeilen überschreiben den bestehenden Eintrag
+              vollständig</strong> - Name, E-Mail, Kategorie und Karten werden auf den Stand der Datei gebracht.
+              Nicht angehakte bleiben unverändert.
               {csvPlan.newCount > 0 && ` ${csvPlan.newCount} neue Mitglieder werden in jedem Fall angelegt.`}
             </p>
 
@@ -579,8 +611,10 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
                 const nameChanged =
                   match.csv.vorname !== match.current.vorname || match.csv.nachname !== match.current.nachname;
                 const kategorieChanged = (match.csv.kategorie ?? "") !== (match.current.kategorie ?? "");
+                const emailChanged = match.csv.email !== match.current.email;
                 const cardsChanged =
                   match.csv.personal !== match.current.personal || match.csv.transferable !== match.current.transferable;
+                const unchanged = !nameChanged && !kategorieChanged && !emailChanged && !cardsChanged;
 
                 return (
                   <label key={match.externalId} className={styles.csvConflictRow}>
@@ -591,23 +625,40 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
                     />
                     <div>
                       <strong>
-                        ID {match.externalId} · {match.csv.vorname} {match.csv.nachname}
+                        ID {match.externalId} · {match.current.vorname} {match.current.nachname}
                       </strong>
-                      <div className={styles.csvConflictDetail}>{match.csv.email}</div>
-                      {nameChanged && (
-                        <div className={styles.csvConflictDetail}>
-                          Name: {match.current.vorname} {match.current.nachname} → {match.csv.vorname} {match.csv.nachname}
-                        </div>
+                      {unchanged ? (
+                        <div className={styles.csvConflictDetail}>Keine Änderung - die Datei entspricht dem Eintrag.</div>
+                      ) : (
+                        <>
+                          {nameChanged && (
+                            <div className={styles.csvConflictChange}>
+                              Name <s>{match.current.vorname} {match.current.nachname}</s> →{" "}
+                              <strong>
+                                {match.csv.vorname} {match.csv.nachname}
+                              </strong>
+                            </div>
+                          )}
+                          {emailChanged && (
+                            <div className={styles.csvConflictChange}>
+                              E-Mail <s>{match.current.email}</s> → <strong>{match.csv.email}</strong>
+                            </div>
+                          )}
+                          {kategorieChanged && (
+                            <div className={styles.csvConflictChange}>
+                              Kategorie <s>{match.current.kategorie ?? "–"}</s> →{" "}
+                              <strong>{match.csv.kategorie ?? "–"}</strong>
+                            </div>
+                          )}
+                          {cardsChanged && (
+                            <div className={styles.csvConflictChange}>
+                              Karten <s>{match.current.personal} persönlich / {match.current.transferable} übertragbar</s>{" "}
+                              → <strong>{match.csv.personal} persönlich / {match.csv.transferable} übertragbar</strong>
+                            </div>
+                          )}
+                        </>
                       )}
-                      {kategorieChanged && (
-                        <div className={styles.csvConflictDetail}>
-                          Kategorie: {match.current.kategorie ?? "–"} → {match.csv.kategorie ?? "–"}
-                        </div>
-                      )}
-                      <div className={styles.csvConflictDetail}>
-                        Karten: {match.current.personal} persönlich / {match.current.transferable} übertragbar
-                        {cardsChanged ? ` → ${match.csv.personal} / ${match.csv.transferable}` : " (unverändert)"}
-                      </div>
+                      {!emailChanged && <div className={styles.csvConflictDetail}>{match.current.email}</div>}
                     </div>
                   </label>
                 );
@@ -615,8 +666,8 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
             </div>
 
             <div className={styles.actions}>
-              <Button type="button" disabled={isPending} onClick={handleCsvImport}>
-                Importieren
+              <Button type="button" disabled={isPending} onClick={() => setCsvConfirmOpen(true)}>
+                {csvSelected.size} {csvSelected.size === 1 ? "Zeile" : "Zeilen"} importieren
               </Button>
               <Button type="button" variant="secondary" onClick={() => setCsvPlan(null)}>
                 Abbrechen
@@ -624,6 +675,32 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal open={csvConfirmOpen} onClose={() => setCsvConfirmOpen(false)} title="Import bestätigen">
+        <p style={{ marginBottom: "var(--space-5)" }}>
+          {csvSelected.size === 0
+            ? "Es ist keine bestehende Zeile angehakt - es werden ausschliesslich neue Mitglieder angelegt."
+            : `Die Daten von ${csvSelected.size} ${
+                csvSelected.size === 1 ? "bestehenden Mitglied werden" : "bestehenden Mitgliedern werden"
+              } vollständig durch die Datei ersetzt. Bestehende Karten werden dabei angeglichen: fehlende kommen dazu, überzählige werden ungültig.`}
+          {csvPlan && csvPlan.newCount > 0 && ` Zusätzlich werden ${csvPlan.newCount} neue Mitglieder angelegt.`}
+        </p>
+        <div className={styles.actions}>
+          <Button
+            type="button"
+            disabled={isPending}
+            onClick={() => {
+              setCsvConfirmOpen(false);
+              handleCsvImport();
+            }}
+          >
+            Ja, jetzt ersetzen
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => setCsvConfirmOpen(false)}>
+            Zurück
+          </Button>
+        </div>
       </Modal>
 
       <Modal open={showAddForm} onClose={() => setShowAddForm(false)} title="Mitglied erfassen">

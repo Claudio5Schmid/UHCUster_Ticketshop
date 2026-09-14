@@ -29,6 +29,9 @@ export interface Member {
   /** The club's own member number, from the import CSV. Null for members created
    *  before it existed. The key an import matches on - see members.ts. */
   external_id: string | null;
+  /** When an import last created or updated this member. Null when they were added
+   *  by hand. */
+  imported_at: string | null;
   vorname: string;
   nachname: string;
   email: string;

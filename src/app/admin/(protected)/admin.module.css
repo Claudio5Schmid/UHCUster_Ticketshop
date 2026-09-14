@@ -405,3 +405,15 @@
   color: var(--color-text-secondary);
 }
 
+/* A field the file will overwrite, old struck through and new in bold - the point
+   of the dialog is that nothing is replaced unseen, so the change has to read as a
+   change and not as a line of data. */
+.csvConflictChange {
+  font-size: var(--text-small-size);
+  color: var(--color-text);
+}
+
+.csvConflictChange s {
+  color: var(--color-text-secondary);
+}
+
