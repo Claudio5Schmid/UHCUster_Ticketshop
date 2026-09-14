@@ -100,3 +100,42 @@
   font-size: var(--text-small-size);
   color: var(--color-error-text);
 }
+
+/* The result line used to sit in the flow underneath the button, inside a header
+   laid out with flex - so every sync grew the header and shoved the button and the
+   heading around. It now hangs below the button without taking part in the layout,
+   and the button keeps a width that both labels fit into, so pressing it moves
+   nothing at all. */
+.syncControl {
+  position: relative;
+}
+
+.syncControl > button {
+  min-width: 14rem;
+}
+
+.syncMessage {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  width: max-content;
+  max-width: min(28rem, 60vw);
+  margin: 0;
+  font-size: var(--text-small-size);
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  /* No room to hang anything off the side on a phone - back into the flow, where a
+     little movement is better than a message off the edge of the screen. */
+  .syncMessage {
+    position: static;
+    max-width: none;
+    text-align: left;
+  }
+
+  .syncControl > button {
+    min-width: 0;
+  }
+}
+

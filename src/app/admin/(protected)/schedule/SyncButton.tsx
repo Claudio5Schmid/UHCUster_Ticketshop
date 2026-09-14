@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { syncGamesNow } from "./actions";
+import styles from "./schedule.module.css";
 
 export function SyncButton() {
   const [isPending, startTransition] = useTransition();
@@ -27,12 +28,20 @@ export function SyncButton() {
   }
 
   return (
-    <div>
+    <div className={styles.syncControl}>
       <Button variant="secondary" onClick={handleSync} disabled={isPending}>
         {isPending ? "Synchronisiere..." : "Jetzt synchronisieren"}
       </Button>
-      {message && <p style={{ color: "var(--color-text-secondary)" }}>{message}</p>}
-      {error && <p style={{ color: "var(--color-error-text)" }}>{error}</p>}
+      {message && (
+        <p className={styles.syncMessage} style={{ color: "var(--color-text-secondary)" }}>
+          {message}
+        </p>
+      )}
+      {error && (
+        <p className={styles.syncMessage} style={{ color: "var(--color-error-text)" }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
