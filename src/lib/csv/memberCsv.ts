@@ -64,16 +64,108 @@ const HEADER_ALIASES: Record<string, CsvField> = {
   "wie viele übertragbare codes": "transferableCodeCount",
 };
 
+function startsWith(bytes: Uint8Array, signature: number[]): boolean {
+  return signature.every((byte, index) => bytes[index] === byte);
+}
+
+/**
+ * Turns an uploaded file's bytes into text, guessing the encoding.
+ *
+ * Necessary because File.text() always decodes as UTF-8, with no way to ask for
+ * anything else - while "CSV (Trennzeichen-getrennt)", the default CSV export of
+ * Excel on a German Windows, writes Windows-1252. Every umlaut in such a file is
+ * a single byte that is not valid UTF-8, so it arrives as U+FFFD and "Müller"
+ * gets imported, and stored, as "M<?>ller".
+ *
+ * A byte-order mark settles the question outright. Without one, UTF-8 is tried
+ * strictly: German text in a legacy encoding practically always contains a byte
+ * sequence that is invalid UTF-8 (0xE4 0xF6 for "äö", say, where 0xE4 announces
+ * a continuation byte that 0xF6 is not), so a failure here is a reliable signal
+ * to fall back rather than a guess.
+ */
+export function decodeCsvBytes(bytes: Uint8Array): string {
+  if (startsWith(bytes, [0xef, 0xbb, 0xbf])) {
+    return new TextDecoder("utf-8").decode(bytes.subarray(3));
+  }
+  if (startsWith(bytes, [0xff, 0xfe])) {
+    return new TextDecoder("utf-16le").decode(bytes.subarray(2));
+  }
+  if (startsWith(bytes, [0xfe, 0xff])) {
+    return new TextDecoder("utf-16be").decode(bytes.subarray(2));
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder("windows-1252").decode(bytes);
+  }
+}
+
 function parseBoolean(value: string): boolean {
   const normalized = value.trim().toLowerCase();
   return normalized === "ja" || normalized === "yes" || normalized === "true" || normalized === "1";
 }
 
-/** Semicolon- or comma-separated, tolerant of quoted fields - matches typical
- * Swiss/German Excel CSV exports (semicolon) without requiring a specific one. */
+/** What a club export realistically uses: Swiss/German Excel writes semicolons,
+ *  international tools commas, a spreadsheet copy-paste tabs. */
+const DELIMITERS = [";", ",", "\t"];
+
+/** Counts a delimiter in one line, ignoring anything inside a quoted field -
+ *  the same quote rule parseCsvTable applies, so detection and parsing can never
+ *  disagree about where a field ends. */
+function countDelimiter(line: string, delimiter: string): number {
+  let count = 0;
+  let inQuotes = false;
+  for (const char of line) {
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === delimiter && !inQuotes) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Reads the delimiter off the file itself.
+ *
+ * The rule before was "semicolon if the text contains one anywhere, otherwise
+ * comma", which broke a comma-separated export the moment a single field held a
+ * semicolon - a category written "Aktiv; Vorstand" was enough to split the whole
+ * file on the wrong character and scatter every column.
+ *
+ * A real delimiter separates the same number of fields on every line, so several
+ * lines are sampled and consistency decides, not frequency. That is what keeps a
+ * stray semicolon in one field from outvoting the commas that actually structure
+ * the file.
+ */
+function detectDelimiter(lines: string[]): string {
+  const sample = lines.slice(0, 10);
+  let best = DELIMITERS[0];
+  let bestScore = -1;
+
+  for (const delimiter of DELIMITERS) {
+    const counts = sample.map((line) => countDelimiter(line, delimiter));
+    const inHeader = counts[0] ?? 0;
+    // Absent from the header line - whatever else it is, it is not this file's delimiter.
+    if (inHeader === 0) continue;
+    const consistent = counts.every((count) => count === inHeader);
+    // Any consistent candidate outranks any inconsistent one, whatever the counts;
+    // between two equally consistent ones, the one yielding more columns wins.
+    const score = (consistent ? 1000 : 0) + inHeader;
+    if (score > bestScore) {
+      bestScore = score;
+      best = delimiter;
+    }
+  }
+
+  return best;
+}
+
+/** Tolerant of quoted fields, and of whichever delimiter the export happened to
+ *  use - see detectDelimiter. */
 export function parseCsvTable(content: string): string[][] {
-  const delimiter = content.includes(";") ? ";" : ",";
   const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const delimiter = detectDelimiter(lines);
   return lines.map((line) => {
     const cells: string[] = [];
     let current = "";

@@ -17,7 +17,7 @@ import {
   deleteMembersAction,
 } from "./actions";
 import { memberSendState, type Member, type MemberSendState } from "@/lib/admin/member-state";
-import { CSV_FIELDS, parseCsvHeader, detectColumnMapping, type CsvColumnMapping, type CsvField } from "@/lib/csv/memberCsv";
+import { CSV_FIELDS, parseCsvHeader, detectColumnMapping, decodeCsvBytes, type CsvColumnMapping, type CsvField } from "@/lib/csv/memberCsv";
 import type { CsvImportPlan } from "@/lib/admin/members";
 import { matchesSendConfirmation } from "@/lib/admin/send-confirmation";
 import styles from "../admin.module.css";
@@ -139,7 +139,9 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
     if (!file) return;
     setError(null);
     setCsvResultMessage(null);
-    const content = await file.text();
+    // Not file.text(): that always decodes as UTF-8, which turns every umlaut in
+    // an Excel-default (Windows-1252) export into a replacement character.
+    const content = decodeCsvBytes(new Uint8Array(await file.arrayBuffer()));
     const header = parseCsvHeader(content);
     setCsvContent(content);
     setCsvHeader(header);
