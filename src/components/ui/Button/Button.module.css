@@ -23,6 +23,18 @@
   opacity: 0.4;
 }
 
+/* A finger needs about 44px; a mouse pointer does not. The sizes above are built
+   for the pointer - 30px for the small buttons, 40px for the rest - and stay as
+   they are wherever there is one, including the admin's dense tables. Where the
+   primary input is touch, every button grows to the size a thumb can hit.
+   min-height rather than padding, so the text stays centred (the button is a
+   centred flex row) and nothing shifts sideways. */
+@media (pointer: coarse) {
+  .button {
+    min-height: 44px;
+  }
+}
+
 .primary {
   background: var(--color-dark);
   color: var(--color-dark-text);
