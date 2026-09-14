@@ -62,12 +62,26 @@ function parseSwissDate(date: string, time: string): Date {
   return zurichWallTimeToUtc(day, month, year, hour, minute);
 }
 
+/**
+ * The API answers with at most 20 games unless a limit is given, and says nothing
+ * about having truncated. That silently cost the club the last four rounds of the
+ * 2026/27 season - the home game against Floorball Thurgau among them - because 20
+ * looked like a whole season and nothing anywhere said otherwise.
+ *
+ * Set far above any real season (22 league rounds plus cup and play-offs) so the cap
+ * is never reached in practice, and treated as an error if it ever is: an incomplete
+ * schedule nobody notices is worse than a sync that fails loudly.
+ */
+const GAME_PAGE_LIMIT = 200;
+
 /** Fetches every scheduled home game for the L-UPL team in a given season
  * (season = the year the season starts, e.g. 2026 for 2026/27 - confirmed against
- * a live query, not assumed). Returns only home games; away games are irrelevant
- * to this shop (it never sells tickets for games UHC Uster doesn't host). */
+ * a live query, not assumed). Returns only home games, cup ties included; away games
+ * are irrelevant to this shop (it never sells tickets for games UHC Uster doesn't
+ * host). */
+
 export async function fetchUpcomingHomeGames(season: number): Promise<SyncedGame[]> {
-  const url = `https://api.swissunihockey.ch/rest/v1.0/teams/${UHC_USTER_L_UPL_TEAM_ID}/games?season=${season}`;
+  const url = `https://api.swissunihockey.ch/rest/v1.0/teams/${UHC_USTER_L_UPL_TEAM_ID}/games?season=${season}&limit=${GAME_PAGE_LIMIT}`;
   const response = await fetch(url, { headers: { Accept: "application/xml" } });
 
   if (!response.ok) {
@@ -77,6 +91,12 @@ export async function fetchUpcomingHomeGames(season: number): Promise<SyncedGame
   const xml = await response.text();
   const parsed = parser.parse(xml);
   const rawGames: RawGame[] = parsed?.games?.game ? [].concat(parsed.games.game) : [];
+
+  if (rawGames.length >= GAME_PAGE_LIMIT) {
+    throw new Error(
+      `Swiss Unihockey returned ${rawGames.length} games for season ${season}, which is the requested limit - the list is probably truncated and would import an incomplete schedule.`
+    );
+  }
 
   return rawGames
     .filter((game) => game["@_hometeamid"] === UHC_USTER_L_UPL_TEAM_ID)

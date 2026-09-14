@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { CURRENT_SEASON } from "@/lib/season";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { syncGamesFromSwissUnihockey } from "@/lib/sync-games";
 
@@ -63,6 +64,42 @@ export async function updateGameDetails(
       manual_override: true,
     })
     .eq("id", gameId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin/schedule");
+  revalidatePath("/spielplan");
+  revalidatePath("/");
+}
+
+/**
+ * Adds a game the sync will never deliver. Swiss Unihockey publishes its schedule in
+ * stages, and a fixture the club already knows about - a cup tie drawn but not yet
+ * entered, a friendly, a play-off date agreed by phone - otherwise cannot be sold or
+ * scanned at all until the federation catches up.
+ *
+ * Deliberately has no external_id: the sync matches on that, so a hand-entered game
+ * can never be overwritten or duplicated by it, and manual_override marks it as the
+ * office's own row in the list.
+ */
+export async function createGame(details: { opponent: string; playedAt: string; venue: string }) {
+  const supabase = await getSupabaseServerClient();
+
+  const playedAt = new Date(details.playedAt);
+  if (Number.isNaN(playedAt.getTime())) {
+    throw new Error("Ungültiges Datum.");
+  }
+  if (!details.opponent.trim()) {
+    throw new Error("Gegner darf nicht leer sein.");
+  }
+
+  const { error } = await supabase.from("games").insert({
+    season: CURRENT_SEASON,
+    opponent: details.opponent.trim(),
+    played_at: playedAt.toISOString(),
+    venue: details.venue.trim() || null,
+    manual_override: true,
+  });
 
   if (error) throw new Error(error.message);
 

@@ -2,6 +2,7 @@ import { getAllGames } from "@/lib/admin/schedule";
 import { CURRENT_SEASON } from "@/lib/season";
 import { GameCard } from "./GameCard";
 import { SyncButton } from "./SyncButton";
+import { AddGameForm } from "./AddGameForm";
 import adminStyles from "../admin.module.css";
 import styles from "./schedule.module.css";
 
@@ -19,8 +20,12 @@ export default async function AdminSchedulePage() {
       <p style={{ color: "var(--color-text-secondary)", marginBottom: "var(--space-6)" }}>
         Heimspiele kommen automatisch von Swiss Unihockey (Datum, Zeit, Ort, Gegner) und lassen sich bei Bedarf von
         Hand korrigieren. Eventfrog-Link und Scanner-Code werden pro Spiel hier gesetzt - den Scanner-Code brauchen die
-        Helfer, um sich am Spieltag unter /scanner anzumelden.
+        Helfer, um sich am Spieltag unter /scanner anzumelden. Spiele, die der Verband noch nicht angesetzt hat,
+        kannst du selbst erfassen.
       </p>
+
+      <AddGameForm />
+
 
       {games.length === 0 ? (
         <p className={adminStyles.emptyState}>
