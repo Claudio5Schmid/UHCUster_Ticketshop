@@ -22,9 +22,11 @@ function formatGameOption(game: Game): string {
   return `${formatGameDate(game)} - UHC Uster vs. ${game.opponent}`;
 }
 
-export function ScannerLogin({ games }: { games: Game[] }) {
+export function ScannerLogin({ games, defaultGameId }: { games: Game[]; defaultGameId: string }) {
   const router = useRouter();
-  const [gameId, setGameId] = useState(games[0]?.id ?? "");
+  // Pre-selected to today's game (see pickDefaultGameId) rather than the first of
+  // the season, but freely changeable - the dropdown is the operator's call.
+  const [gameId, setGameId] = useState(defaultGameId);
   const [code, setCode] = useState("");
   const [deviceLabel, setDeviceLabel] = useState("");
   const [error, setError] = useState<string | null>(null);

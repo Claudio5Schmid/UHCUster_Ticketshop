@@ -71,7 +71,7 @@ async function postScan(session: StoredScannerSession, scannedToken: string) {
  * back to a local "not_found" rather than hanging.
  */
 export function useScannerEngine(session: StoredScannerSession) {
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "error" | "unauthorized">("loading");
   const [error, setError] = useState<string | null>(null);
   const [ticketCount, setTicketCount] = useState(0);
   const [lastResult, setLastResult] = useState<ScanFeedback | null>(null);
@@ -105,6 +105,15 @@ export function useScannerEngine(session: StoredScannerSession) {
         const response = await fetch("/api/scanner/tickets", {
           headers: { Authorization: `Bearer ${session.token}` },
         });
+        // Told apart from a genuine failure: a session is only good for eight
+        // hours and for one game, so by the next match day the stored one is
+        // expired. That is a helper who needs to log in again, not a fault -
+        // the caller sends them back to the login instead of showing them
+        // "tickets download failed: 401" at the door.
+        if (response.status === 401) {
+          if (!cancelled) setStatus("unauthorized");
+          return;
+        }
         if (!response.ok) throw new Error(`tickets download failed: ${response.status}`);
         const data = (await response.json()) as { tickets: ScannerTicket[] };
         if (cancelled) return;

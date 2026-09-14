@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadScannerSession, clearScannerSession, type StoredScannerSession } from "@/lib/scanner/session-storage";
 import { useScannerEngine, type ScanFeedback } from "@/lib/scanner/useScannerEngine";
@@ -61,6 +61,14 @@ function ScanningView({ session, onExit }: { session: StoredScannerSession; onEx
     paused: locked,
   });
 
+  // An expired session is not something to read at the door - it is a login that
+  // has to happen again. A scanner session lasts eight hours and covers one game,
+  // so opening the app at the next match day always lands here. Clearing it and
+  // going back beats leaving a helper on "tickets download failed: 401".
+  useEffect(() => {
+    if (status === "unauthorized") onExit();
+  }, [status, onExit]);
+
   useEffect(() => {
     if (!lastResult || lastResult === lastHandledResult.current) return;
     lastHandledResult.current = lastResult;
@@ -91,6 +99,16 @@ function ScanningView({ session, onExit }: { session: StoredScannerSession; onEx
           <SessionFixture session={session} />
         </div>
         <p style={{ margin: "auto", color: "#fff" }}>Ticketliste wird geladen...</p>
+      </div>
+    );
+  }
+
+  if (status === "unauthorized") {
+    return (
+      <div className={styles.scanPage}>
+        <p style={{ margin: "auto", color: "#fff", padding: "0 24px", textAlign: "center" }}>
+          Anmeldung abgelaufen - zurück zur Anmeldung...
+        </p>
       </div>
     );
   }
@@ -230,6 +248,13 @@ export function ScannerScanApp() {
   const router = useRouter();
   const [session, setSession] = useState<StoredScannerSession | null | "loading">("loading");
 
+  // Stable identity: ScanningView watches this in an effect, and a fresh arrow
+  // each render would re-run it each render.
+  const handleExit = useCallback(() => {
+    clearScannerSession();
+    router.push("/scanner");
+  }, [router]);
+
   useEffect(() => {
     // One-time read of a browser-only store (sessionStorage doesn't exist during
     // SSR) to decide whether to redirect - not a recurring sync, so there's no
@@ -248,12 +273,6 @@ export function ScannerScanApp() {
   }
 
   return (
-    <ScanningView
-      session={session}
-      onExit={() => {
-        clearScannerSession();
-        router.push("/scanner");
-      }}
-    />
+    <ScanningView session={session} onExit={handleExit} />
   );
 }

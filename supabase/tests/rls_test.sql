@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(111);
+select plan(116);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -38,8 +38,11 @@ values ('d0000000-0000-0000-0000-000000000001', 'TEST-0001', 'neu', 'c0000000-00
 insert into public.order_items (id, order_id, product_id, product_name_snapshot, unit_price_rappen, quantity, holder_name)
 values ('e0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'Test Active Product', 15000, 1, 'Test Holder');
 
-insert into public.tickets (id, token, order_item_id, product_id, season, holder_name)
-values ('f0000000-0000-0000-0000-000000000001', 'TEST-TOKEN-0001', 'e0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', '2627', 'Test Holder');
+-- order_id became a required column in 20260909100001 (cards are numbered per
+-- order, not per line item) and this fixture was never carried along, which made
+-- the whole suite fail at setup against the live schema.
+insert into public.tickets (id, token, order_item_id, order_id, product_id, season, holder_name)
+values ('f0000000-0000-0000-0000-000000000001', 'TEST-TOKEN-0001', 'e0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', '2627', 'Test Holder');
 
 insert into public.games (id, season, opponent, played_at)
 values
@@ -50,6 +53,16 @@ values
 -- life - D31) - this fixture predates that column, so it needs one now too.
 insert into public.scan_events (id, scanned_token, ticket_id, game_id, result, device_id)
 values ('10000001-0000-0000-0000-000000000001', 'TEST-TOKEN-0001', 'f0000000-0000-0000-0000-000000000001', '20000001-0000-0000-0000-000000000001', 'accepted', 'test-device-1');
+
+-- Group M fixture: its own ticket, already scanned in at the first game. Kept
+-- separate from TEST-TOKEN-0001 because Group F reissues that one, which leaves
+-- it 'ersetzt' - Group M asserts a ticket stays 'gueltig' across a season and
+-- must not read another group's mutation as a failure of that.
+insert into public.tickets (id, token, order_item_id, order_id, product_id, season, holder_name)
+values ('f0000000-0000-0000-0000-000000000003', 'TEST-TOKEN-0004', 'e0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', '2627', 'Season Pass Holder');
+
+insert into public.scan_events (scanned_token, ticket_id, game_id, result, device_id)
+values ('TEST-TOKEN-0004', 'f0000000-0000-0000-0000-000000000003', '20000001-0000-0000-0000-000000000001', 'accepted', 'test-device-1');
 
 -- Group I fixture (game_scanner_codes): one game already has a code (for the
 -- anon/non-admin SELECT-denial and admin-update tests), the other doesn't yet
@@ -697,6 +710,54 @@ select throws_ok(
 );
 reset role;
 reset request.jwt.claim.sub;
+
+-- ============================================================================
+-- Group M: a season pass is redeemable once PER GAME, not once for life
+--
+-- The behaviour the whole match day rests on: a pass scanned at one game has to
+-- come up green again at the next one. Nothing else in this suite would catch a
+-- regression here - a partial unique index narrowed to (ticket_id) alone, or a
+-- future scan path that sets tickets.status to 'eingeloest', would both look
+-- harmless in review and only surface at a turnstile.
+--
+-- Fixture in play: ticket f...0003, which exists only for this group and already
+-- has an accepted scan at game ...0001, both inserted at the top of this file.
+-- ============================================================================
+
+select throws_ok(
+  $$insert into public.scan_events (scanned_token, ticket_id, game_id, result, device_id)
+    values ('TEST-TOKEN-0004', 'f0000000-0000-0000-0000-000000000003', '20000001-0000-0000-0000-000000000001', 'accepted', 'test-device-2')$$,
+  '23505',
+  NULL,
+  'the same ticket cannot be accepted twice at the SAME game'
+);
+
+select lives_ok(
+  $$insert into public.scan_events (scanned_token, ticket_id, game_id, result, device_id)
+    values ('TEST-TOKEN-0004', 'f0000000-0000-0000-0000-000000000003', '20000001-0000-0000-0000-000000000002', 'accepted', 'test-device-2')$$,
+  'the same ticket CAN be accepted again at a DIFFERENT game - a season pass is not single-use'
+);
+
+select is(
+  (select count(*) from public.scan_events
+     where ticket_id = 'f0000000-0000-0000-0000-000000000003' and result = 'accepted')::int,
+  2,
+  'that leaves exactly one accepted scan per game, two in total'
+);
+
+-- The index is partial (result = 'accepted'), so rejections stay fully auditable:
+-- every re-presentation of a card at the door must still be recorded.
+select lives_ok(
+  $$insert into public.scan_events (scanned_token, ticket_id, game_id, result, device_id)
+    values ('TEST-TOKEN-0004', 'f0000000-0000-0000-0000-000000000003', '20000001-0000-0000-0000-000000000001', 'already_redeemed', 'test-device-2')$$,
+  'a repeated already_redeemed at the same game is allowed - the index only constrains accepted'
+);
+
+select is(
+  (select status from public.tickets where id = 'f0000000-0000-0000-0000-000000000003'),
+  'gueltig',
+  'scanning never consumes the ticket itself - status stays gueltig all season'
+);
 
 select * from finish();
 
