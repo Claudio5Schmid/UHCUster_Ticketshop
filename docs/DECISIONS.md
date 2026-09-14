@@ -907,3 +907,31 @@ say it and a third headline line left no room for the outline number.
 Cards already in Storage keep the old layout until `scripts/rerender-ticket-pdfs.ts` runs; it
 re-renders in place without touching ids, tokens or QR codes. Single-match tickets (the third
 artboard on the canvas) are a proposal only - there is no product type for them yet. **Resolved.**
+
+**D60 — A member card's headline is the member list's "Kategorie", split at its first comma.**
+Claudio wants cards the office can personalise from the import - a sponsor's card reading
+"Livestreampartner" over the sponsor's name - without a product per variant. The card printed the
+product name ("Mitglieder UHC Uster"), so every member card read the same. Now a card issued from the
+member list takes its headline from `members.kategorie`: the text before the first comma is line one,
+the text after it line two; no comma means one line; an empty category falls back to the product
+name. Shop orders have no member row and keep printing their product, since single tickets and
+subscriptions cannot be bought there yet. Both lines shrink together to keep each whole - the comma is
+where the office wants the break - down to 24px; only a line still too wide at that floor wraps, because
+running off the card is the one thing worse than a third line. Capitals throughout, as the design has
+it; the eyebrow and "Gültigkeit" text are unchanged, a sponsor card being a season pass all the same.
+
+A category whose first line is "Red Castle Club" makes the card a club card - crest, tinted stub,
+"NAME / FIRMA" - with the metal read off the last word of the second line ("Red Castle Club, Gold"),
+so the two club imports Claudio mentioned print like the shop's own club cards; anything but Gold,
+Silber or Bronze stays red like the shop's "Normal" tier. The shop's club cards still take their tier
+from the product.
+
+**Editing the category redraws the cards at once.** Until now nothing re-rendered a PDF after
+issue but the one-off script; a change in the member table or on re-import now redraws that member's
+live cards in place (same path, token and QR code), so the next download matches the list. That
+overwrite goes through the admin's own session, which needed an update policy on the tickets bucket
+(`20260914110001_allow_admin_ticket_file_replace.sql`) - the standing right the rerender script's
+comment argued against granting. Accepted now, because "the list says one thing, the card another"
+is the worse failure once the category *is* the card. The existing members' "Mitglied UHC Uster" was
+changed in place to "Mitglied, UHC Uster" so their cards keep their two lines; the admin filter shows
+the full comma value for now, to be revisited. **Resolved.**

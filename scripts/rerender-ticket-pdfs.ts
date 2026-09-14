@@ -30,6 +30,7 @@ interface TicketRow {
   transferable: boolean;
   transferable_index: number | null;
   pdf_path: string;
+  order_id: string;
   products: { name: string; type: "season_pass" | "membership"; tier_level: number; benefits: ProductBenefits } | null;
   orders: { order_number: string } | null;
 }
@@ -50,7 +51,7 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSess
 
 const { data, error } = await supabase
   .from("tickets")
-  .select("id, token, holder_name, transferable, transferable_index, pdf_path, products(name, type, tier_level, benefits), orders(order_number)")
+  .select("id, token, holder_name, transferable, transferable_index, pdf_path, order_id, products(name, type, tier_level, benefits), orders(order_number)")
   .not("pdf_path", "is", null)
   .order("issued_at", { ascending: true })
   .returns<TicketRow[]>();
@@ -62,6 +63,15 @@ if (error) {
 
 const tickets = data ?? [];
 console.log(`${tickets.length} Ticket(s) mit PDF gefunden.${write ? "" : " (Trockenlauf - nichts wird geschrieben)"}`);
+
+// The headline comes from the member list (D60): one lookup for every member's
+// category, keyed by the order their cards hang off.
+const { data: members, error: membersError } = await supabase.from("members").select("order_id, kategorie").not("order_id", "is", null);
+if (membersError) {
+  console.error(`Mitglieder konnten nicht geladen werden: ${membersError.message}`);
+  process.exit(1);
+}
+const kategorieByOrder = new Map((members ?? []).map((member) => [member.order_id as string, (member.kategorie as string | null) ?? null]));
 
 let rendered = 0;
 const failures: string[] = [];
@@ -83,6 +93,7 @@ for (const ticket of tickets) {
       transferable: ticket.transferable,
       transferableIndex: ticket.transferable_index,
       orderNumber: ticket.orders?.order_number ?? "-",
+      kategorie: kategorieByOrder.get(ticket.order_id) ?? null,
     });
 
     if (write) {

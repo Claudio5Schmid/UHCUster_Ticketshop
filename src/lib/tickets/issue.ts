@@ -38,6 +38,8 @@ interface TicketSpec {
   transferableIndex: number | null;
   season: string;
   orderNumber: string;
+  /** The member list's "Kategorie" (D60); null for a shop order. */
+  kategorie: string | null;
 }
 
 interface BuiltTicket {
@@ -66,6 +68,7 @@ async function buildTicket(spec: TicketSpec): Promise<BuiltTicket> {
     transferable: spec.transferable,
     transferableIndex: spec.transferableIndex,
     orderNumber: spec.orderNumber,
+    kategorie: spec.kategorie,
   });
 
   return {
@@ -88,6 +91,27 @@ async function buildTicket(spec: TicketSpec): Promise<BuiltTicket> {
 }
 
 type SupabaseClient = Awaited<ReturnType<typeof getSupabaseServerClient>>;
+
+/** What the card prints as its headline comes from the member list (D60): the
+ * member whose order this is, or nothing for a shop order, which has no member
+ * row and prints its product name. */
+async function getKategorieForOrder(supabase: SupabaseClient, orderId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("members")
+    .select("kategorie")
+    .eq("order_id", orderId)
+    .maybeSingle<{ kategorie: string | null }>();
+  if (error) {
+    throw new Error(error.message);
+  }
+  return data?.kategorie ?? null;
+}
+
+/** Passed by the import, which knows the category before the member row is
+ * linked to its order; looked up by everyone else. */
+interface IssueOptions {
+  kategorie?: string | null;
+}
 
 /**
  * Every path uploads before it records, so a failure part-way through leaves no
@@ -131,8 +155,9 @@ async function uploadAll(supabase: SupabaseClient, built: BuiltTicket[]): Promis
  * after a failed upload is safe. Adding cards to an order that already has some
  * is deliberately NOT this function's job - see addMemberTickets.
  */
-export async function issueTicketsForOrder(orderId: string): Promise<{ issued: number }> {
+export async function issueTicketsForOrder(orderId: string, options: IssueOptions = {}): Promise<{ issued: number }> {
   const supabase = await getSupabaseServerClient();
+  const kategorie = options.kategorie !== undefined ? options.kategorie : await getKategorieForOrder(supabase, orderId);
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
@@ -175,6 +200,7 @@ export async function issueTicketsForOrder(orderId: string): Promise<{ issued: n
         transferableIndex: transferable ? nextTransferableIndex++ : null,
         season: order.season,
         orderNumber: order.order_number,
+        kategorie,
       });
     }
   }
@@ -204,7 +230,8 @@ export async function issueTicketsForOrder(orderId: string): Promise<{ issued: n
 export async function addMemberTickets(
   orderId: string,
   counts: { personal: number; transferable: number },
-  holderName?: string | null
+  holderName?: string | null,
+  options: IssueOptions = {}
 ): Promise<{ issued: number }> {
   const personal = Math.max(0, Math.trunc(counts.personal));
   const transferable = Math.max(0, Math.trunc(counts.transferable));
@@ -213,6 +240,7 @@ export async function addMemberTickets(
   }
 
   const supabase = await getSupabaseServerClient();
+  const kategorie = options.kategorie !== undefined ? options.kategorie : await getKategorieForOrder(supabase, orderId);
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
@@ -267,6 +295,7 @@ export async function addMemberTickets(
       transferableIndex: null,
       season: order.season,
       orderNumber: order.order_number,
+      kategorie,
     });
   }
   for (let i = 0; i < transferable; i++) {
@@ -279,6 +308,7 @@ export async function addMemberTickets(
       transferableIndex: nextTransferableIndex++,
       season: order.season,
       orderNumber: order.order_number,
+      kategorie,
     });
   }
 
@@ -300,6 +330,7 @@ export async function addMemberTickets(
 
 interface TicketForRegeneration {
   id: string;
+  order_id: string;
   product_id: string;
   holder_name: string | null;
   transferable: boolean;
@@ -322,7 +353,7 @@ export async function regenerateTicket(ticketId: string): Promise<{ newTicketId:
 
   const { data: old, error: loadError } = await supabase
     .from("tickets")
-    .select("id, product_id, holder_name, transferable, transferable_index, season, status, products(name, type, tier_level, benefits), orders(order_number)")
+    .select("id, order_id, product_id, holder_name, transferable, transferable_index, season, status, products(name, type, tier_level, benefits), orders(order_number)")
     .eq("id", ticketId)
     .single<TicketForRegeneration>();
   if (loadError || !old) {
@@ -343,6 +374,7 @@ export async function regenerateTicket(ticketId: string): Promise<{ newTicketId:
     transferable: old.transferable,
     transferableIndex: old.transferable_index,
     season: old.season,
+    kategorie: await getKategorieForOrder(supabase, old.order_id),
     orderNumber: old.orders?.order_number ?? "-",
   });
 
@@ -359,4 +391,64 @@ export async function regenerateTicket(ticketId: string): Promise<{ newTicketId:
   }
 
   return { newTicketId: built.id };
+}
+
+interface StoredTicketRow {
+  id: string;
+  token: string;
+  holder_name: string | null;
+  transferable: boolean;
+  transferable_index: number | null;
+  pdf_path: string;
+  products: ProductForIssuance | null;
+  orders: { order_number: string } | null;
+}
+
+/**
+ * Redraws every live card of one order in place - the same path, token and QR
+ * code, only the PDF bytes change. What the office edits in the member list has
+ * to reach the card the member downloads next (D60): the category is the card's
+ * headline, so changing it without this would leave the list saying one thing
+ * and the card another. Overwriting needs the admin's own update right on the
+ * tickets bucket, granted for exactly this.
+ */
+export async function rerenderTicketsForOrder(orderId: string): Promise<{ rerendered: number }> {
+  const supabase = await getSupabaseServerClient();
+  const kategorie = await getKategorieForOrder(supabase, orderId);
+
+  const { data, error } = await supabase
+    .from("tickets")
+    .select("id, token, holder_name, transferable, transferable_index, pdf_path, products(name, type, tier_level, benefits), orders(order_number)")
+    .eq("order_id", orderId)
+    .in("status", ["gueltig", "eingeloest"])
+    .not("pdf_path", "is", null)
+    .returns<StoredTicketRow[]>();
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  let rerendered = 0;
+  for (const ticket of data ?? []) {
+    if (!ticket.products || !ticket.orders) continue;
+    const bytes = await renderTicketPdf({
+      token: ticket.token,
+      productName: ticket.products.name,
+      productType: ticket.products.type,
+      tierLevel: ticket.products.tier_level,
+      benefits: ticket.products.benefits,
+      holderName: ticket.holder_name,
+      transferable: ticket.transferable,
+      transferableIndex: ticket.transferable_index,
+      orderNumber: ticket.orders.order_number,
+      kategorie,
+    });
+    const { error: uploadError } = await supabase.storage
+      .from("tickets")
+      .upload(ticket.pdf_path, bytes, { contentType: "application/pdf", upsert: true });
+    if (uploadError) {
+      throw new Error(`Failed to replace ${ticket.pdf_path}: ${uploadError.message}`);
+    }
+    rerendered++;
+  }
+  return { rerendered };
 }

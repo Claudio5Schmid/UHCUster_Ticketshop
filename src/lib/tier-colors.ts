@@ -56,6 +56,20 @@ const GOLD: TicketAccentColor = withHex({
   metalName: "Gold",
 });
 
+/**
+ * The metal by its printed name, for a card whose tier comes from the member
+ * list's "Kategorie" ("Red Castle Club, Gold") rather than from a product (D60).
+ * Matches the last word of the second line, so "VIP Gold" is gold too; anything
+ * else is the plain red, exactly like the shop's "Normal" tier.
+ */
+export function getMetalAccentColorByName(name: string | null | undefined): TicketAccentColor {
+  const lastWord = name?.trim().split(/\s+/).pop()?.toLowerCase();
+  if (lastWord === "gold") return GOLD;
+  if (lastWord === "silber") return SILBER;
+  if (lastWord === "bronze") return BRONZE;
+  return SITE_RED;
+}
+
 export function getTicketAccentColor(productType: "season_pass" | "membership", tierLevel: number): TicketAccentColor {
   if (productType !== "membership") {
     return SITE_RED;

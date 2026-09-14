@@ -14,7 +14,7 @@ import {
 import QRCode from "qrcode";
 import { readFile } from "fs/promises";
 import path from "path";
-import { getTicketAccentColor } from "@/lib/tier-colors";
+import { getMetalAccentColorByName, getTicketAccentColor } from "@/lib/tier-colors";
 import { ticketProductName, ticketTypeEyebrowSuffix } from "./label";
 import { CURRENT_SEASON_LABEL, LEAGUE_LABEL } from "@/lib/season";
 import type { ProductBenefits } from "@/lib/products";
@@ -33,6 +33,28 @@ export interface TicketPdfData {
   /** Running number among an order's transferable cards; null for personal ones. */
   transferableIndex?: number | null;
   orderNumber: string;
+  /**
+   * The member list's "Kategorie" for a card issued from the import (D60): the
+   * text before the first comma is the headline's first line, the text after it
+   * the second. Null or empty for shop orders, which print the product name.
+   */
+  kategorie?: string | null;
+}
+
+/**
+ * "Livestreampartner, Muster AG" -> ["Livestreampartner", "Muster AG"];
+ * "Mitglied UHC Uster" -> ["Mitglied UHC Uster", null]; blank -> null (print the
+ * product name). Only the first comma splits, so a company name may keep its own.
+ */
+export function splitKategorie(kategorie: string | null | undefined): [string, string | null] | null {
+  const value = kategorie?.trim();
+  if (!value) return null;
+  const comma = value.indexOf(",");
+  if (comma === -1) return [value, null];
+  const first = value.slice(0, comma).trim();
+  const rest = value.slice(comma + 1).trim();
+  if (!first) return rest ? [rest, null] : null;
+  return [first, rest || null];
 }
 
 const PAGE_WIDTH = 595.28; // A4
@@ -55,6 +77,10 @@ const STUB_WIDTH = px(236);
 /** Helvetica's cap height as a fraction of the font size. Text is placed by the
  * top of its capitals, the way the design measures gaps. */
 const CAP = 0.72;
+/** The headline's size, and how far it may shrink to keep a long line whole. */
+const TITLE_SIZE = px(46);
+const TITLE_MIN_SIZE = px(24);
+const TITLE_MAX_WIDTH = px(380);
 /** Room left under a baseline for descenders when stacking lines upwards. */
 const DESCENDER = 0.25;
 
@@ -176,8 +202,10 @@ async function embedPublicPng(pdfDoc: PDFDocument, file: string) {
  * token under the QR code stays as the manual fallback at the door.
  *
  * Red Castle Club cards carry the club's own crest instead of the eyebrow, the
- * tier's metal tone (D29) on the badge, the stub and the tier word of the
- * title, and a tinted stub. Season passes stay on the site's red.
+ * tier's metal tone (D29) on the stub, the outline number and the tier word of
+ * the title, and a tinted stub. Season passes stay on the site's red. A card is
+ * a club card when its product is a membership, or when its member-list
+ * category names the club ("Red Castle Club, Gold" - D60).
  *
  * Uses pdf-lib's standard Helvetica rather than the site's Inter webfont (D30);
  * the design's Inter 900 headline becomes Helvetica Bold in capitals.
@@ -192,10 +220,14 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   const fontMono = await pdfDoc.embedFont(StandardFonts.Courier);
 
   const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  const colors = getTicketAccentColor(data.productType, data.tierLevel);
+  const explicitTitle = splitKategorie(data.kategorie);
+  const clubByKategorie = explicitTitle !== null && explicitTitle[0].toLowerCase() === "red castle club";
+  const club = data.productType === "membership" || clubByKategorie;
+  const colors = clubByKategorie
+    ? getMetalAccentColorByName(explicitTitle[1])
+    : getTicketAccentColor(data.productType, data.tierLevel);
   const accent = rgb(...colors.accent);
   const tint = rgb(...colors.tint);
-  const membership = data.productType === "membership";
 
   // --- Header: logo left, the season right, both on one centre line ---
   const logo = await embedPublicPng(pdfDoc, "uhc-uster-logo.png");
@@ -214,10 +246,10 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
 
   // --- The card: black body, stub on the right, perforation, notches ---
   const cardTop = headerTop - logoHeight - px(44);
-  const cardHeight = membership ? px(480) : px(400);
+  const cardHeight = club ? px(480) : px(400);
   const cardBottom = cardTop - cardHeight;
   const stubX = MARGIN + CONTENT_WIDTH - STUB_WIDTH;
-  const stubFill = membership ? tint : WHITE;
+  const stubFill = club ? tint : WHITE;
 
   page.drawSvgPath(roundedRectPath(CONTENT_WIDTH, cardHeight, uniform(CARD_RADIUS)), { x: MARGIN, y: cardTop, color: BLACK });
   page.drawSvgPath(roundedRectPath(STUB_WIDTH, cardHeight, { tl: 0, tr: CARD_RADIUS, br: CARD_RADIUS, bl: 0 }), {
@@ -237,7 +269,7 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
     start: { x: stubX, y: cardTop },
     end: { x: stubX, y: cardBottom },
     thickness: px(2),
-    color: membership ? blend(accent, tint, 0.6) : PERFORATION,
+    color: club ? blend(accent, tint, 0.6) : PERFORATION,
     dashArray: [px(6), px(6)],
   });
   for (const y of [cardTop, cardBottom]) {
@@ -267,7 +299,7 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
     drawText(page, badgeText, panelRight - badgeWidth + px(10), badgeTop - (badgeHeight - badgeStyle.size * CAP) / 2, badgeStyle);
   };
 
-  if (membership) {
+  if (club) {
     // The club's crest where a season pass has its eyebrow.
     const crest = await embedPublicPng(pdfDoc, "red-castle-club-logo.png");
     const crestHeight = px(34);
@@ -282,14 +314,32 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
     cursor -= badgeHeight + px(16);
   }
 
-  // Title: the product name in capitals, wrapped like the design's headline. A
-  // Red Castle Club tier word ("GOLD") takes the tier's metal. The transferable
-  // member product's own "(übertragbar)" comes off: the eyebrow's running number
-  // and the note under the holder already say it, and the headline has no room
-  // for a third line.
-  const titleStyle: TextStyle = { font: fontBold, size: px(46), color: WHITE, tracking: -px(46) * 0.02 };
+  // Title, in capitals. A member-list category gives the two lines outright and
+  // they stay whole: both shrink together, to a floor, rather than wrap - the
+  // office decides the line break with its comma. Only a line that is still too
+  // wide at the floor wraps, because running off the card is the one thing worse
+  // than a third line. Without a category the product name wraps like the
+  // design's headline; the transferable member product's own "(übertragbar)"
+  // comes off first, since the eyebrow's running number and the note under the
+  // holder already say it. A Red Castle Club tier word ("GOLD") takes the
+  // tier's metal either way.
+  const titleStyleAt = (size: number): TextStyle => ({ font: fontBold, size, color: WHITE, tracking: -size * 0.02 });
+  let titleStyle = titleStyleAt(TITLE_SIZE);
+  let titleLines: string[];
+  if (explicitTitle) {
+    titleLines = explicitTitle.filter((line): line is string => Boolean(line)).map((line) => line.toUpperCase());
+    while (
+      titleStyle.size > TITLE_MIN_SIZE &&
+      titleLines.some((line) => textWidth(line, titleStyle) > TITLE_MAX_WIDTH)
+    ) {
+      titleStyle = titleStyleAt(titleStyle.size - 0.5);
+    }
+    const fitted = titleStyle;
+    titleLines = titleLines.flatMap((line) => wrapText(line, fitted, TITLE_MAX_WIDTH));
+  } else {
+    titleLines = wrapText(ticketProductName(data.productName).toUpperCase(), titleStyle, TITLE_MAX_WIDTH);
+  }
   const titleLineHeight = titleStyle.size * 0.98;
-  const titleLines = wrapText(ticketProductName(data.productName).toUpperCase(), titleStyle, px(380));
   const metal = colors.metalName?.toUpperCase() ?? null;
   titleLines.forEach((line, index) => {
     const last = index === titleLines.length - 1;
@@ -319,7 +369,7 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   // A season pass - member cards included - always names one person; a Red
   // Castle Club card is bought by a person or a company.
   const holderName = data.holderName ?? "-";
-  drawText(page, membership ? "NAME / FIRMA" : "NAME", panelX, labelTop, fieldLabelStyle);
+  drawText(page, club ? "NAME / FIRMA" : "NAME", panelX, labelTop, fieldLabelStyle);
   drawText(page, holderName, panelX, valueTop, fitted(holderName, fieldValueStyle, columnWidth, px(13)));
   drawText(page, "BESTELLUNG", secondColumnX, labelTop, fieldLabelStyle);
   drawText(page, data.orderNumber, secondColumnX, valueTop, fitted(data.orderNumber, fieldValueStyle, columnWidth, px(13)));
@@ -337,7 +387,7 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   const ghostStyle: TextStyle = {
     font: fontBold,
     size: px(104),
-    color: membership ? blend(accent, BLACK, 0.5) : blend(WHITE, BLACK, 0.3),
+    color: club ? blend(accent, BLACK, 0.5) : blend(WHITE, BLACK, 0.3),
     tracking: -px(104) * 0.06,
   };
   // The slash in "26/27" hangs below the baseline, so the number is taller than
@@ -351,9 +401,9 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
 
   // --- Stub: label up top, the token and instruction at the bottom, QR between ---
   const stubCenter = stubX + STUB_WIDTH / 2;
-  const stubLabelStyle: TextStyle = { font: fontBold, size: px(11), color: membership ? accent : GREY, tracking: px(11) * 0.14 };
+  const stubLabelStyle: TextStyle = { font: fontBold, size: px(11), color: club ? accent : GREY, tracking: px(11) * 0.14 };
   const stubTop = cardTop - px(30);
-  drawText(page, membership ? "VIP-EINLASS" : "EINLASS", stubCenter, stubTop, stubLabelStyle, "center");
+  drawText(page, club ? "VIP-EINLASS" : "EINLASS", stubCenter, stubTop, stubLabelStyle, "center");
 
   const tokenStyle: TextStyle = { font: fontMono, size: px(10), color: GREY, tracking: px(10) * 0.06 };
   const showStyle: TextStyle = { font: fontBold, size: px(14), color: BLACK };
@@ -366,11 +416,11 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   const qrImage = await pdfDoc.embedPng(Buffer.from(qrDataUrl.split(",")[1], "base64"));
   // On the tinted club stub the code sits in its own white box, so the scanner
   // always sees a clean quiet zone.
-  const qrSize = membership ? px(150) : px(160);
-  const boxSize = membership ? qrSize + px(20) : qrSize;
+  const qrSize = club ? px(150) : px(160);
+  const boxSize = club ? qrSize + px(20) : qrSize;
   const spaceTop = stubTop - stubLabelStyle.size * CAP;
   const boxTop = spaceTop - (spaceTop - showTop - boxSize) / 2;
-  if (membership) {
+  if (club) {
     page.drawSvgPath(roundedRectPath(boxSize, boxSize, uniform(px(12))), { x: stubCenter - boxSize / 2, y: boxTop, color: WHITE });
   }
   page.drawImage(qrImage, {

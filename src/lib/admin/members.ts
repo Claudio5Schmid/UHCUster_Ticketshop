@@ -1,5 +1,5 @@
 import { getSupabaseServerClient } from "@/lib/supabase-server";
-import { issueTicketsForOrder, addMemberTickets } from "@/lib/tickets/issue";
+import { issueTicketsForOrder, addMemberTickets, rerenderTicketsForOrder } from "@/lib/tickets/issue";
 import { getOrderTickets, type OrderTicket } from "@/lib/admin/tickets";
 import { sendCardEmail } from "@/lib/email/mailer";
 import { memberCardsHtml, memberCardsText } from "@/lib/email/member-cards";
@@ -120,10 +120,18 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail | 
   };
 }
 
+/** The category is the card's headline (D60), so a change here redraws the
+ * member's cards straight away - the next download shows the new text. */
 export async function updateMemberKategorie(memberId: string, kategorie: string | null): Promise<void> {
   const supabase = await getSupabaseServerClient();
-  const { error } = await supabase.from("members").update({ kategorie }).eq("id", memberId);
+  const { data, error } = await supabase
+    .from("members")
+    .update({ kategorie })
+    .eq("id", memberId)
+    .select("order_id")
+    .single<{ order_id: string | null }>();
   if (error) throw new Error(error.message);
+  if (data?.order_id) await rerenderTicketsForOrder(data.order_id);
 }
 
 /**
@@ -177,7 +185,7 @@ export async function createMemberAndIssueCards(input: MemberInput): Promise<Mem
     return { ...(member as Omit<Member, "cards">), cards: { ...EMPTY_COUNTS } };
   }
 
-  const orderId = await createOrderForMember(fullName, input.email, personal, transferable);
+  const orderId = await createOrderForMember(fullName, input.email, personal, transferable, input.kategorie);
 
   const { data: updatedMember, error: updateError } = await supabase
     .from("members")
@@ -198,7 +206,8 @@ async function createOrderForMember(
   fullName: string,
   email: string,
   personal: number,
-  transferable: number
+  transferable: number,
+  kategorie: string | null
 ): Promise<string> {
   const supabase = await getSupabaseServerClient();
   const { data: orderId, error } = await supabase.rpc("create_member_order", {
@@ -213,7 +222,9 @@ async function createOrderForMember(
     throw new Error(error?.message ?? "Failed to create member order");
   }
 
-  await issueTicketsForOrder(orderId);
+  // Passed along rather than looked up: the member row is linked to this order
+  // only after the cards exist, so a lookup here would find nothing.
+  await issueTicketsForOrder(orderId, { kategorie });
   return orderId;
 }
 
@@ -236,14 +247,14 @@ export async function addCardsToMember(
   const supabase = await getSupabaseServerClient();
   const { data: member, error } = await supabase
     .from("members")
-    .select("id, vorname, nachname, email, order_id, personal_card_count, transferable_code_count")
+    .select("id, vorname, nachname, email, kategorie, order_id, personal_card_count, transferable_code_count")
     .eq("id", memberId)
     .single();
   if (error || !member) throw new Error(error?.message ?? "Mitglied nicht gefunden.");
 
   if (!member.order_id) {
     const fullName = `${member.vorname} ${member.nachname}`.trim();
-    const orderId = await createOrderForMember(fullName, member.email, personal, transferable);
+    const orderId = await createOrderForMember(fullName, member.email, personal, transferable, member.kategorie ?? null);
     const { error: linkError } = await supabase.from("members").update({ order_id: orderId }).eq("id", memberId);
     if (linkError) throw new Error(linkError.message);
   } else {
@@ -401,7 +412,7 @@ export async function planMemberCsvImport(content: string, mapping: CsvColumnMap
  * one taken away.
  */
 async function reconcileCards(
-  member: { id: string; order_id: string | null; vorname: string; nachname: string; email: string },
+  member: { id: string; order_id: string | null; vorname: string; nachname: string; email: string; kategorie: string | null },
   target: CsvImportCounts
 ): Promise<string | null> {
   const supabase = await getSupabaseServerClient();
@@ -410,7 +421,7 @@ async function reconcileCards(
   let orderId = member.order_id;
   if (!orderId) {
     if (target.personal + target.transferable === 0) return null;
-    orderId = await createOrderForMember(fullName, member.email, target.personal, target.transferable);
+    orderId = await createOrderForMember(fullName, member.email, target.personal, target.transferable, member.kategorie);
     const { error } = await supabase.from("members").update({ order_id: orderId }).eq("id", member.id);
     if (error) throw new Error(error.message);
     return orderId;
@@ -540,16 +551,22 @@ export async function applyMemberCsvImport(
         .eq("id", existingMember.id);
       if (updateError) throw new Error(updateError.message);
 
-      await reconcileCards(
+      const orderId = await reconcileCards(
         {
           id: existingMember.id as string,
           order_id: (existingMember.order_id as string | null) ?? null,
           vorname: row.vorname,
           nachname: row.nachname,
           email: row.email,
+          kategorie: row.kategorie,
         },
         target
       );
+      // Cards that already existed were drawn with the old category; the ones
+      // reconcileCards just added already carry the new one, and redrawing them
+      // too is cheaper than telling them apart.
+      const kategorieChanged = ((existingMember.kategorie as string | null) ?? null) !== (row.kategorie ?? null);
+      if (orderId && kategorieChanged) await rerenderTicketsForOrder(orderId);
       updated++;
     } catch (importError) {
       failed.push({ row: i + 2, reason: importError instanceof Error ? importError.message : "Unbekannter Fehler" });
