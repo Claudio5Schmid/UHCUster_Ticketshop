@@ -24,6 +24,19 @@
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
+/* 44px for a thumb without a 44px ring on screen: the visible circle stays 36px
+   and an invisible overlay carries the extra 4px on each side. The guideline is
+   about what can be hit, not about what can be seen - growing the ring itself
+   would redraw a header that was drawn the way it is on purpose. The icons sit
+   12px apart, so the enlarged areas still clear each other by 4px. */
+@media (pointer: coarse) {
+  .cartButton::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+  }
+}
+
 
 .cartButton:focus-visible {
   outline: none;
