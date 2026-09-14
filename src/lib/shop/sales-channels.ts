@@ -87,13 +87,19 @@ export function resolvePurchase(product: Product, channels: SalesChannel[]): Pro
 }
 
 /**
- * "Auf uhcuster.ch kaufen" - read off the address itself, so the button keeps
- * telling the truth if the target is ever pointed somewhere else.
+ * "Zu uhcuster.ch" - read off the address itself, so the button keeps telling
+ * the truth if the target is ever pointed somewhere else.
+ *
+ * Deliberately short. "Auf uhcuster.ch kaufen" needed 141px and the Gold card,
+ * which carries the most padding of the four Red Castle tiers, offers 140 - so
+ * that one button wrapped to two lines and sat 16px below its neighbours. One
+ * pixel of slack is none: a slightly different font rendering, or a host a
+ * character longer, and it breaks again. This leaves about 50px.
  */
 export function redirectButtonLabel(url: string): string {
   try {
-    return `Auf ${new URL(url).hostname.replace(/^www\./, "")} kaufen`;
+    return `Zu ${new URL(url).hostname.replace(/^www\./, "")}`;
   } catch {
-    return "Auf der Website kaufen";
+    return "Zur Website";
   }
 }

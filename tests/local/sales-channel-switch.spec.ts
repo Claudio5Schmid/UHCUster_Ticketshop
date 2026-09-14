@@ -42,7 +42,7 @@ async function setMode(page: Page, group: string, mode: Mode) {
 /** The buy control inside the card whose title is `title`, whatever shape it has. */
 function cardControl(page: Page, title: string) {
   const card = page.locator("article, li, div").filter({ hasText: title }).last();
-  return card.getByRole("link", { name: /kaufen/ }).or(card.getByRole("button", { name: "Auswählen" }));
+  return card.getByRole("link", { name: /^Zu / }).or(card.getByRole("button", { name: "Auswählen" }));
 }
 
 test("the three Verkauf modes each reach the shop", async ({ page }) => {
@@ -67,7 +67,7 @@ test("the three Verkauf modes each reach the shop", async ({ page }) => {
     await setMode(page, "Saisonkarten", "website");
     await page.goto("/");
     const link = cardControl(page, SEASON_PASS_CARD);
-    await expect(link).toHaveText("Auf uhcuster.ch kaufen");
+    await expect(link).toHaveText("Zu uhcuster.ch");
     await expect(link).toHaveAttribute("href", /^https:\/\/uhcuster\.ch\//);
     await expect(link).toHaveAttribute("target", "_blank");
 
