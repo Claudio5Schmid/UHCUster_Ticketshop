@@ -48,6 +48,10 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: var(--space-5);
+  /* Named so a card can ask how wide its row is - see ProductCard's reserved
+     note line, which is only worth holding open while cards sit side by side. */
+  container-type: inline-size;
+  container-name: cardgrid;
 }
 
 .teaser {

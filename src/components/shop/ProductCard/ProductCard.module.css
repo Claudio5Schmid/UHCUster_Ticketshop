@@ -80,3 +80,13 @@
 .purchaseNotePlaceholder {
   visibility: hidden;
 }
+
+/* One card per row has nothing to line up with, and the reserved line is then
+   just dead space under the last card. 504px is where this grid gains its
+   second column: two 240px tracks plus the 24px gap (--space-5). Recompute it if
+   either number changes. */
+@container cardgrid (max-width: 503px) {
+  .purchaseNotePlaceholder {
+    display: none;
+  }
+}

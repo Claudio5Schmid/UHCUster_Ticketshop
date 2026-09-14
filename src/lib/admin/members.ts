@@ -416,6 +416,19 @@ async function reconcileCards(
     return orderId;
   }
 
+  // The member row is not the only copy of the name - the customer and every
+  // order item hold their own, written when the order was created. Without this
+  // a corrected spelling reaches the member list and nothing else, which is how
+  // one import's encoding fault outlived its fix in 172 customer records: those
+  // are what the cards and the invoice are addressed from. Done through a
+  // function because order_items deliberately has no UPDATE policy, so writing
+  // to it from here would touch zero rows and still look like it worked.
+  const { error: renameError } = await supabase.rpc("rename_order_holder", {
+    p_order_id: orderId,
+    p_full_name: fullName,
+  });
+  if (renameError) throw new Error(renameError.message);
+
   const live = (await getOrderTickets(orderId)).filter(isLiveTicket);
   const { toVoid, toAdd } = planCardReconciliation(live, target);
 

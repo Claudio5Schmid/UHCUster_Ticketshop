@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(116);
+select plan(123);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -758,6 +758,69 @@ select is(
   'gueltig',
   'scanning never consumes the ticket itself - status stays gueltig all season'
 );
+
+-- ============================================================================
+-- Group N: rename_order_holder - a corrected name reaches the order's records
+--
+-- The member row is not the only copy of a name: the customer and every order
+-- item hold their own, and nothing refreshed them when an import corrected the
+-- member. order_items has no UPDATE policy at all - deliberately, it carries
+-- prices - so the application cannot write to it directly and a SECURITY
+-- DEFINER function does exactly the one field instead.
+--
+-- Uses the file's own order d...0001 and its customer c...0001.
+-- ============================================================================
+
+set local role anon;
+select throws_ok(
+  $$select public.rename_order_holder('d0000000-0000-0000-0000-000000000001', 'Jan Wuethrich')$$,
+  '42501',
+  'permission denied for function rename_order_holder',
+  'anon is refused by privileges, before reaching the function body'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
+select throws_ok(
+  $$select public.rename_order_holder('d0000000-0000-0000-0000-000000000001', 'Jan Wuethrich')$$,
+  'P0001',
+  'only admins can rename an order holder',
+  'a signed-in non-admin is refused by the function'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+select throws_ok(
+  $$select public.rename_order_holder('d0000000-0000-0000-0000-000000000001', '   ')$$,
+  'P0001',
+  'a holder name cannot be empty',
+  'an empty name is refused rather than blanking the records'
+);
+select lives_ok(
+  $$select public.rename_order_holder('d0000000-0000-0000-0000-000000000001', 'Korrigierter Name')$$,
+  'an admin can rename an order holder'
+);
+select is(
+  (select name from public.customers where id = 'c0000000-0000-0000-0000-000000000001'),
+  'Korrigierter Name',
+  'the customer record now carries the corrected name'
+);
+select is(
+  (select holder_name from public.order_items where id = 'e0000000-0000-0000-0000-000000000001'),
+  'Korrigierter Name',
+  'so does the order item - the table the application itself cannot update'
+);
+select ok(
+  (select exists(select 1 from public.audit_log
+     where entity_type = 'order' and entity_id = 'd0000000-0000-0000-0000-000000000001'
+       and action = 'holder_name_change')),
+  'the rename was written to audit_log'
+);
+reset role;
+reset request.jwt.claim.sub;
 
 select * from finish();
 
