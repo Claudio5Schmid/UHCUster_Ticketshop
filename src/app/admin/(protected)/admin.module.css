@@ -417,3 +417,41 @@
   color: var(--color-text-secondary);
 }
 
+/* Shown while a CSV import runs. Determinate on purpose rather than a spinner: the
+   work is counted in rows and each one renders a PDF, so "how much is left" is both
+   knowable and the thing somebody waiting actually wants to know. */
+.progressPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5) 0;
+}
+
+.progressHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-4);
+  font-size: var(--text-small-size);
+}
+
+.progressPercent {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: var(--text-h3-size);
+}
+
+.progressTrack {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-surface-alt, #efefef);
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 999px;
+  transition: width 200ms ease-out;
+}
+

@@ -322,6 +322,8 @@ export interface CsvImportMatch {
 }
 
 export interface CsvImportPlan {
+  /** Every row the file yields, errors excluded - what a progress bar counts against. */
+  totalRows: number;
   /** Rows whose member number is new. Listed as a count only, by decision - on a
    *  first import of the whole club this is hundreds of rows and nothing to decide. */
   newCount: number;
@@ -341,6 +343,7 @@ export interface CsvImportPlan {
 export async function planMemberCsvImport(content: string, mapping: CsvColumnMapping): Promise<CsvImportPlan> {
   const { rows, errors } = parseMemberCsvRows(content, mapping);
   const plan: CsvImportPlan = {
+    totalRows: rows.length,
     newCount: 0,
     matches: [],
     errors: errors.map((reason, index) => ({ row: index, reason })),
@@ -473,10 +476,22 @@ export interface CsvImportResult {
 export async function applyMemberCsvImport(
   content: string,
   mapping: CsvColumnMapping,
-  applyExternalIds: string[]
+  applyExternalIds: string[],
+  /** Which slice of the file to write in this call. The browser walks the file a
+   *  chunk at a time so it can show how far along it is - a single call returning
+   *  only at the end leaves someone watching a still screen for minutes, since every
+   *  card rendered here is a PDF. Omitted means the whole file. */
+  range?: { offset: number; limit: number }
 ): Promise<CsvImportResult> {
-  const { rows, errors } = parseMemberCsvRows(content, mapping);
-  const failed: Array<{ row: number; reason: string }> = errors.map((reason, index) => ({ row: index, reason }));
+  const { rows: allRows, errors } = parseMemberCsvRows(content, mapping);
+  // Parse errors belong to the file, not to a slice of it - reported once, with the
+  // first chunk, so they are not repeated on every call.
+  const reportErrors = !range || range.offset === 0;
+  const failed: Array<{ row: number; reason: string }> = reportErrors
+    ? errors.map((reason, index) => ({ row: index, reason }))
+    : [];
+  const rows = range ? allRows.slice(range.offset, range.offset + range.limit) : allRows;
+  const rowOffset = range?.offset ?? 0;
   const selected = new Set(applyExternalIds);
 
   const supabase = await getSupabaseServerClient();
@@ -569,7 +584,11 @@ export async function applyMemberCsvImport(
       if (orderId && kategorieChanged) await rerenderTicketsForOrder(orderId);
       updated++;
     } catch (importError) {
-      failed.push({ row: i + 2, reason: importError instanceof Error ? importError.message : "Unbekannter Fehler" });
+      failed.push({
+        // +2: past the header row, and from zero-based to what the file calls line 1.
+        row: rowOffset + i + 2,
+        reason: importError instanceof Error ? importError.message : "Unbekannter Fehler",
+      });
     }
   }
 

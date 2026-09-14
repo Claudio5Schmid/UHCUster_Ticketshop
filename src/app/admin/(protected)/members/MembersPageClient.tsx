@@ -86,6 +86,9 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
   /* Off by default: it matters when tracing which batch somebody arrived in, and is
      noise the rest of the time. */
   const [showImportedAt, setShowImportedAt] = useState(false);
+  /* Null while nothing is running. Every card written here is a rendered PDF, so a
+     file of any size takes long enough that a still screen reads as a hang. */
+  const [csvProgress, setCsvProgress] = useState<{ done: number; total: number } | null>(null);
 
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [body, setBody] = useState(DEFAULT_BODY);
@@ -173,7 +176,7 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
         // Nothing to decide means nothing to ask about: a file of purely new members
         // goes straight through rather than through an empty confirmation step.
         if (plan.matches.length === 0) {
-          await runCsvImport([]);
+          await runCsvImport([], plan.totalRows);
           return;
         }
         setCsvPlan(plan);
@@ -184,9 +187,29 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
     });
   }
 
-  async function runCsvImport(applyExternalIds: string[]) {
+  /** Small enough that the bar moves often, large enough that the four writers inside
+   *  each call still have something to share. */
+  const CSV_CHUNK = 5;
+
+  async function runCsvImport(applyExternalIds: string[], totalRows: number) {
     if (!csvContent) return;
-    const result = await importCsvAction(csvContent, csvMapping, applyExternalIds);
+
+    const result = { imported: 0, updated: 0, skipped: 0, failed: [] as Array<{ row: number; reason: string }> };
+    setCsvProgress({ done: 0, total: totalRows });
+
+    for (let offset = 0; offset < totalRows; offset += CSV_CHUNK) {
+      const chunk = await importCsvAction(csvContent, csvMapping, applyExternalIds, {
+        offset,
+        limit: CSV_CHUNK,
+      });
+      result.imported += chunk.imported;
+      result.updated += chunk.updated;
+      result.skipped += chunk.skipped;
+      result.failed.push(...chunk.failed);
+      setCsvProgress({ done: Math.min(offset + CSV_CHUNK, totalRows), total: totalRows });
+    }
+
+    setCsvProgress(null);
     setCsvResultMessage(
       [
         `${result.imported} neu importiert`,
@@ -215,7 +238,7 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
     setError(null);
     startTransition(async () => {
       try {
-        await runCsvImport([...csvSelected]);
+        await runCsvImport([...csvSelected], csvPlan?.totalRows ?? 0);
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "Fehler beim Import.");
       }
@@ -675,6 +698,37 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
                 Abbrechen
               </Button>
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Not dismissible: closing it would not stop the writing, only hide it. */}
+      <Modal open={csvProgress !== null} onClose={() => {}} title="Import läuft">
+        {csvProgress && (
+          <div className={styles.progressPanel}>
+            <div className={styles.progressHead}>
+              <span>
+                {csvProgress.done} von {csvProgress.total} Zeilen
+              </span>
+              <span className={styles.progressPercent}>
+                {Math.round((csvProgress.done / Math.max(1, csvProgress.total)) * 100)}%
+              </span>
+            </div>
+            <div
+              className={styles.progressTrack}
+              role="progressbar"
+              aria-valuenow={csvProgress.done}
+              aria-valuemin={0}
+              aria-valuemax={csvProgress.total}
+            >
+              <div
+                className={styles.progressBar}
+                style={{ width: `${(csvProgress.done / Math.max(1, csvProgress.total)) * 100}%` }}
+              />
+            </div>
+            <p style={{ color: "var(--color-text-secondary)", margin: 0, fontSize: "var(--text-small-size)" }}>
+              Für jede Karte wird eine PDF erzeugt - das dauert. Bitte das Fenster nicht schliessen.
+            </p>
           </div>
         )}
       </Modal>

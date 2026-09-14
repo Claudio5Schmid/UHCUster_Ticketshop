@@ -24,8 +24,6 @@ export default async function AdminSchedulePage() {
         kannst du selbst erfassen.
       </p>
 
-      <AddGameForm />
-
 
       {games.length === 0 ? (
         <p className={adminStyles.emptyState}>
@@ -39,6 +37,12 @@ export default async function AdminSchedulePage() {
           ))}
         </div>
       )}
+
+      {/* After the list, not before it: the fixtures are what the page is for, and
+          entering one by hand is the exception. */}
+      <div style={{ marginTop: "var(--space-6)" }}>
+        <AddGameForm />
+      </div>
     </div>
   );
 }

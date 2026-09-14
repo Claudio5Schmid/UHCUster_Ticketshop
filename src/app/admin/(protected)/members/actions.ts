@@ -28,12 +28,15 @@ export async function planCsvImportAction(csvContent: string, mapping: CsvColumn
   return planMemberCsvImport(csvContent, mapping);
 }
 
+/** `range` lets the browser walk the file a chunk at a time and report progress
+ *  between calls; omitted, it writes the whole file in one go. */
 export async function importCsvAction(
   csvContent: string,
   mapping: CsvColumnMapping,
-  applyExternalIds: string[]
+  applyExternalIds: string[],
+  range?: { offset: number; limit: number }
 ): Promise<CsvImportResult> {
-  const result = await applyMemberCsvImport(csvContent, mapping, applyExternalIds);
+  const result = await applyMemberCsvImport(csvContent, mapping, applyExternalIds, range);
   revalidatePath("/admin/members");
   return result;
 }
