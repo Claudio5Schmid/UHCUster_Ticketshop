@@ -16,7 +16,7 @@ import QRCode from "qrcode";
 import { readFile } from "fs/promises";
 import path from "path";
 import { getMetalAccentColorByName, getTicketAccentColor } from "@/lib/tier-colors";
-import { ticketProductName, ticketTypeEyebrowSuffix } from "./label";
+import { splitKategorie, ticketProductName, ticketTypeEyebrowSuffix } from "./label";
 import { CURRENT_SEASON_LABEL, LEAGUE_LABEL } from "@/lib/season";
 import type { ProductBenefits } from "@/lib/products";
 
@@ -40,22 +40,6 @@ export interface TicketPdfData {
    * the second. Null or empty for shop orders, which print the product name.
    */
   kategorie?: string | null;
-}
-
-/**
- * "Livestreampartner, Muster AG" -> ["Livestreampartner", "Muster AG"];
- * "Mitglied UHC Uster" -> ["Mitglied UHC Uster", null]; blank -> null (print the
- * product name). Only the first comma splits, so a company name may keep its own.
- */
-export function splitKategorie(kategorie: string | null | undefined): [string, string | null] | null {
-  const value = kategorie?.trim();
-  if (!value) return null;
-  const comma = value.indexOf(",");
-  if (comma === -1) return [value, null];
-  const first = value.slice(0, comma).trim();
-  const rest = value.slice(comma + 1).trim();
-  if (!first) return rest ? [rest, null] : null;
-  return [first, rest || null];
 }
 
 const PAGE_WIDTH = 595.28; // A4

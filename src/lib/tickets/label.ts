@@ -25,10 +25,30 @@ export function ticketProductName(productName: string): string {
   return productName.replace(TRAILING_TRANSFERABLE, "").trim();
 }
 
-/** What a card is called: its member-list category, else its product. */
+/**
+ * "Livestreampartner, Muster AG" -> ["Livestreampartner", "Muster AG"];
+ * "Mitglied UHC Uster" -> ["Mitglied UHC Uster", null]; blank -> null (the card
+ * prints its product name). Only the first comma splits, so a company name may
+ * keep its own; the office's spacing around the comma does not matter.
+ */
+export function splitKategorie(kategorie: string | null | undefined): [string, string | null] | null {
+  const value = kategorie?.trim();
+  if (!value) return null;
+  const comma = value.indexOf(",");
+  if (comma === -1) return [value, null];
+  const first = value.slice(0, comma).trim();
+  const rest = value.slice(comma + 1).trim();
+  if (!first) return rest ? [rest, null] : null;
+  return [first, rest || null];
+}
+
+/** What a card is called: its member-list category - the card's two lines,
+ * joined with a comma and a space however the import spaced them - else its
+ * product. */
 function baseName({ productName, kategorie }: Pick<TicketTypeLabelInput, "productName" | "kategorie">): string {
-  const category = kategorie?.trim();
-  return category ? category : ticketProductName(productName);
+  const lines = splitKategorie(kategorie);
+  if (!lines) return ticketProductName(productName);
+  return lines[1] ? `${lines[0]}, ${lines[1]}` : lines[0];
 }
 
 /** "Mitglieder UHC Uster (übertragbar-2)" / "Mitglieder UHC Uster (nicht übertragbar)". */
