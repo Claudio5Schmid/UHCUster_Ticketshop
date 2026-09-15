@@ -8,6 +8,10 @@ export interface TicketTypeLabelInput {
   productName: string;
   transferable: boolean;
   transferableIndex?: number | null;
+  /** The member list's "Kategorie" (D60). When set it is the card's name, on
+   * screen exactly as on the card - the product name is only what a card is
+   * called when no category names it. */
+  kategorie?: string | null;
 }
 
 /**
@@ -21,9 +25,15 @@ export function ticketProductName(productName: string): string {
   return productName.replace(TRAILING_TRANSFERABLE, "").trim();
 }
 
+/** What a card is called: its member-list category, else its product. */
+function baseName({ productName, kategorie }: Pick<TicketTypeLabelInput, "productName" | "kategorie">): string {
+  const category = kategorie?.trim();
+  return category ? category : ticketProductName(productName);
+}
+
 /** "Mitglieder UHC Uster (übertragbar-2)" / "Mitglieder UHC Uster (nicht übertragbar)". */
-export function ticketTypeLabel({ productName, transferable, transferableIndex }: TicketTypeLabelInput): string {
-  const base = ticketProductName(productName);
+export function ticketTypeLabel({ productName, kategorie, transferable, transferableIndex }: TicketTypeLabelInput): string {
+  const base = baseName({ productName, kategorie });
 
   if (!transferable) return `${base} (nicht übertragbar)`;
 
@@ -37,8 +47,8 @@ export function ticketTypeLabel({ productName, transferable, transferableIndex }
  * table, but a personal card keeps its plain product name: "(nicht übertragbar)"
  * answers a question only someone comparing kinds of card is asking.
  */
-export function ticketDisplayName({ productName, transferable, transferableIndex }: TicketTypeLabelInput): string {
-  const base = ticketProductName(productName);
+export function ticketDisplayName({ productName, kategorie, transferable, transferableIndex }: TicketTypeLabelInput): string {
+  const base = baseName({ productName, kategorie });
 
   if (!transferable) return base;
 

@@ -117,6 +117,7 @@ export default async function OrderStatusPage({ params }: { params: Promise<{ to
                     <span className={styles.ticketName}>
                       {ticketDisplayName({
                         productName: ticket.productName,
+                        kategorie: ticket.kategorie,
                         transferable: ticket.transferable,
                         transferableIndex: ticket.transferableIndex,
                       })}

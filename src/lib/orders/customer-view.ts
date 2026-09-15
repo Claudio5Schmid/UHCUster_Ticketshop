@@ -30,6 +30,8 @@ export interface CustomerOrderTicket {
   transferable: boolean;
   /** Lets a customer tell four otherwise identical transferable cards apart. */
   transferableIndex: number | null;
+  /** The member list's category (D60) - the name printed on the card; null for a shop order. */
+  kategorie: string | null;
 }
 
 export interface CustomerOrderView {
@@ -96,6 +98,14 @@ async function getDownloadableTickets(orderId: string): Promise<CustomerOrderTic
 
   if (error) return [];
 
+  // The list calls the card what the card calls itself (D60).
+  const { data: member } = await supabase
+    .from("members")
+    .select("kategorie")
+    .eq("order_id", orderId)
+    .maybeSingle<{ kategorie: string | null }>();
+  const kategorie = member?.kategorie ?? null;
+
   return (data ?? [])
     .filter((row) => Boolean(row.pdf_path))
     .map((row) => {
@@ -106,6 +116,7 @@ async function getDownloadableTickets(orderId: string): Promise<CustomerOrderTic
         holderName: row.holder_name,
         transferable: row.transferable,
         transferableIndex: row.transferable_index,
+        kategorie,
       };
     });
 }

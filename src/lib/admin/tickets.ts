@@ -12,6 +12,8 @@ export interface OrderTicket {
   pdf_path: string | null;
   card_sent_at: string | null;
   product_name_snapshot: string;
+  /** The member list's category for a member's order (D60); null for a shop order. */
+  kategorie: string | null;
 }
 
 /**
@@ -39,6 +41,18 @@ export async function getOrderTickets(orderId: string): Promise<OrderTicket[]> {
     throw new Error(`Failed to load tickets: ${error.message}`);
   }
 
+  // The card's name on screen is the same as on the card (D60): the member
+  // list's category, for the one member whose order this is.
+  const { data: member, error: memberError } = await supabase
+    .from("members")
+    .select("kategorie")
+    .eq("order_id", orderId)
+    .maybeSingle<{ kategorie: string | null }>();
+  if (memberError) {
+    throw new Error(`Failed to load member category: ${memberError.message}`);
+  }
+  const kategorie = member?.kategorie ?? null;
+
   return (data ?? []).map((row) => {
     const orderItem = Array.isArray(row.order_items) ? row.order_items[0] : row.order_items;
     return {
@@ -51,6 +65,7 @@ export async function getOrderTickets(orderId: string): Promise<OrderTicket[]> {
       pdf_path: row.pdf_path,
       card_sent_at: row.card_sent_at,
       product_name_snapshot: orderItem?.product_name_snapshot ?? "-",
+      kategorie,
     };
   });
 }

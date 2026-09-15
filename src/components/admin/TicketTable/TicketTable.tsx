@@ -88,6 +88,7 @@ export function TicketTable({ tickets, orderNumber, target }: TicketTableProps) 
       render: (ticket) =>
         ticketTypeLabel({
           productName: ticket.product_name_snapshot,
+          kategorie: ticket.kategorie,
           transferable: ticket.transferable,
           transferableIndex: ticket.transferable_index,
         }),
@@ -182,6 +183,7 @@ export function TicketTable({ tickets, orderNumber, target }: TicketTableProps) 
     if (!ticket) return "";
     const label = ticketTypeLabel({
       productName: ticket.product_name_snapshot,
+      kategorie: ticket.kategorie,
       transferable: ticket.transferable,
       transferableIndex: ticket.transferable_index,
     });
