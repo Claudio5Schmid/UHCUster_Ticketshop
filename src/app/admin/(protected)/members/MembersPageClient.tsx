@@ -22,7 +22,7 @@ import type { CsvImportPlan } from "@/lib/admin/members";
 import { matchesSendConfirmation } from "@/lib/admin/send-confirmation";
 import styles from "../admin.module.css";
 
-type SortKey = "name" | "email" | "kategorie" | "karten" | "versand" | "importiert";
+type SortKey = "name" | "email" | "kategorie" | "karten" | "versand" | "importiert" | "mitgliedsnummer";
 
 const importDateFormatter = new Intl.DateTimeFormat("de-CH", {
   timeZone: "Europe/Zurich",
@@ -294,6 +294,13 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
         // Sorted by how much work is left rather than alphabetically, so the
         // members still waiting for something come first.
         return ["offen", "teilweise", "vollstaendig", "ohne"].indexOf(memberSendState(member));
+      case "mitgliedsnummer":
+        // Numeric when the club numbers its members that way, so 9 sorts before 10;
+        // anything non-numeric falls back to plain text, and a member without a
+        // number sorts last either way.
+        return /^\d+$/.test(member.external_id ?? "")
+          ? Number(member.external_id)
+          : (member.external_id ?? "\uffff");
       case "importiert":
         // Empty sorts last rather than ahead of every real date: a member added by
         // hand has no import to compare against.
@@ -400,6 +407,14 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
           aria-label={`${m.vorname} ${m.nachname} auswählen`}
         />
       ),
+    },
+    {
+      // Leftmost after the tick box: it is the number the office looks a member up by
+      // in their own system, and the key an import matches on - so when something in
+      // the list disagrees with the file, this is the column you check first.
+      key: "mitgliedsnummer",
+      header: sortableHeader("Nr.", "mitgliedsnummer"),
+      render: (m: Member) => m.external_id ?? "–",
     },
     {
       key: "name",
