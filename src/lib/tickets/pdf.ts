@@ -11,6 +11,7 @@ import {
   type PDFPage,
   type RGB,
 } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import QRCode from "qrcode";
 import { readFile } from "fs/promises";
 import path from "path";
@@ -74,9 +75,9 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const CARD_RADIUS = px(24);
 const STUB_WIDTH = px(236);
 
-/** Helvetica's cap height as a fraction of the font size. Text is placed by the
- * top of its capitals, the way the design measures gaps. */
-const CAP = 0.72;
+/** Inter's cap height as a fraction of the font size (1490/2048). Text is
+ * placed by the top of its capitals, the way the design measures gaps. */
+const CAP = 0.727;
 /** The headline's size, and how far it may shrink to keep a long line whole. */
 const TITLE_SIZE = px(46);
 const TITLE_MIN_SIZE = px(24);
@@ -193,6 +194,15 @@ async function embedPublicPng(pdfDoc: PDFDocument, file: string) {
   return pdfDoc.embedPng(await readFile(path.join(process.cwd(), "public", file)));
 }
 
+/** Inter, the site's own face, embedded from public/fonts (D61): a PDF that
+ * only names a font leaves every viewer to substitute its own, which is how the
+ * same card looked bolder in Vorschau than in a browser. Embedded whole, not
+ * subset per document - pdf-lib's subsetter drops most of Inter's glyphs - so
+ * the files on disk are cut down once to the Latin range instead. */
+async function embedInter(pdfDoc: PDFDocument, file: string): Promise<PDFFont> {
+  return pdfDoc.embedFont(await readFile(path.join(process.cwd(), "public", "fonts", file)), { subset: false });
+}
+
 /**
  * Renders one ticket as a single-page A4 PDF, after the "Editorial Pass" design
  * (D59): the club logo and season up top, then a black landscape card with the
@@ -207,16 +217,19 @@ async function embedPublicPng(pdfDoc: PDFDocument, file: string) {
  * a club card when its product is a membership, or when its member-list
  * category names the club ("Red Castle Club, Gold" - D60).
  *
- * Uses pdf-lib's standard Helvetica rather than the site's Inter webfont (D30);
- * the design's Inter 900 headline becomes Helvetica Bold in capitals.
+ * Set in Inter like the design and the site, embedded in the file (D61, which
+ * supersedes D30's Helvetica): Black for the headline and the season, Bold for
+ * labels and values, Regular for running text; Courier for the token.
  */
 export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.setTitle(`${data.productName} - UHC Uster`);
   pdfDoc.setProducer("UHC Uster Ticketshop");
 
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  pdfDoc.registerFontkit(fontkit);
+  const font = await embedInter(pdfDoc, "Inter-Regular.ttf");
+  const fontBold = await embedInter(pdfDoc, "Inter-Bold.ttf");
+  const fontBlack = await embedInter(pdfDoc, "Inter-Black.ttf");
   const fontMono = await pdfDoc.embedFont(StandardFonts.Courier);
 
   const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -237,7 +250,7 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   page.drawImage(logo, { x: MARGIN, y: headerTop - logoHeight, width: logoWidth, height: logoHeight });
 
   const seasonLabelStyle: TextStyle = { font: fontBold, size: px(11), color: GREY, tracking: px(11) * 0.14 };
-  const seasonStyle: TextStyle = { font: fontBold, size: px(28), color: BLACK, tracking: -px(28) * 0.03 };
+  const seasonStyle: TextStyle = { font: fontBlack, size: px(28), color: BLACK, tracking: -px(28) * 0.03 };
   const seasonBlockHeight = seasonLabelStyle.size * CAP + px(4) + seasonStyle.size * CAP;
   let seasonTop = headerTop - (logoHeight - seasonBlockHeight) / 2;
   drawText(page, "SAISON", PAGE_WIDTH - MARGIN, seasonTop, seasonLabelStyle, "right");
@@ -323,7 +336,7 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   // comes off first, since the eyebrow's running number and the note under the
   // holder already say it. A Red Castle Club tier word ("GOLD") takes the
   // tier's metal either way.
-  const titleStyleAt = (size: number): TextStyle => ({ font: fontBold, size, color: WHITE, tracking: -size * 0.02 });
+  const titleStyleAt = (size: number): TextStyle => ({ font: fontBlack, size, color: WHITE, tracking: -size * 0.02 });
   let titleStyle = titleStyleAt(TITLE_SIZE);
   let titleLines: string[];
   if (explicitTitle) {
@@ -385,7 +398,7 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   // and the holder line; a three-line product name may leave none, and then
   // the card simply goes without.
   const ghostStyle: TextStyle = {
-    font: fontBold,
+    font: fontBlack,
     size: px(104),
     color: club ? blend(accent, BLACK, 0.5) : blend(WHITE, BLACK, 0.3),
     tracking: -px(104) * 0.06,

@@ -934,4 +934,25 @@ overwrite goes through the admin's own session, which needed an update policy on
 comment argued against granting. Accepted now, because "the list says one thing, the card another"
 is the worse failure once the category *is* the card. The existing members' "Mitglied UHC Uster" was
 changed in place to "Mitglied, UHC Uster" so their cards keep their two lines; the admin filter shows
-the full comma value for now, to be revisited. **Resolved.**
+the full comma value for now, to be revisited. On screen a card is called what the card calls
+itself: the ticket tables in the member and order views and the customer's own card list all print
+the category, comma and all, in place of the product name. **Resolved.**
+
+**D61 — The card embeds Inter; D30's Helvetica is withdrawn.** Claudio sent a screenshot of a
+card whose letters were wider and lighter than the samples he had approved, and asked for the
+same font as before. The file had not changed: it named Helvetica without embedding it, and every
+viewer substituted its own - real Helvetica in Vorschau, an Arial-alike in the browser he had
+downloaded from. A card that looks different in every program is not "the design", so the fonts
+are now in the file. And since a font is being embedded anyway, it is the site's own: Inter Black
+for the headline and the season, Bold for labels and values, Regular for running text (Courier
+stays for the token). The PDF now matches the canvas, which D30 had settled for as a compromise.
+
+D30's obstacle was real: Google's font repo ships Inter only as a variable file, which pdf-lib
+cannot take as three weights. The static instances come from Google's CSS API instead, which
+serves per-weight TTFs to a client that does not announce variable-font support; they live in
+`public/fonts` under the SIL Open Font License. Two things did not work along the way and are
+written down so nobody retries them: pdf-lib's per-document subsetting drops most of Inter's
+glyphs (a card came out as "G U U ÜB GB"), so the files are cut down once to the Latin range with
+fontTools and embedded whole - 23 KB a weight, 72 KB a card; and the Google-served files must be
+checked for `variationAxes` being empty before trusting them as static. Every stored card was
+re-rendered so the members' downloads match. **Resolved.**
