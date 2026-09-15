@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+import { TICKET_DOWNLOAD_COLUMNS, ticketDownloadName, type TicketDownloadRow } from "@/lib/tickets/download-name";
 
 /**
  * Route Handlers don't go through the (protected) layout's auth check (same note
@@ -22,10 +23,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ orde
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { data: ticket, error } = await supabase.from("tickets").select("pdf_path").eq("id", ticketId).maybeSingle();
+  const { data: ticket, error } = await supabase
+    .from("tickets")
+    .select(TICKET_DOWNLOAD_COLUMNS)
+    .eq("id", ticketId)
+    .maybeSingle<TicketDownloadRow>();
   if (error || !ticket?.pdf_path) {
     return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
   }
+
+  const { data: member } = await supabase.from("members").select("kategorie").eq("order_id", ticket.order_id).maybeSingle<{ kategorie: string | null }>();
 
   const { data: file, error: downloadError } = await supabase.storage.from("tickets").download(ticket.pdf_path);
   if (downloadError || !file) {
@@ -35,7 +42,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ orde
   return new NextResponse(await file.arrayBuffer(), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${ticket.pdf_path.split("/").pop()}"`,
+      "Content-Disposition": `attachment; filename="${ticketDownloadName(ticket, member?.kategorie ?? null)}"`,
     },
   });
 }

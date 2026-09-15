@@ -3,6 +3,8 @@ import JSZip from "jszip";
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import { verifyOrderAccessToken } from "@/lib/orders/access-token";
 import { loadPaidOrderForToken } from "../order-access";
+import { TICKET_DOWNLOAD_COLUMNS, ticketDownloadName, type TicketDownloadRow } from "@/lib/tickets/download-name";
+import { uniqueFileName } from "@/lib/tickets/label";
 
 /** All of an order's still-valid tickets in one file - the customer-side twin of
  * the admin ZIP route, authorised by the signed link instead of a session. */
@@ -22,13 +24,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   const supabase = getSupabaseAdminClient();
   const { data: tickets, error } = await supabase
     .from("tickets")
-    .select("pdf_path, order_items!inner(order_id)")
+    .select(TICKET_DOWNLOAD_COLUMNS)
     .eq("order_items.order_id", order.id)
-    .in("status", ["gueltig", "eingeloest"]);
+    .in("status", ["gueltig", "eingeloest"])
+    .returns<TicketDownloadRow[]>();
 
   if (error || !tickets || tickets.length === 0) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  const { data: member } = await supabase.from("members").select("kategorie").eq("order_id", order.id).maybeSingle<{ kategorie: string | null }>();
+  const kategorie = member?.kategorie ?? null;
+  const taken = new Map<string, number>();
 
   const zip = new JSZip();
   for (const ticket of tickets) {
@@ -37,7 +44,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     // One unreadable file must not cost the customer the rest of the order - skip
     // it and hand over what does exist, rather than failing the whole download.
     if (downloadError || !file) continue;
-    zip.file(ticket.pdf_path.split("/").pop() ?? ticket.pdf_path, await file.arrayBuffer());
+    zip.file(uniqueFileName(ticketDownloadName(ticket, kategorie), taken), await file.arrayBuffer());
   }
 
   if (Object.keys(zip.files).length === 0) {

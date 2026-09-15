@@ -6,6 +6,8 @@ import { memberCardsHtml, memberCardsText } from "@/lib/email/member-cards";
 import { buildOrderAccessUrl } from "@/lib/orders/access-token";
 import { CURRENT_SEASON } from "@/lib/season";
 import { parseMemberCsvRows, type CsvColumnMapping } from "@/lib/csv/memberCsv";
+import { ticketFileName, uniqueFileName } from "@/lib/tickets/label";
+import { CURRENT_SEASON_LABEL } from "@/lib/season";
 import {
   EMPTY_COUNTS,
   countCards,
@@ -651,14 +653,26 @@ export async function sendMemberCards(
       }
 
       const attachments = [];
+      const taken = new Map<string, number>();
       for (const ticket of pending) {
         const path = ticket.pdf_path as string;
         const { data: file, error: downloadError } = await supabase.storage.from("tickets").download(path);
         if (downloadError || !file) {
           throw new Error(`PDF ${path} konnte nicht geladen werden: ${downloadError?.message}`);
         }
+        // Named like a download (D62), not after the stored id.
+        const name = ticketFileName(
+          {
+            productName: ticket.product_name_snapshot,
+            kategorie: ticket.kategorie,
+            holderName: ticket.holder_name,
+            transferable: ticket.transferable,
+            transferableIndex: ticket.transferable_index,
+          },
+          CURRENT_SEASON_LABEL
+        );
         attachments.push({
-          filename: path.split("/").pop() ?? path,
+          filename: uniqueFileName(name, taken),
           content: new Uint8Array(await file.arrayBuffer()),
         });
       }

@@ -956,3 +956,12 @@ glyphs (a card came out as "G U U ÜB GB"), so the files are cut down once to th
 fontTools and embedded whole - 23 KB a weight, 72 KB a card; and the Google-served files must be
 checked for `variationAxes` being empty before trusting them as static. Every stored card was
 re-rendered so the members' downloads match. **Resolved.**
+
+**D62 — A card downloads under a readable name, not its storage id.** Every download and every
+mail attachment handed over `1fa15fc5-….pdf`, the id the file is stored under. Claudio asked for a
+name a person can read and picked the shape: `Saisonkarte-26-27-Lea-Muster-uebertragbar-2.pdf`.
+Generalised, the first part is what the card calls itself (the member-list category or the product
+name, D60), then the season, the holder, and the running number of a transferable card. Umlauts are
+spelt out (Müller -> Mueller) so the name survives every browser and mail program, and a ZIP
+numbers a repeated name rather than overwriting it. The stored path keeps the id - only the name the
+recipient sees changes, so nothing in Storage moves and no card is re-rendered. **Resolved.**

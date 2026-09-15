@@ -75,6 +75,44 @@ export function ticketDisplayName({ productName, kategorie, transferable, transf
   return transferableIndex ? `${base} (übertragbar-${transferableIndex})` : `${base} (übertragbar)`;
 }
 
+/** "Lea Müller-Näf" -> "Lea-Mueller-Naef": what survives in a file name on every
+ * system and in every mail program. Umlauts are spelt out rather than stripped,
+ * so "Müller" stays recognisable. */
+function fileSlug(text: string): string {
+  return text
+    .replace(/[ÄÖÜäöüß]/g, (c) => ({ Ä: "Ae", Ö: "Oe", Ü: "Ue", ä: "ae", ö: "oe", ü: "ue", ß: "ss" })[c] ?? c)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * The name a downloaded or mailed card carries (D62):
+ * "Saisonkarte-Erwachsene-26-27-Lea-Muster.pdf", or for a transferable card
+ * "Red-Castle-Club-Gold-26-27-Muster-AG-uebertragbar-2.pdf". The stored file
+ * keeps its id; this is only what the customer sees in the download.
+ */
+export function ticketFileName(
+  input: TicketTypeLabelInput & { holderName: string | null },
+  seasonLabel: string
+): string {
+  const parts = [fileSlug(baseName(input)), fileSlug(seasonLabel)];
+  const holder = input.holderName?.trim();
+  if (holder) parts.push(fileSlug(holder));
+  if (input.transferable) parts.push(input.transferableIndex ? `uebertragbar-${input.transferableIndex}` : "uebertragbar");
+  return `${parts.filter(Boolean).join("-")}.pdf`;
+}
+
+/** Keeps every name in one ZIP distinct: a second "…-Lea-Muster.pdf" becomes
+ * "…-Lea-Muster-2.pdf" rather than overwriting the first. */
+export function uniqueFileName(name: string, taken: Map<string, number>): string {
+  const count = (taken.get(name) ?? 0) + 1;
+  taken.set(name, count);
+  if (count === 1) return name;
+  return name.replace(/\.pdf$/, `-${count}.pdf`);
+}
+
 /**
  * The short form printed in the card's eyebrow line, where the product name
  * already occupies the title right below it: "ÜBERTRAGBAR-2", never the whole
