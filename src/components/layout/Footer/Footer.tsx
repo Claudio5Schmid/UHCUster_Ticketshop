@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Container } from "@/components/layout/Container/Container";
+import { DATENSCHUTZ_PDF } from "@/lib/legal";
 import styles from "./Footer.module.css";
 
 export function Footer() {
@@ -23,8 +24,15 @@ export function Footer() {
               <li>
                 <Link href="/impressum">Impressum</Link>
               </li>
+              {/* The club's own PDF rather than a page of its own: it is the
+                  signed document, and keeping a second copy as markup would mean
+                  two versions of a legal text that must not disagree. A plain
+                  anchor, not next/link - this is a file, not a route - and a new
+                  tab, so a half-filled order form is not lost behind it. */}
               <li>
-                <Link href="/datenschutz">Datenschutz</Link>
+                <a href={DATENSCHUTZ_PDF} target="_blank" rel="noopener noreferrer">
+                  Datenschutz
+                </a>
               </li>
               <li>
                 <Link href="/ticket-bedingungen">Ticket-Bedingungen</Link>
