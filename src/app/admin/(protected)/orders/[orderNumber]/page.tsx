@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { getOrderDetail } from "@/lib/admin/orders";
 import { getOrderTickets } from "@/lib/admin/tickets";
 import { buildOrderAccessUrl } from "@/lib/orders/access-token";
@@ -21,6 +22,13 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
 
   return (
     <div>
+      {/* The same way back the member detail has: an order is reached from the list,
+          and the browser's back button is not something a page should rely on. */}
+      <p className={styles.breadcrumb}>
+        <Link href="/admin" className={styles.orderLink}>
+          ← Alle Bestellungen
+        </Link>
+      </p>
       <div className={styles.header}>
         <h1>{order.order_number}</h1>
         <Badge variant={order.status === "bezahlt" ? "accent" : "neutral"}>{order.status}</Badge>
