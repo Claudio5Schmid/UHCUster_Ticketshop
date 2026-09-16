@@ -16,7 +16,7 @@ import QRCode from "qrcode";
 import { readFile } from "fs/promises";
 import path from "path";
 import { getMetalAccentColorByName, getTicketAccentColor } from "@/lib/tier-colors";
-import { splitKategorie, ticketProductName, ticketTypeEyebrowSuffix } from "./label";
+import { splitKategorie, ticketProductName } from "./label";
 import { CURRENT_SEASON_LABEL, LEAGUE_LABEL } from "@/lib/season";
 import type { ProductBenefits } from "@/lib/products";
 
@@ -174,6 +174,9 @@ function roundedRectPath(width: number, height: number, r: Radii): string {
 
 const uniform = (radius: number): Radii => ({ tl: radius, tr: radius, br: radius, bl: radius });
 
+/** A five-pointed star in a 20 x 20 box, for drawSvgPath (scale it to size). */
+const STAR_PATH = "M 10 1.2 L 12.7 7.3 L 19.3 7.9 L 14.3 12.3 L 15.8 18.8 L 10 15.4 L 4.2 18.8 L 5.7 12.3 L 0.7 7.9 L 7.3 7.3 Z";
+
 async function embedPublicPng(pdfDoc: PDFDocument, file: string) {
   return pdfDoc.embedPng(await readFile(path.join(process.cwd(), "public", file)));
 }
@@ -279,36 +282,26 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   const panelWidth = panelRight - panelX;
   let cursor = cardTop - px(36);
 
-  // Every card says in its top row whether it may change hands: a pill on the
-  // right, white for a transferable card and muted for a personal one.
-  const badgeText = data.transferable ? (ticketTypeEyebrowSuffix(data.transferableIndex) ?? "ÜBERTRAGBAR") : "NICHT ÜBERTRAGBAR";
-  const badgeStyle: TextStyle = { font: fontBold, size: px(10), color: data.transferable ? WHITE : MUTED_ON_BLACK, tracking: px(10) * 0.1 };
-  const badgeWidth = textWidth(badgeText, badgeStyle) + px(20);
-  const badgeHeight = px(18);
-  const drawBadge = (rowTop: number, rowHeight: number) => {
-    const badgeTop = rowTop - (rowHeight - badgeHeight) / 2;
-    page.drawSvgPath(roundedRectPath(badgeWidth, badgeHeight, uniform(badgeHeight / 2)), {
-      x: panelRight - badgeWidth,
-      y: badgeTop,
-      borderColor: badgeStyle.color,
-      borderWidth: 0.75,
-    });
-    drawText(page, badgeText, panelRight - badgeWidth + px(10), badgeTop - (badgeHeight - badgeStyle.size * CAP) / 2, badgeStyle);
-  };
-
   if (club) {
     // The club's crest where a season pass has its eyebrow.
     const crest = await embedPublicPng(pdfDoc, "red-castle-club-logo.png");
     const crestHeight = px(34);
     const crestWidth = (crest.width / crest.height) * crestHeight;
     page.drawImage(crest, { x: panelX, y: cursor - crestHeight, width: crestWidth, height: crestHeight });
-    drawBadge(cursor, crestHeight);
+    // VIP stars in the tier's metal, right-aligned on the crest's line: one for
+    // Bronze, two for Silber, three for Gold (D64); the Normal tier has none.
+    const starCount = { Gold: 3, Silber: 2, Bronze: 1 }[colors.metalName ?? ""] ?? 0;
+    const starSize = px(18);
+    const starGap = px(4);
+    for (let i = 0; i < starCount; i++) {
+      const x = panelRight - starSize - i * (starSize + starGap);
+      page.drawSvgPath(STAR_PATH, { x, y: cursor - (crestHeight - starSize) / 2, scale: starSize / 20, color: accent });
+    }
     cursor -= crestHeight + px(18);
   } else {
     const eyebrowStyle: TextStyle = { font: fontBold, size: px(12), color: accent, tracking: px(12) * 0.14 };
-    drawText(page, `SAISONKARTE · ${LEAGUE_LABEL}`, panelX, cursor - (badgeHeight - eyebrowStyle.size * CAP) / 2, eyebrowStyle);
-    drawBadge(cursor, badgeHeight);
-    cursor -= badgeHeight + px(16);
+    drawText(page, `SAISONKARTE · ${LEAGUE_LABEL}`, panelX, cursor, eyebrowStyle);
+    cursor -= eyebrowStyle.size * CAP + px(16);
   }
 
   // Title, in capitals. A member-list category gives the two lines outright and
@@ -353,23 +346,19 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   });
   const titleBottom = cursor + titleLineHeight - titleStyle.size * CAP;
 
-  // Holder and order number, stacked up from the card's bottom edge.
+  // Holder, transfer note and order number, stacked up from the card's bottom
+  // edge. The name has the panel's whole width to itself; the order number sits
+  // under the transfer note in the same small type (D63), and nothing else says
+  // whether the card may change hands - the note is the one place.
   const noteStyle: TextStyle = { font, size: px(12), color: MUTED_ON_BLACK };
-  const fieldLabelStyle: TextStyle = { font: fontBold, size: px(11), color: MUTED_ON_BLACK, tracking: px(11) * 0.12 };
   const fieldValueStyle: TextStyle = { font: fontBold, size: px(20), color: WHITE };
-  const noteTop = cardBottom + px(32) + noteStyle.size * DESCENDER + noteStyle.size * CAP;
+  const orderTop = cardBottom + px(32) + noteStyle.size * DESCENDER + noteStyle.size * CAP;
+  const noteTop = orderTop + px(6) + noteStyle.size * DESCENDER + noteStyle.size * CAP;
   const valueTop = noteTop + px(22) + fieldValueStyle.size * DESCENDER + fieldValueStyle.size * CAP;
-  const labelTop = valueTop + px(6) + fieldLabelStyle.size * CAP;
-  const columnWidth = (panelWidth - px(24)) / 2;
-  const secondColumnX = panelX + columnWidth + px(24);
 
-  // A season pass - member cards included - always names one person; a Red
-  // Castle Club card is bought by a person or a company.
+  // The name stands on its own, without a label over it (D64).
   const holderName = data.holderName ?? "-";
-  drawText(page, club ? "NAME / FIRMA" : "NAME", panelX, labelTop, fieldLabelStyle);
-  drawText(page, holderName, panelX, valueTop, fitted(holderName, fieldValueStyle, columnWidth, px(13)));
-  drawText(page, "BESTELLUNG", secondColumnX, labelTop, fieldLabelStyle);
-  drawText(page, data.orderNumber, secondColumnX, valueTop, fitted(data.orderNumber, fieldValueStyle, columnWidth, px(13)));
+  drawText(page, holderName, panelX, valueTop, fitted(holderName, fieldValueStyle, panelWidth, px(13)));
 
   const transferNote = data.transferable
     ? data.transferableIndex
@@ -377,10 +366,11 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
       : "Übertragbar · kann an eine beliebige Person weitergegeben werden"
     : "Nicht übertragbar · nur für die genannte Person gültig";
   drawText(page, transferNote, panelX, noteTop, fitted(transferNote, noteStyle, panelWidth, px(10)));
+  drawText(page, `Bestellung ${data.orderNumber}`, panelX, orderTop, noteStyle);
 
-  // The hollow season number sits in whatever band is left between the title
-  // and the holder line; a three-line product name may leave none, and then
-  // the card simply goes without.
+  // The hollow season number sits between the title and the holder line; a
+  // three-line product name may leave no room, and then the card simply goes
+  // without.
   const ghostStyle: TextStyle = {
     font: fontBlack,
     size: px(104),
@@ -390,9 +380,12 @@ export async function renderTicketPdf(data: TicketPdfData): Promise<Uint8Array> 
   // The slash in "26/27" hangs below the baseline, so the number is taller than
   // its capitals.
   const ghostHeight = ghostStyle.size * (CAP + 0.12);
-  const band = titleBottom - labelTop;
-  if (band >= ghostHeight + px(24)) {
-    const ghostTop = titleBottom - (band - ghostHeight) / 2;
+  // Placed by the golden section of the band between the title and the name
+  // (D65): the space above it is 1.618 times the space below, so it sits a
+  // little low - the eye reads it as balanced, where a true centre looks high.
+  const spare = titleBottom - valueTop - ghostHeight;
+  const ghostTop = titleBottom - spare * (1 - 1 / 1.618);
+  if (spare >= px(8)) {
     drawOutlinedText(page, CURRENT_SEASON_LABEL, panelRight + px(4), ghostTop, ghostStyle, px(1.5), "right");
   }
 

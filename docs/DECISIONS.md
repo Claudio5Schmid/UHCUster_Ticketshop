@@ -965,3 +965,297 @@ name, D60), then the season, the holder, and the running number of a transferabl
 spelt out (Müller -> Mueller) so the name survives every browser and mail program, and a ZIP
 numbers a repeated name rather than overwriting it. The stored path keeps the id - only the name the
 recipient sees changes, so nothing in Storage moves and no card is re-rendered. **Resolved.**
+
+## 2026-09-16 — Bestellkategorien, CSV-Migration, manueller Mailversand, Red-Castle-Bestellprozess
+
+Neuer Auftrag (Migrationsphase). Ab hier auf Deutsch, weil die Fragen und Antworten direkt mit
+Claudio abgestimmt werden. Phase 0 (Analyse) ist abgeschlossen; dieser Abschnitt ist das
+Interrogation Gate (Phase 0.5). Offene Punkte sind mit **O** nummeriert, entschiedene mit **D**.
+
+### Phase 0 — was schon da ist (und wo der Auftrag davon abweicht)
+
+Der Auftrag beschreibt ein Zielmodell, das zu grossen Teilen bereits existiert. Die relevanten
+Befunde, weil sie die Fragen unten prägen:
+
+- **Status-Modell existiert bereits exakt so** (`orders.status`: `neu | rechnung_versendet |
+  bezahlt | storniert`, `transition_order_status()` mit `audit_log`-Eintrag inkl. Admin-User). Was
+  fehlt: die Übergangsregeln werden nicht erzwungen (jeder Wechsel ist erlaubt), Stornieren
+  deaktiviert keine Tickets, es gibt keinen Bestätigungsdialog, und Tickets werden erst bei
+  `bezahlt` ausgestellt (`issue_tickets_for_order` verweigert alles andere und verlangt `is_admin()`).
+- **`orders.source`** existiert mit den Werten `shop | csv_import`. Der Mitglieder-Import hat
+  damit bereits **699 Bestellungen** (`csv_import`, alle `bezahlt`) angelegt, dazu 480 Mitglieder,
+  763 Tickets, 36 Karten bereits per Mail verschickt. Der Auftrag nennt den Wert `import`.
+- **Produkte sind flach**: eine Tabelle `products` mit `type` (`season_pass | membership`), ohne
+  Varianten-Tabelle. Jede Variante ist heute eine eigene Produktzeile, auf die `order_items`,
+  `tickets`, `price_history` und `sales_channels` zeigen. Live vorhanden (Saison 2627):
+  Saisonkarte Erwachsene 150.–, Reduziert 80.–, Sponsoren Legi 0.–, Mitglieder (persönlich /
+  übertragbar, 0.–, inaktiv), Red Castle Normal 300.– (1 persönliche Karte), Bronze 1000.– (2
+  übertragbare), Silber 2500.– (2), Gold 5000.– (3), plus ein Testprodukt.
+- **Name auf dem Ticket**: `tickets.holder_name` ist bereits der Snapshot beim Ausstellen und wird
+  von PDF, Admin-Tabellen, Download-Dateinamen und `rename_ticket_holder()` gelesen. Die Regel
+  «Firma vs. Person» liegt heute aber im Warenkorb (Freitext pro Zeile), nicht zentral.
+- **Download-Link existiert** (`/meine-tickets/<token>`, D54): HMAC-signierter Link über die
+  Bestellnummer, nicht erratbar, ohne Ablauf, in Bestätigungs- und Mitglieder-Mails bereits im
+  Einsatz. Es gibt keine `download_token`-Spalte; der Link braucht keine. Download und
+  Kartenliste sind heute auf `status = 'bezahlt'` gegated.
+- **Mailversand**: `sendEmail()` in `src/lib/email/mailer.ts` (Resend). Zwei Aufrufer: die
+  Bestellbestätigung nach dem Shop-Checkout (`after()` in `kasse/actions.ts`, best-effort,
+  `confirmation_email_sent_at`) und der manuelle Kartenversand im Reiter Mitglieder
+  (`sendMemberCards()`: Betreff/Text editierbar, Platzhalter `{{vorname}}`/`{{nachname}}`,
+  Tipp-Bestätigung «Versenden», PDFs als Anhang, `tickets.card_sent_at` pro Karte). Es gibt keine
+  Vorlagenauswahl, keine Vorschau, keine Testmail, keine Batches. Der Import versendet nichts —
+  aber nur, weil ihn niemand aufruft; eine serverseitige Sperre nach `source` gibt es nicht.
+- **Auto-Storno**: `auto_cancel_stale_orders()` (pg_cron, täglich) setzt jede Bestellung mit
+  `status = 'neu'` nach 14 Tagen auf `storniert` (D14). Für Red-Castle-Rechnungen mit 30 Tagen
+  Zahlungsfrist ist das falsch — und sobald Stornieren Tickets sperrt, würde der Job Sponsoren
+  die Karten abschalten.
+- **Checkout heute**: ein generischer Warenkorb (Name pro Karte, Adresse, Telefon Pflicht,
+  Turnstile). Red Castle ist per `sales_channels` aktuell auf `shop` gestellt und läuft durch
+  genau diesen Warenkorb; Saisonkarten stehen auf `website` (Bestellfrist abgelaufen).
+- **Admin «Bestellungen»**: Liste mit Status-Filter und Suche, Detailseite mit Statuswechsel und
+  Ticket-Tabelle, Excel- und FIBU-CSV-Export unter Einstellungen → Export. Keine Mehrfachauswahl,
+  keine Kopier-Buttons, kein CSV-Import, keine Rechnungsnummer.
+- **Tests**: nur Playwright (lokal destruktiv gegen das Produktionsprojekt, Preview read-only) und
+  pgTAP für RLS. Es gibt keinen Unit-Test-Runner, den die Mail-Tests («Import erzeugt 0 Mails»)
+  brauchen. Der bestehende Playwright-Test `rcc-membership-order.spec.ts` bestellt Red Castle
+  über den heutigen Warenkorb und wird durch den neuen Flow ersetzt werden müssen.
+- **Wallet-Passes** sind nicht gebaut (D28); «beim Import erzeugen» heisst konkret: der Import
+  benutzt dieselbe Ausstellungsfunktion wie der Shop, sodass Passes dort mitkommen, sobald sie
+  existieren. Es gibt dafür jetzt nichts zu bauen.
+
+### Bereits im Auftrag beantwortet
+
+**D63 — Saisonabo-Varianten und Preise:** wie live im Projekt definiert (`products`): Erwachsene
+150.–, Reduziert 80.–, Sponsoren Legi 0.–. Die Mitglieder-Produkte bleiben als eigene Kategorie
+(`mitglieder`), nicht als Saisonabo-Variante — sie werden über den Mitglieder-Reiter ausgestellt.
+**Entschieden.**
+
+**D64 — Zugang zur Red-Castle-Bestellung ist offen**, kein Sponsor-Code. **Entschieden.**
+
+**D65 — Zahlungsfrist fix 30 Tage netto**, nicht pro Paket konfigurierbar. **Entschieden.**
+
+**D66 — Keine Dankes-Mail bei `bezahlt`.** Kein Feature-Flag, kein Code dafür. **Entschieden.**
+
+**D67 — Wallet-Passes beim Import erzeugen**, nicht erst beim ersten Abruf — d.h. der Import
+läuft durch dieselbe Ticket-Ausstellung wie der Shop. **Entschieden.**
+
+**D68 — Admin-Rollen: alle Admins dürfen alles**, Rollen kommen später (bestätigt D15).
+**Entschieden.**
+
+### Offene Fragen (Interrogation Gate)
+
+Jede Frage hat einen Vorschlag; «wie vorgeschlagen» als Antwort reicht.
+
+**O1 — Produkt/Variante: eigene Tabellen oder Spalten auf `products`?** Der Auftrag beschreibt
+`products` (Hauptkategorie) und `product_variants` (mit Preis). Heute ist `products` bereits die
+Varianten-Ebene, auf die alle Fremdschlüssel zeigen. *Vorschlag:* `products` bleibt die
+Varianten-Ebene und bekommt zwei neue Spalten `category` (`red_castle | saisonabo | mitglieder`)
+und `variant` (`gold | silber | bronze | normal` bzw. `erwachsene | reduziert | legi` bzw.
+`persoenlich | uebertragbar`), eindeutig pro Saison; die gültigen Kombinationen stehen in einer
+kleinen Lookup-Tabelle `product_variant_catalog (category, variant)`, auf die ein
+Fremdschlüssel zeigt — ungültige Kombinationen (Saisonabo + Gold) sind damit per Constraint
+ausgeschlossen. Kein Umbau von `order_items`/`tickets`, kein Risiko für die 700 bestehenden
+Bestellungen. Alternative: echte Tabellen `products`/`product_variants` mit Umverdrahtung aller
+Fremdschlüssel — ein grosser Migrationsschritt ohne funktionalen Gewinn.
+
+**O2 — Red Castle «Normal»:** bleibt die persönliche Stufe (300.–, 1 Karte auf Personennamen) als
+vierte Variante bestellbar? Der Auftrag nennt nur Gold/Silber/Bronze und «immer Firmenname».
+*Vorschlag:* Normal bleibt als Variante bestehen, folgt aber demselben Rechnungs-Flow; auf der
+Karte steht der Firmenname (Regel gilt für die ganze Kategorie). Falls Normal nicht mehr über den
+Shop laufen soll: deaktivieren.
+
+**O3 — «Anzahl Tickets» beim Red-Castle-Paket:** heute ist die Kartenzahl pro Stufe fix (Bronze 2,
+Silber 2, Gold 3, Normal 1). Im CSV-Beispiel hat Gold aber `anzahl = 4`. *Vorschlag:* Im Shop
+wählt der Sponsor die Stufe; die Kartenzahl ist die der Stufe, ohne Eingabefeld (der Preis ist ein
+Paketpreis, ein freies Feld hätte keinen Preis). Im Import gilt `anzahl` aus der Datei als
+gegeben (Altbestände dürfen abweichen). Falls Sponsoren im Shop tatsächlich mehr Karten wählen
+dürfen: bitte sagen, zu welchem Preis (pro Zusatzkarte?).
+
+**O4 — `ticket_name` vs. `holder_name`:** *Vorschlag:* die bestehende Spalte `tickets.holder_name`
+ist das `ticket_name` des Auftrags (gleiche Bedeutung, gleicher Snapshot-Zeitpunkt); sie wird
+nicht umbenannt, damit PDF, Admin, Scanner und die 763 bestehenden Tickets unverändert
+funktionieren. Die Regel «red_castle → Firmenname, saisonabo → Vor- und Nachname» wandert an
+eine zentrale Stelle in der Ticket-Erzeugung (`src/lib/tickets/issue.ts` + Bestellfunktion).
+Alternative: zusätzliche Spalte `ticket_name`, die dann doppelt gepflegt werden müsste.
+
+**O5 — `download_token`:** *Vorschlag:* der bestehende signierte Link (D54) bleibt der
+Ticket-Link; keine neue Spalte. Er ist kryptografisch nicht erratbar (HMAC-SHA256 mit eigenem
+Secret) und steht bereits in allen verschickten Mails. Eine zufällige Spalte brächte nur dann
+etwas, wenn ein einzelner Link widerrufbar sein soll — dafür sehe ich keinen Bedarf. Wenn doch
+gewünscht: bitte sagen, dann kommt `orders.download_token` (32 Bytes Zufall) und der Link wechselt.
+
+**O6 — Auto-Storno nach 14 Tagen (D14):** *Vorschlag:* der Job cancelt nur noch Bestellungen
+ohne ausgestellte Tickets (also Saisonabo-Vorkasse), nie Rechnungsbestellungen (`payment_method =
+'invoice'`). Alternative: Job ganz abschalten, da Storno neu ein bewusster Admin-Schritt mit
+Dialog ist. Was ist dir lieber?
+
+**O7 — Saisonabo im Shop: weiterhin Vorkasse (Tickets erst bei `bezahlt`)?** Der Auftrag
+beschreibt den Rechnungs-Flow nur für Red Castle. *Vorschlag:* ja, Saisonabo-Shopbestellungen
+bleiben wie heute (Tickets bei `bezahlt`); nur `red_castle` stellt Tickets sofort bei `neu` aus.
+Sobald der Shop dereinst Saisonabos wieder verkauft, kann das per Entscheid umgestellt werden.
+
+**O8 — Red-Castle-Bestellung: eigenes Formular oder Warenkorb?** *Vorschlag:* eigene Seite
+`/red-castle-club/bestellen?variante=gold` mit dem Firmenformular (Firma, Kontaktperson,
+Rechnungsadresse, E-Mail, Referenz/PO optional, Pflicht-Checkbox 30 Tage netto, Turnstile),
+ohne Warenkorb — Zahlungsart und Daten unterscheiden sich vom Saisonabo-Checkout, und ein
+gemischter Warenkorb (Saisonabo + Red Castle) hätte zwei Zahlungsarten. Die «Auswählen»-Buttons
+auf `/red-castle-club` führen direkt dorthin.
+
+**O9 — Telefonnummer im Red-Castle-Formular:** heute Pflicht im Checkout; der Auftrag nennt sie
+nicht. *Vorschlag:* optionales Feld.
+
+**O10 — Firmendaten: auf `orders` oder auf `customers`?** Der Auftrag listet `company_name`,
+`contact_person`, `billing_address` etc. auf `orders`. *Vorschlag:* die Adress- und
+Kontaktfelder bleiben in `customers` (dort liegen sie heute, Export und Admin lesen sie dort);
+`customers` bekommt `company_name`, `contact_person`, `customer_reference` dazu. `orders`
+bekommt, was zur Bestellung gehört: `payment_method`, `invoice_number`, `terms_accepted_at`,
+`external_ref`, `import_batch_id`, `notification_status`, `notified_at`.
+
+**O11 — `source`-Wert:** `csv_import` (bestehend, 699 Zeilen) beibehalten statt `import`?
+*Vorschlag:* beibehalten; das Wort im UI heisst «Import».
+
+**O12 — Was zählt als «informiert» (`notification_status`)?** Heute gibt es zwei Marker: die
+automatische Bestätigung (`confirmation_email_sent_at`) und pro Karte `card_sent_at` (manueller
+Versand). *Vorschlag:* `notification_status`/`notified_at` auf `orders` werden **nur vom
+manuellen Versand** gesetzt (Einführungs-Mail); die automatische Shop-Bestätigung setzt weiterhin
+`confirmation_email_sent_at`. Filter «Noch nicht informiert» = `notification_status =
+'nicht_versendet'`. Sollen Shop-Bestellungen, die die automatische Bestätigung bekommen haben,
+im Filter trotzdem als «nicht informiert» erscheinen? *Vorschlag:* ja — die Einführungs-Mail ist
+etwas anderes als die Bestätigung; im Standard-Filter sind sie aber per Quelle = Import ohnehin
+ausgeblendet.
+
+**O13 — Mail-Inhalt beim manuellen Versand:** Tickets als PDF-Anhang **und** Link (wie bei den
+Mitgliedern) oder nur Link? *Vorschlag:* Anhang und Link — Sponsoren leiten die PDFs weiter, und
+der Link ist die dauerhafte Rückkehr.
+
+**O14 — Platzhalter-Syntax:** Mitglieder-Versand nutzt `{{vorname}}`; der Auftrag nennt `{name}`,
+`{firma}`, `{bestellnummer}`, `{variante}`, `{ticket_link}`. *Vorschlag:* die generische
+Komponente versteht beide Schreibweisen (`{name}` und `{{name}}`), die Vorlagen verwenden die
+einfache aus dem Auftrag; bei Mitgliedern bleiben `vorname`/`nachname` zusätzlich verfügbar.
+
+**O15 — Vorlagen im Code oder in der Datenbank?** *Vorschlag:* im Code (`src/lib/email/
+templates.ts`), editierbar im Dialog vor dem Versand — so wie heute bei den Mitgliedern. Eine
+Vorlagen-Verwaltung im Admin wäre ein eigener Auftrag.
+
+**O16 — Testmail «an die eigene Adresse»:** die Login-Adresse des angemeldeten Admins, fix?
+*Vorschlag:* ja, vorbelegt mit der Admin-Adresse, überschreibbar.
+
+**O17 — Batch-Rollback:** hart löschen (Bestellungen, Positionen, Tickets, PDFs, Kunden des
+Batches) oder stornieren? *Vorschlag:* hart löschen, aber nur solange kein Ticket des Batches
+je gescannt wurde (`scan_events` verweist auf Tickets und darf nicht verändert werden); sonst
+verweigert der Rollback mit Hinweis, und der Weg ist Stornieren pro Bestellung. Der Rollback
+braucht dafür Löschrechte, die heute bewusst niemand hat — sie kommen als eigene, geprüfte
+Funktion `rollback_import_batch()` nur für Bestellungen mit `import_batch_id`.
+
+**O18 — `bestelldatum` aus dem CSV:** als `orders.created_at` übernehmen? Das beeinflusst die
+Datumsspalte im FIBU-Export und die Sortierung. *Vorschlag:* ja; das Importdatum steht separat
+im Batch.
+
+**O19 — Interne Benachrichtigungsadresse:** neue ENV-Variable `ORDER_NOTIFICATION_EMAIL`
+(Kassierin/Fibu). Betreff: «Neue Sponsorenbestellung UHCU-2627-0012 – Rechnung erstellen» (echte
+Bestellnummer statt #1234). *Vorschlag:* so umsetzen; Adresse trägst du in Vercel ein.
+
+**O20 — Unit-Test-Runner für die Mail-Tests:** es gibt keinen. *Vorschlag:* Vitest (versteht die
+`@/`-Pfade aus `tsconfig.json` ohne Umwege), Script `npm test`; Resend wird gemockt. Playwright
+bleibt für E2E.
+
+**O21 — Filter «Produkt»/«Variante» im Reiter Bestellungen:** eine Bestellung hat heute mehrere
+Positionen (Warenkorb). *Vorschlag:* der Filter trifft, wenn irgendeine Position passt; Red-Castle-
+Bestellungen haben ohnehin genau eine.
+
+**O22 — Bestehende Playwright-Tests:** `rcc-membership-order.spec.ts` (Red Castle durch den
+Warenkorb) wird durch einen Test des neuen Formulars ersetzt, nicht nebenher gepflegt. Einverstanden?
+
+**D63 — No transfer badge; the order number moves under the transfer note.** Claudio, looking at a
+printed member card, took the "NICHT ÜBERTRAGBAR" pill in the card's top row back out: the note
+under the holder already says it, and the pill said it a second time. The order number leaves its
+column beside the name and sits under that note, in the same small type - "Bestellung
+UHCU-2627-0764" - so the name has the panel's whole width, which is also what a long holder name
+needed: "Corinne Achermann Sommer" had shrunk to fit half a panel. Three layout directions for very
+long company names were sketched on the canvas and set aside; the width freed here covers the case
+for now. **Resolved.**
+
+**D64 — VIP stars on club cards, no label over the name, the season number sits low.** Every Red
+Castle Club subscription is a VIP card, and the card now says so the way a hotel does: one star for
+Bronze, two for Silber, three for Gold, in the tier's metal, on the crest's line where the transfer
+badge used to be; the Normal tier has none. Two smaller moves came with the same look at the card:
+the "NAME" / "NAME / FIRMA" label over the holder is gone on every card - a name over a card needs
+no caption - and the hollow season number no longer floats mid-band but sits a hand's breadth above
+the name, with the title's space above it, which reads as one block with the holder line rather
+than as a gap between two. **Resolved.**
+
+**D65 — The season number sits on the golden section; the gold gets fuller.** Claudio wanted the
+hollow season number "eingemittet im goldenen Schnitt" between the card's title and the name, on
+every card: the space above it is 1.618 times the space below, which the eye reads as balanced
+where a true centre looks high and D64's low anchor looked pushed down. And the Gold tier's metal
+was too muted for him - it is now #cfa62b (from #b18d2b), still a print-safe ochre gold rather
+than a neon yellow. D47 means the shop's Gold tier cards take the same tone, deliberately: the
+web card and the printed pass keep agreeing on what "Gold" looks like. **Resolved.**
+
+### Antworten Runde 1 (2026-09-16)
+
+**D69 — Auto-Storno wird ganz abgeschaltet (ersetzt D14).** Stornieren ist neu ein bewusster
+Admin-Schritt mit Bestätigungsdialog; kein Job cancelt mehr im Hintergrund. Der pg_cron-Eintrag
+wird entfernt, die Funktion bleibt ohne Zeitplan stehen. **Entschieden (O6).**
+
+**D70 — Red Castle: Firma ist optional, Besteller sind heute Privatpersonen.** Das Formular
+erfasst Vorname und Nachname der bestellenden Person plus ein optionales Feld Firma. Die Regel
+«immer Firmenname auf dem Ticket» aus dem Auftrag gilt damit nicht mehr; welcher Name auf die
+Karte kommt, wenn eine Firma angegeben ist, ist noch offen (siehe O2b). **Teilweise entschieden (O2).**
+
+**D71 — Wie vorgeschlagen entschieden:** O1 (Spalten `category`/`variant` auf `products` mit
+Lookup-Tabelle), O4 (`holder_name` bleibt das Ticket-Name-Feld), O5 (signierter Link bleibt, keine
+`download_token`-Spalte), O9 (Telefon optional), O10 (Firmendaten auf `customers`, Bestellfelder auf
+`orders`), O11 (`csv_import` bleibt), O12 (`notification_status` nur durch manuellen Versand),
+O13 (PDF-Anhang und Link), O14 (beide Platzhalter-Schreibweisen), O15 (Vorlagen im Code),
+O16 (Testmail an Admin-Adresse, überschreibbar), O17 (Rollback löscht hart, nur ohne Scans),
+O18 (`bestelldatum` wird `created_at`), O19 (`ORDER_NOTIFICATION_EMAIL`), O20 (Vitest),
+O21 (Filter trifft irgendeine Position), O22 (Playwright-Test wird ersetzt). **Entschieden.**
+
+**D72 — Eigenes Red-Castle-Formular, DSG-konform (O8).** Claudio: «halte dich an die DSG-
+Verordnung, wenn das geht, dann ja.» Ein eigenes Formular ist mit dem revidierten Datenschutzgesetz
+(DSG, seit 1.9.2023) vereinbar, solange es Datensparsamkeit einhält: nur Felder, die für Rechnung
+und Ticket nötig sind, Zweck beim Formular genannt, Link auf `/datenschutz`, keine Weitergabe
+ausser an Resend (Mailversand) und Cloudflare (Turnstile) — beides ist in der Datenschutzerklärung
+zu nennen, falls noch nicht geschehen. Die Pflicht-Checkbox bezieht sich nur auf die
+Zahlungsbedingungen; eine separate Einwilligungs-Checkbox für die Datenverarbeitung ist nach DSG
+nicht nötig, weil die Verarbeitung zur Vertragserfüllung erfolgt. **Entschieden.**
+
+**Noch offen nach Runde 1:**
+- **O2b** — Name auf der Karte, wenn eine Firma angegeben ist: Firma oder Person? Vorschlag:
+  Firma, falls angegeben, sonst Vor- und Nachname.
+- **O3** — Kartenzahl pro Red-Castle-Paket: fix pro Stufe oder frei wählbar (dann zu welchem Preis)?
+- **O7** — Saisonabo-Shopbestellungen: weiterhin Tickets erst nach Zahlung, oder wie Red Castle
+  sofort mit Rechnung nachher?
+- Claudio ergänzt die Feldliste (siehe Anhang «Erfasste Attribute» unten).
+
+### Anhang — Erfasste Attribute (Stand heute) und geplante Ergänzungen
+
+Was der Shop und der Admin heute pro Datensatz speichern. Fett = im Shop-Checkout vom Kunden
+selbst eingegeben; die anderen entstehen im System oder im Admin.
+
+**Kunde (`customers`)** — **Name**, **E-Mail**, **Telefon** (Pflicht), **Strasse und Nr.**,
+**PLZ**, **Ort**, Land (fix «CH»), Mitgliedernummer (Spalte vorhanden, wird nirgends befüllt).
+
+**Bestellung (`orders`)** — Bestellnummer (UHCU-2627-0001, automatisch), Status (neu /
+Rechnung versendet / bezahlt / storniert), Saison, Quelle (Shop / Import), Total, Rückerstattung
+offen (ja/nein), Bestelldatum, Bestätigungsmail versendet am, Dateien übergeben am.
+
+**Position (`order_items`)** — Produkt (Name-Snapshot), Anzahl, Einzelpreis zum Bestellzeitpunkt,
+**Name auf der Karte** (bei übertragbaren Paketen ein gemeinsamer Name, z.B. Firma).
+
+**Ticket (`tickets`)** — Name auf der Karte, übertragbar (ja/nein), laufende Nummer
+(übertragbar-1, -2, …), Status (gültig / eingelöst / storniert / ersetzt), ersetzt Ticket X,
+ausgestellt am, per Mail versendet am, PDF-Datei.
+
+**Mitglied (`members`, nur Mitglieder-Import)** — Mitgliedsnummer, Vorname, Nachname, E-Mail,
+Kategorie, Anzahl persönliche Karten, Anzahl übertragbare Karten, importiert am.
+
+**Geplant neu (dieser Auftrag)** —
+Kunde: Vorname und Nachname statt eines Namensfelds (für Red Castle), Firma (optional),
+Kontaktperson (= die bestellende Person), Referenz/PO-Nummer (optional), Telefon neu optional.
+Bestellung: Zahlungsart (Red Castle fix «Rechnung»), Rechnungsnummer (Fibu), Zahlungsbedingungen
+akzeptiert am, externe Referenz (alte Bestellnummer aus dem CSV), Import-Batch, Benachrichtigung
+(nicht versendet / versendet / fehlgeschlagen) und Zeitpunkt.
+Produkt: Kategorie (Red Castle / Saisonabo / Mitglieder) und Variante (Gold, Silber, Bronze,
+Normal / Erwachsene, Reduziert, Legi / persönlich, übertragbar).

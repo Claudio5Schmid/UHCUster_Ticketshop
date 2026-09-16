@@ -51,8 +51,8 @@ const SILBER: TicketAccentColor = withHex({
 });
 
 const GOLD: TicketAccentColor = withHex({
-  accent: [0.694, 0.553, 0.169], // muted, print-safe gold (not neon yellow)
-  tint: [0.969, 0.941, 0.867],
+  accent: [0.812, 0.651, 0.169], // #cfa62b - a fuller gold than the first muted take (D65), still print-safe
+  tint: [0.973, 0.945, 0.859],
   metalName: "Gold",
 });
 
