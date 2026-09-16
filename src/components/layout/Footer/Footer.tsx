@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Container } from "@/components/layout/Container/Container";
-import { DATENSCHUTZ_PDF } from "@/lib/legal";
+import { DATENSCHUTZ_PDF, IMPRESSUM_URL } from "@/lib/legal";
 import styles from "./Footer.module.css";
 
 export function Footer() {
@@ -22,7 +22,9 @@ export function Footer() {
                 <Link href="/meine-tickets">Meine Tickets</Link>
               </li>
               <li>
-                <Link href="/impressum">Impressum</Link>
+                <a href={IMPRESSUM_URL} target="_blank" rel="noopener noreferrer">
+                  Impressum
+                </a>
               </li>
               {/* The club's own PDF rather than a page of its own: it is the
                   signed document, and keeping a second copy as markup would mean

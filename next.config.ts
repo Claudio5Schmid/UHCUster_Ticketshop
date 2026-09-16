@@ -11,6 +11,13 @@ const nextConfig: NextConfig = {
         destination: "/datenschutz-uhc-uster.pdf",
         permanent: true,
       },
+      {
+        // Same as above: the imprint lives on the club's own site, and this route
+        // used to show a placeholder. Kept so existing links still arrive.
+        source: "/impressum",
+        destination: "https://uhcuster.ch/de/verein/impressum.htm",
+        permanent: true,
+      },
     ];
   },
 };
