@@ -63,7 +63,8 @@ export function matchMail(
   mail: SentMailRecord,
   ordersByNumber: Map<string, string>,
   membersByEmail: Map<string, MemberMatch>,
-  ordersByEmail: Map<string, string>
+  ordersByEmail: Map<string, string[]>,
+  alreadyPaired: Map<string, number> = new Map()
 ): Match | null {
   const subject = mail.subject ?? "";
 
@@ -82,9 +83,19 @@ export function matchMail(
     const member = membersByEmail.get(address);
     if (member) return { kind: "member_cards", orderId: member.orderId, memberId: member.memberId };
   }
+  // Several orders can share an address - a household, or one person ordering
+  // twice - and the manual send wrote to each of them separately, so there are
+  // as many mails as orders and nothing in either to tell them apart. They are
+  // paired off in order of sending against the orders in order of creation.
+  // Which mail ends up on which of that person's orders is arbitrary, but the
+  // outcome is the same for all of them: one bad address fails every one.
   for (const address of mail.to) {
-    const orderId = ordersByEmail.get(address);
-    if (orderId) return { kind: "order_info", orderId, memberId: null };
+    const pool = ordersByEmail.get(address);
+    if (!pool) continue;
+    const used = alreadyPaired.get(address) ?? 0;
+    if (used >= pool.length) continue;
+    alreadyPaired.set(address, used + 1);
+    return { kind: "order_info", orderId: pool[used], memberId: null };
   }
   return null;
 }
@@ -139,19 +150,24 @@ export async function backfillDeliveryHistory(since: Date = DEFAULT_SINCE): Prom
     for (const row of data ?? []) known.add(row.provider_message_id as string);
   }
 
-  const orderRows = await readAll<{ id: string; order_number: string; customers: { email?: string } | { email?: string }[] | null }>(
-    "orders",
-    "id, order_number, customers(email)"
-  );
+  const orderRows = await readAll<{
+    id: string;
+    order_number: string;
+    created_at: string;
+    customers: { email?: string } | { email?: string }[] | null;
+  }>("orders", "id, order_number, created_at, customers(email)");
+  orderRows.sort((a, b) => a.created_at.localeCompare(b.created_at));
+
   const ordersByNumber = new Map<string, string>();
-  const ordersByEmail = new Map<string, string>();
+  const ordersByEmail = new Map<string, string[]>();
   for (const row of orderRows) {
     ordersByNumber.set(row.order_number, row.id);
     const customer = row.customers;
     const email = (Array.isArray(customer) ? customer[0]?.email : customer?.email)?.trim().toLowerCase();
-    // First one wins: a customer with several orders is matched by subject above
-    // anyway, and this fallback only has to find someone plausible.
-    if (email && !ordersByEmail.has(email)) ordersByEmail.set(email, row.id);
+    if (!email) continue;
+    const pool = ordersByEmail.get(email) ?? [];
+    pool.push(row.id);
+    ordersByEmail.set(email, pool);
   }
 
   const memberRows = await readAll<{ id: string; email: string | null; order_id: string | null }>("members", "id, email, order_id");
@@ -168,8 +184,11 @@ export async function backfillDeliveryHistory(since: Date = DEFAULT_SINCE): Prom
   report.known = mails.length - pending.length;
 
   const matches = new Map<string, Match>();
+  // Carried across the loop so that two mails to one address take two different
+  // orders rather than both landing on the same one.
+  const paired = new Map<string, number>();
   for (const mail of pending) {
-    const match = matchMail(mail, ordersByNumber, membersByEmail, ordersByEmail);
+    const match = matchMail(mail, ordersByNumber, membersByEmail, ordersByEmail, paired);
     if (match) matches.set(mail.id, match);
     else report.unmatched.push(mail.to[0] ?? "(kein Empfänger)");
   }

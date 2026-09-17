@@ -8,7 +8,7 @@ import { matchMail, type MemberMatch } from "@/lib/admin/email-backfill";
  */
 const ordersByNumber = new Map([["UHCU-2627-0762", "order-762"]]);
 const membersByEmail = new Map<string, MemberMatch>([["ruedi@bluewin.ch", { memberId: "member-1", orderId: "order-762" }]]);
-const ordersByEmail = new Map([["kundin@example.com", "order-99"]]);
+const ordersByEmail = new Map([["kundin@example.com", ["order-99"]]]);
 
 function mail(subject: string | null, to: string[]) {
   return { id: "m1", to, subject, createdAt: "2026-09-17T18:55:00Z", status: "bounced" as const };
@@ -52,8 +52,20 @@ describe("matchMail", () => {
   });
 
   it("prefers the member over the order when both would match", () => {
-    const both = new Map([["ruedi@bluewin.ch", "order-someone-else"]]);
+    const both = new Map([["ruedi@bluewin.ch", ["order-someone-else"]]]);
     expect(matchMail(mail("Deine Karte", ["ruedi@bluewin.ch"]), ordersByNumber, membersByEmail, both)?.kind).toBe("member_cards");
+  });
+
+  it("pairs two mails to one address with two different orders", () => {
+    const household = new Map([["familie@example.com", ["order-a", "order-b"]]]);
+    const paired = new Map<string, number>();
+    const first = matchMail(mail("Deine Karten", ["familie@example.com"]), ordersByNumber, membersByEmail, household, paired);
+    const second = matchMail(mail("Deine Karten", ["familie@example.com"]), ordersByNumber, membersByEmail, household, paired);
+    const third = matchMail(mail("Deine Karten", ["familie@example.com"]), ordersByNumber, membersByEmail, household, paired);
+    expect(first?.orderId).toBe("order-a");
+    expect(second?.orderId).toBe("order-b");
+    // More mails than orders: the extra one is reported rather than doubled up.
+    expect(third).toBeNull();
   });
 
   it("matches nobody rather than guessing", () => {
