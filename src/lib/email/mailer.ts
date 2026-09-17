@@ -40,6 +40,43 @@ export interface SendEmailInput {
  */
 const UNDELIVERABLE_TLDS = [".invalid", ".test", ".example", ".localhost"];
 
+/**
+ * Pacing and retries live here rather than in each send loop, because the limit
+ * they respect is the provider's and belongs to the key, not to whichever loop
+ * happens to be running.
+ *
+ * Resend allows 10 requests a second per team, raised on request. A floor of
+ * 130ms between calls is about 7.7 a second: fast enough that the club's whole
+ * list is a matter of minutes, far enough below the ceiling that a slow moment
+ * elsewhere cannot push a burst over it. The real pace is slower anyway - a card
+ * mail downloads its PDFs first.
+ *
+ * Note this holds within one server instance. Two admins sending at the same
+ * moment could exceed it, which is what the retry below is for.
+ */
+const MIN_GAP_MS = 130;
+
+/** Resend answers a burst with 429. Waiting and going again is the whole fix;
+ *  failing the recipient would leave the office hunting for who to send to. */
+const RATE_LIMIT_RETRIES = 4;
+const RATE_LIMIT_BACKOFF_MS = [500, 1500, 3500, 7000];
+
+let nextSlot = 0;
+
+async function waitForSlot(): Promise<void> {
+  const now = Date.now();
+  const slot = Math.max(now, nextSlot);
+  nextSlot = slot + MIN_GAP_MS;
+  if (slot > now) await new Promise((resolve) => setTimeout(resolve, slot - now));
+}
+
+/** Resend reports a refused send in its response rather than throwing, so the
+ *  rate-limit case has to be recognised from what comes back. */
+function isRateLimited(error: { name?: string; message?: string } | null): boolean {
+  const text = `${error?.name ?? ""} ${error?.message ?? ""}`.toLowerCase();
+  return text.includes("rate_limit") || text.includes("too many requests") || text.includes("429");
+}
+
 export function isUndeliverableAddress(email: string): boolean {
   const normalized = email.trim().toLowerCase();
   return UNDELIVERABLE_TLDS.some((tld) => normalized.endsWith(tld));
@@ -93,7 +130,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     contentType: "application/pdf",
   }));
 
-  const { data, error } = await getClient().emails.send({
+  const message = {
     from: fromEmail,
     to: input.to,
     ...(replyTo ? { replyTo } : {}),
@@ -101,17 +138,29 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     text: input.bodyText,
     ...(input.bodyHtml ? { html: input.bodyHtml } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),
-  });
+  };
 
-  // Resend reports a refused send in its response instead of throwing - the opposite
-  // of the nodemailer/SES transport this replaced, whose sendMail rejected. Ignoring
-  // `error` would turn every rejection into a reported success, and sendPendingCards
-  // in src/lib/admin/members.ts would stamp cards as sent that never left the building.
-  if (error) {
+  for (let attempt = 0; ; attempt++) {
+    await waitForSlot();
+    const { data, error } = await getClient().emails.send(message);
+
+    // Resend reports a refused send in its response instead of throwing - the opposite
+    // of the nodemailer/SES transport this replaced, whose sendMail rejected. Ignoring
+    // `error` would turn every rejection into a reported success, and sendMemberCards
+    // in src/lib/admin/members.ts would stamp cards as sent that never left the building.
+    if (!error) {
+      return { accepted: true, messageId: data?.id ?? null };
+    }
+
+    if (isRateLimited(error) && attempt < RATE_LIMIT_RETRIES) {
+      const wait = RATE_LIMIT_BACKOFF_MS[attempt];
+      console.warn(`[email] Rate limited on "${input.subject}" - waiting ${wait}ms and trying again.`);
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      continue;
+    }
+
     throw new Error(`E-Mail konnte nicht versendet werden (${error.name}): ${error.message}`);
   }
-
-  return { accepted: true, messageId: data?.id ?? null };
 }
 
 export interface SendCardEmailInput {

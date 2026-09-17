@@ -259,3 +259,35 @@ Ohne diese Variable weist der Endpunkt jedes Ereignis ab, und der Shop bleibt be
 **Bounce-Mails im Postfach gibt es nicht.** Resend leitet Rückläufer nicht an die Absenderadresse
 weiter - es meldet sie im Dashboard und über genau diesen Webhook. Wer nur ins Postfach schaut,
 sieht nichts.
+
+
+## Grossversand: was das Tempo begrenzt (Stand 17.09.2026)
+
+**Resend erlaubt 10 Anfragen pro Sekunde pro Team**, auf Anfrage mehr; darüber kommt ein 429
+zurück. Der Pro-Plan hat **kein Tageslimit** und 50'000 bzw. 100'000 Mails im Monat - für ~600
+Karten ist weder das eine noch das andere die Grenze.
+
+Der Shop bremst selbst, und zwar im Mailer, weil das Limit am API-Key hängt und nicht an einer
+einzelnen Versandschlaufe: **mindestens 130 ms zwischen zwei Sendungen**, also rund 7,7 pro Sekunde.
+Kommt trotzdem ein 429, wartet der Mailer und versucht es erneut (0,5 s, 1,5 s, 3,5 s, 7 s) statt
+den Empfänger als fehlgeschlagen abzuhaken. Andere Ablehnungen werden nicht wiederholt - Warten
+repariert eine falsche Adresse nicht.
+
+Die eigentliche Dauer bestimmt nicht das Limit, sondern die Arbeit pro Mail: für jede Karte wird das
+PDF aus dem Storage geladen und angehängt. Rechne für 600 Empfänger mit **rund zehn Minuten**, in
+denen der Browser-Tab offen bleiben muss - der Versand läuft in Fünferblöcken vom Browser aus. Wird
+er unterbrochen, ist nichts kaputt: bereits versendete Karten und bereits informierte Bestellungen
+werden beim nächsten Lauf übersprungen.
+
+Die Batch-Schnittstelle von Resend (100 Mails in einer Anfrage) hilft hier **nicht**: sie
+unterstützt keine Anhänge, und unsere Karten hängen als PDF an.
+
+**Das Risiko bei 600 auf einen Schlag ist nicht die Technik, sondern die Zustellbarkeit.** Ein
+Absender, der bisher wenig verschickt hat, springt damit sprunghaft nach oben, und grosse Anbieter
+sortieren so etwas gerne aus. Empfehlung: in Blöcken von 100 bis 150 über mehrere Tage, nach jedem
+Block im Reiter Bestellungen (oder auf der Bestellseite unter «E-Mails») die unzustellbaren
+anschauen und die Adressen korrigieren, bevor der nächste Block rausgeht. Anhaltend hohe
+Rückläuferquoten können beim Anbieter zur Sperrung führen.
+
+Eine hart abgelehnte Adresse landet bei Resend zudem auf der Sperrliste; ein erneuter Versand an sie
+wird abgelehnt, bis sie dort entfernt wird.

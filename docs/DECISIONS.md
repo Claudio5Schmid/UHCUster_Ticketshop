@@ -1451,3 +1451,22 @@ Shop verfolgt kein Leseverhalten.
 **Was das nicht erklärt:** warum genau diese drei Adressen abgelehnt wurden. Der Grund steht in
 Claudios Resend-Dashboard und ab jetzt auf der Bestellseite unter «E-Mails». Der lokale
 `RESEND_API_KEY` ist nicht mehr gültig, von hier aus war es nicht abfragbar. **Entschieden.**
+
+**D89 — Das Versandtempo liegt im Mailer, nicht in den Schlaufen, und ein 429 wird abgewartet.**
+Claudio vor dem Grossversand: «Wie steht es mit der Senderate, kann ich problemlos alle 600
+versenden? Wir haben Resend Pro.» Nachgeschaut statt geraten: Resend erlaubt **10 Anfragen pro
+Sekunde pro Team** (nicht 2 - die 2/s, mit denen der Bestellversand gebaut wurde, waren schlicht
+falsch), Pro hat kein Tageslimit und 50'000 bzw. 100'000 Mails im Monat.
+
+Die 600 ms Pause zwischen zwei Bestell-Mails sind damit dreifach zu langsam, und der
+Mitglieder-Versand hatte gar keine Pause - beides Zufall statt Entwurf. Die Bremse sitzt jetzt einmal
+im Mailer, weil das Limit am API-Key hängt und nicht an der Schlaufe, die gerade läuft: mindestens
+130 ms zwischen zwei Sendungen (~7,7/s). Beide Versandwege erben das, ohne es zu wissen.
+
+Dazu kommt, was bisher fehlte: ein 429 lässt den Mailer warten und erneut senden (0,5/1,5/3,5/7 s)
+statt den Empfänger als fehlgeschlagen zu vermerken. Andere Ablehnungen werden nicht wiederholt -
+Warten repariert keine falsche Adresse. Der Zähler ist pro Serverinstanz, zwei gleichzeitig
+versendende Admins könnten ihn also überschreiten; genau dafür ist der Retry da.
+
+Die Batch-Schnittstelle (100 Mails pro Anfrage) wurde geprüft und verworfen: sie unterstützt keine
+Anhänge, und jede Karte hängt als PDF an. **Entschieden.**

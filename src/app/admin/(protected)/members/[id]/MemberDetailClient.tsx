@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/Input/Input";
+import { EditableEmail } from "@/components/admin/EditableEmail/EditableEmail";
 import { Button } from "@/components/ui/Button/Button";
 import { Badge } from "@/components/ui/Badge/Badge";
 import { Modal } from "@/components/ui/Modal/Modal";
@@ -69,7 +70,9 @@ export function MemberDetailClient({ member, tickets }: MemberDetailClientProps)
       <div className={styles.detailGrid}>
         <dl className={styles.detailBlock}>
           <dt>E-Mail</dt>
-          <dd>{member.email}</dd>
+          <dd>
+            <EditableEmail value={member.email} target={{ kind: "member", id: member.id }} />
+          </dd>
           <dt>Kategorie</dt>
           <dd>{member.kategorie ?? "–"}</dd>
           <dt>Bestellung</dt>

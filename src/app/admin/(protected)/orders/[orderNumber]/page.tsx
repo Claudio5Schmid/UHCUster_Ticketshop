@@ -136,7 +136,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
             <CopyField label="Rechnungsadresse (Name)" value={order.customer.name} />
             {order.customer.company_name && <CopyField label="Kontaktperson" value={person} />}
             <CopyField label="Adresse" value={address} multiline />
-            <CopyField label="E-Mail" value={order.customer.email} />
+            <CopyField label="E-Mail" value={order.customer.email} editableAs={{ kind: "order", id: order.id }} />
             <CopyField label="Telefon" value={order.customer.phone} />
             <CopyField label="Referenz / PO-Nummer" value={order.customer.customer_reference} />
           </div>

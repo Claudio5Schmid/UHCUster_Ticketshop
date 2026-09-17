@@ -15,12 +15,12 @@ import type { OrderStatus } from "@/lib/orders/visibility";
  * and the durable link in the body, exactly like the member cards. Every
  * outcome lands on the order (set_order_notification), per recipient.
  *
- * Deliberately sequential with a pause between sends: Resend allows two
- * requests a second, and a burst of a hundred would be refused halfway through,
- * leaving half the customers informed and the office guessing which half.
+ * Sequential on purpose, one recipient at a time: each mail is recorded and
+ * marked on its own order, and a failure has to name the one recipient it
+ * belongs to. The pace against the provider's rate limit is kept in the mailer,
+ * which is where the limit actually applies (it belongs to the API key, not to
+ * this loop).
  */
-
-const SEND_GAP_MS = 600;
 
 export interface OrderSendRecipient {
   id: string;
@@ -213,7 +213,7 @@ export async function sendOrderMails(
   const recipients = await loadRecipients(orderIds);
   const supabase = await getSupabaseServerClient();
 
-  for (const [index, recipient] of recipients.entries()) {
+  for (const recipient of recipients) {
     if (recipient.status === "storniert") {
       result.skipped.push({ orderNumber: recipient.orderNumber, reason: "Bestellung ist storniert." });
       continue;
@@ -226,8 +226,6 @@ export async function sendOrderMails(
       result.skipped.push({ orderNumber: recipient.orderNumber, reason: "Keine aktiven Karten." });
       continue;
     }
-
-    if (index > 0) await new Promise((resolve) => setTimeout(resolve, SEND_GAP_MS));
 
     try {
       const mail = render(recipient, subjectTemplate, bodyTemplate);
