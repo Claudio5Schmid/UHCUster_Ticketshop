@@ -62,6 +62,25 @@ interface ResendEmailRow {
   last_event?: string | null;
 }
 
+/**
+ * Resend's refusals in words that say what to do about them.
+ *
+ * The sending key is deliberately restricted to sending - that is the right
+ * setting for a key that sits in the web app and is used on every checkout.
+ * Reading the history needs a second, full-access key, which is why there is a
+ * separate variable for it rather than a note to widen the first one.
+ */
+function describeResendError(message: string): string {
+  if (/restricted to only send/i.test(message)) {
+    return (
+      "Der hinterlegte Resend-Schlüssel darf nur senden, nicht lesen. " +
+      "In Resend unter API Keys einen zweiten Schlüssel mit \"Full access\" erstellen und ihn in Vercel " +
+      "als RESEND_HISTORY_API_KEY hinterlegen, dann neu deployen. Der Sende-Schlüssel bleibt wie er ist."
+    );
+  }
+  return `Resend: ${message}`;
+}
+
 const PAGE_SIZE = 100;
 
 /**
@@ -73,8 +92,10 @@ const PAGE_SIZE = 100;
  * loop, not a tuning knob.
  */
 export async function listSentMails(since: Date, maxPages = 30): Promise<SentMailRecord[]> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("RESEND_API_KEY must be set to read the send history.");
+  const apiKey = process.env.RESEND_HISTORY_API_KEY ?? process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error("Kein Resend-Schlüssel hinterlegt (RESEND_HISTORY_API_KEY oder RESEND_API_KEY).");
+  }
   const resend = new Resend(apiKey);
 
   const collected: SentMailRecord[] = [];
@@ -82,7 +103,7 @@ export async function listSentMails(since: Date, maxPages = 30): Promise<SentMai
 
   for (let page = 0; page < maxPages; page += 1) {
     const response = await resend.emails.list({ limit: PAGE_SIZE, ...(after ? { after } : {}) });
-    if (response.error) throw new Error(response.error.message);
+    if (response.error) throw new Error(describeResendError(response.error.message));
 
     const rows = ((response.data as { data?: ResendEmailRow[] } | null)?.data ?? []) as ResendEmailRow[];
     if (rows.length === 0) return collected;

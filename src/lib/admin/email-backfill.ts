@@ -35,7 +35,14 @@ export interface BackfillReport {
   undeliverable: number;
   /** Mails that match nobody here, with the addresses, so they can be looked at. */
   unmatched: string[];
+  /** Why the run could not finish, in words the office can act on. Absent when
+   *  it did. Returned rather than thrown: a server action that throws reaches
+   *  the browser as an unreadable framework error, and "the key may not read
+   *  the history" is an answer, not a crash. */
+  error?: string;
 }
+
+export const EMPTY_REPORT: BackfillReport = { seen: 0, known: 0, added: 0, undeliverable: 0, unmatched: [] };
 
 export interface MemberMatch {
   memberId: string;

@@ -27,7 +27,9 @@ export function SyncDeliveryButton() {
     setError(null);
     setReport(null);
     try {
-      setReport(await syncDeliveryHistoryAction());
+      const result = await syncDeliveryHistoryAction();
+      if (result.error) setError(result.error);
+      else setReport(result);
     } catch (syncError) {
       setError(syncError instanceof Error ? syncError.message : "Abgleich fehlgeschlagen.");
     } finally {
@@ -40,7 +42,7 @@ export function SyncDeliveryButton() {
       <Button type="button" variant="secondary" size="sm" onClick={handleClick} disabled={running}>
         {running ? "Wird abgeglichen…" : "Zustellstatus abgleichen"}
       </Button>
-      {error && <span style={{ color: "var(--color-danger)" }}>{error}</span>}
+      {error && <span style={{ color: "var(--color-error-text)", maxWidth: "48ch" }}>{error}</span>}
       {report && (
         <span style={{ color: "var(--color-text-secondary)" }}>
           {report.added} nachgetragen, davon {report.undeliverable} nicht zugestellt

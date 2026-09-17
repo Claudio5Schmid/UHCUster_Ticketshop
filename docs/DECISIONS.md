@@ -1568,3 +1568,18 @@ das zurück, was ihr Versandweg gesetzt hat: `member_cards` die Karten und `memb
 Auf der Mitgliederseite steht neu unter **E-Mails**, was an diese Person rausging und wie es
 ausging, mit dem Grund von Resend. Und das Abzeichen zählt nicht mehr nur Karten: sagt der Anbieter
 zur neusten Mail «unzustellbar», steht das dort, statt «vollständig versendet». **Entschieden.**
+
+**Nachtrag zu D93 (gleicher Tag).** Der erste Klick auf «Zustellstatus abgleichen» endete in einem
+minifizierten React-Fehler. Zwei Ursachen, beide behoben.
+
+Erstens durfte der Schlüssel nicht lesen: «This API key is restricted to only send emails.» Der
+Sende-Schlüssel ist auf «Sending access» beschränkt, und das soll er bleiben - er liegt in der
+Web-App und wird bei jeder Bestellung gebraucht. Die Historie liest deshalb neu
+`RESEND_HISTORY_API_KEY`, einen zweiten Schlüssel mit Full access, und fällt nur ersatzweise auf den
+Sende-Schlüssel zurück.
+
+Zweitens war der Fehler für das Büro unlesbar. Eine Server-Aktion, die wirft, kommt im Browser als
+«Minified React error #441» mit einer Ziffernfolge an - der eigentliche Satz steht nur im
+Serverlog. Der Abgleich wirft jetzt nicht mehr über die Grenze, sondern gibt sein Scheitern als
+Teil des Berichts zurück, und der Knopf zeigt es an. Bei genau diesem Fall steht dort, was zu tun
+ist: zweiten Schlüssel erstellen, in Vercel hinterlegen, neu deployen. **Entschieden.**

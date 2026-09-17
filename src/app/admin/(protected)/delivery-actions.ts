@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
-import { backfillDeliveryHistory, type BackfillReport } from "@/lib/admin/email-backfill";
+import { backfillDeliveryHistory, EMPTY_REPORT, type BackfillReport } from "@/lib/admin/email-backfill";
 
 /**
  * Fetches what Resend knows about the mails sent before the shop kept a log and
@@ -16,8 +16,17 @@ export async function syncDeliveryHistoryAction(): Promise<BackfillReport> {
   const { data: isAdmin } = await supabase.rpc("is_admin");
   if (!isAdmin) throw new Error("Nicht berechtigt.");
 
-  const report = await backfillDeliveryHistory();
-  revalidatePath("/admin");
-  revalidatePath("/admin/members");
-  return report;
+  try {
+    const report = await backfillDeliveryHistory();
+    revalidatePath("/admin");
+    revalidatePath("/admin/members");
+    return report;
+  } catch (syncError) {
+    // Answered, not thrown. An error out of a server action arrives in the
+    // browser as a minified framework error with a digest and nothing the
+    // office can do with it; "the key may not read the history" is something
+    // they can act on.
+    console.error("[email] delivery history sync failed:", syncError);
+    return { ...EMPTY_REPORT, error: syncError instanceof Error ? syncError.message : "Abgleich fehlgeschlagen." };
+  }
 }

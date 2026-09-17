@@ -276,6 +276,12 @@ Resend ab und trägt sie nach; danach gilt für diese Sendungen dasselbe wie fü
 eine Karte, deren Mail nie ankam, steht wieder auf offen. Der Knopf verschickt nichts, liest nur -
 er darf jederzeit und mehrfach gedrückt werden.
 
+Dafür braucht es **einen zweiten Resend-Schlüssel**: der Sende-Schlüssel ist bewusst auf «Sending
+access» beschränkt - richtig für einen Schlüssel, der in der Web-App steckt und bei jeder Bestellung
+gebraucht wird - und darf die Historie nicht lesen. In Resend unter API Keys einen Schlüssel mit
+**Full access** erstellen und ihn in Vercel als `RESEND_HISTORY_API_KEY` hinterlegen, dann neu
+deployen. Der Sende-Schlüssel bleibt unverändert.
+
 **Bounce-Mails im Postfach gibt es nicht.** Resend leitet Rückläufer nicht an die Absenderadresse
 weiter - es meldet sie im Dashboard und über genau diesen Webhook. Wer nur ins Postfach schaut,
 sieht nichts.
