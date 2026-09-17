@@ -93,6 +93,32 @@ export function matchMail(
  *  single `in()` is a URL the server refuses. */
 const ID_SLICE = 100;
 
+/** Rows per insert. Big enough that the whole club is a handful of round trips,
+ *  small enough that one rejected row does not take the run with it. */
+const INSERT_CHUNK = 200;
+
+/**
+ * A whole table, in pages.
+ *
+ * PostgREST caps an open-ended read (1000 rows by default), and both the order
+ * book and the membership roster are near enough to that for a silently
+ * truncated answer to start losing matches. Paging costs one extra round trip
+ * and removes the question.
+ */
+const PAGE = 1000;
+
+async function readAll<T>(table: string, columns: string): Promise<T[]> {
+  const supabase = getSupabaseAdminClient();
+  const collected: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase.from(table).select(columns).range(from, from + PAGE - 1);
+    if (error) throw new Error(`Failed to read ${table}: ${error.message}`);
+    const rows = (data ?? []) as T[];
+    collected.push(...rows);
+    if (rows.length < PAGE) return collected;
+  }
+}
+
 export async function backfillDeliveryHistory(since: Date = DEFAULT_SINCE): Promise<BackfillReport> {
   const supabase = getSupabaseAdminClient();
   const mails = await listSentMails(since);
@@ -100,29 +126,40 @@ export async function backfillDeliveryHistory(since: Date = DEFAULT_SINCE): Prom
   const report: BackfillReport = { seen: mails.length, known: 0, added: 0, undeliverable: 0, unmatched: [] };
   if (mails.length === 0) return report;
 
-  const { data: existing, error: existingError } = await supabase.from("email_messages").select("provider_message_id");
-  if (existingError) throw new Error(`Failed to read the mail log: ${existingError.message}`);
-  const known = new Set((existing ?? []).map((row) => row.provider_message_id as string));
+  // Asked about by id rather than read whole: the answer is bounded by what
+  // Resend just handed over, and PostgREST caps an open-ended read anyway.
+  const known = new Set<string>();
+  const allIds = mails.map((mail) => mail.id);
+  for (let offset = 0; offset < allIds.length; offset += ID_SLICE) {
+    const { data, error } = await supabase
+      .from("email_messages")
+      .select("provider_message_id")
+      .in("provider_message_id", allIds.slice(offset, offset + ID_SLICE));
+    if (error) throw new Error(`Failed to read the mail log: ${error.message}`);
+    for (const row of data ?? []) known.add(row.provider_message_id as string);
+  }
 
-  const { data: orderRows, error: orderError } = await supabase.from("orders").select("id, order_number, customers(email)");
-  if (orderError) throw new Error(`Failed to read orders: ${orderError.message}`);
+  const orderRows = await readAll<{ id: string; order_number: string; customers: { email?: string } | { email?: string }[] | null }>(
+    "orders",
+    "id, order_number, customers(email)"
+  );
   const ordersByNumber = new Map<string, string>();
   const ordersByEmail = new Map<string, string>();
-  for (const row of orderRows ?? []) {
-    ordersByNumber.set(row.order_number as string, row.id as string);
-    const customer = row.customers as { email?: string } | { email?: string }[] | null;
+  for (const row of orderRows) {
+    ordersByNumber.set(row.order_number, row.id);
+    const customer = row.customers;
     const email = (Array.isArray(customer) ? customer[0]?.email : customer?.email)?.trim().toLowerCase();
     // First one wins: a customer with several orders is matched by subject above
     // anyway, and this fallback only has to find someone plausible.
-    if (email && !ordersByEmail.has(email)) ordersByEmail.set(email, row.id as string);
+    if (email && !ordersByEmail.has(email)) ordersByEmail.set(email, row.id);
   }
 
-  const { data: memberRows, error: memberError } = await supabase.from("members").select("id, email, order_id").not("order_id", "is", null);
-  if (memberError) throw new Error(`Failed to read members: ${memberError.message}`);
+  const memberRows = await readAll<{ id: string; email: string | null; order_id: string | null }>("members", "id, email, order_id");
   const membersByEmail = new Map<string, MemberMatch>();
-  for (const row of memberRows ?? []) {
+  for (const row of memberRows) {
+    if (!row.order_id) continue;
     const email = (row.email as string | null)?.trim().toLowerCase();
-    if (email && !membersByEmail.has(email)) membersByEmail.set(email, { memberId: row.id as string, orderId: row.order_id as string });
+    if (email && !membersByEmail.has(email)) membersByEmail.set(email, { memberId: row.id, orderId: row.order_id });
   }
 
   // Oldest first, so that when one address was written to twice the later mail
@@ -155,30 +192,40 @@ export async function backfillDeliveryHistory(since: Date = DEFAULT_SINCE): Prom
     }
   }
 
-  for (const mail of pending) {
-    const match = matches.get(mail.id);
-    if (!match) continue;
-
-    const carriesCards = match.kind === "member_cards" || match.kind === "order_info";
-    const { error: insertError } = await supabase.from("email_messages").insert({
-      provider_message_id: mail.id,
-      kind: match.kind,
-      recipient: mail.to[0] ?? "",
-      subject: mail.subject,
-      order_id: match.orderId,
-      member_id: match.memberId,
-      ticket_ids: carriesCards ? (cardsByOrder.get(match.orderId) ?? []) : [],
-      sent_at: mail.createdAt,
+  // Written in blocks rather than one at a time: the history is hundreds of
+  // mails and a round trip each would outlast the request. The rows all go in
+  // first, so that when the outcomes are applied afterwards the newest-wins
+  // check already sees every send that happened.
+  const rows = pending
+    .filter((mail) => matches.has(mail.id))
+    .map((mail) => {
+      const match = matches.get(mail.id) as Match;
+      const carriesCards = match.kind === "member_cards" || match.kind === "order_info";
+      return {
+        provider_message_id: mail.id,
+        kind: match.kind,
+        recipient: mail.to[0] ?? "",
+        subject: mail.subject,
+        order_id: match.orderId,
+        member_id: match.memberId,
+        ticket_ids: carriesCards ? (cardsByOrder.get(match.orderId) ?? []) : [],
+        sent_at: mail.createdAt,
+      };
     });
-    if (insertError) {
-      // A row someone else wrote in the meantime is not a failure worth stopping
-      // the run for - the rest of the history still wants writing.
-      console.error(`[email] could not record ${mail.id}:`, insertError.message);
-      continue;
-    }
-    report.added += 1;
 
-    if (mail.status === "accepted") continue;
+  const written = new Set<string>();
+  for (let offset = 0; offset < rows.length; offset += INSERT_CHUNK) {
+    const chunk = rows.slice(offset, offset + INSERT_CHUNK);
+    const { error: insertError } = await supabase.from("email_messages").insert(chunk);
+    if (insertError) throw new Error(`Failed to record the history: ${insertError.message}`);
+    for (const row of chunk) written.add(row.provider_message_id);
+    report.added += chunk.length;
+  }
+
+  // Only the ones with something to say. A mail that is merely on its way is
+  // already recorded as accepted by the insert above.
+  for (const mail of pending) {
+    if (!written.has(mail.id) || mail.status === "accepted") continue;
     await applyDeliveryEvent({
       messageId: mail.id,
       status: mail.status,
