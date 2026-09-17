@@ -223,10 +223,17 @@ after the corrected second attempt was delivered, would put the order back to fa
 back to unsent. A superseded outcome is still written to its own row - the log stays complete - and
 goes no further. Newest is counted per member where one is attached, otherwise per order, so a
 corrected address supersedes the old one without two people overwriting each other. Which kinds of
-mail may move the order is explicit: `order_info` and `member_cards` carry the customer's status,
-`order_confirmation` carries `confirmation_email_sent_at`, and `order_notification` (the note to
-the office) and `test` carry nothing - a full mailbox at the treasurer's says nothing about whether
-the customer was reached.
+mail may take back is exactly what its own send path set (D93): `order_info` the cards it carried
+and the order's `notification_status`, `member_cards` the cards and `members.cards_sent_at`,
+`order_confirmation` the order's `confirmation_email_sent_at`. `order_notification` - the note to
+the office - and `test` take back nothing: a full mailbox at the treasurer's says nothing about
+whether the customer was reached.
+
+Mails sent before this table existed have no row for an event to find, and the webhook answers
+those events without acting on them. `backfillDeliveryHistory()` reads Resend's own history
+(`GET /emails`, each mail with its last event) and writes the missing rows, after which the rules
+above apply to them too. It is driven by the "Zustellstatus abgleichen" button on the members and
+orders lists and is safe to run again: a mail already in the table is skipped.
 
 ## Mutation functions (not tables, but part of the data layer)
 
