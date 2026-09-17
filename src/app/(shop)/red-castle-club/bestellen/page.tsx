@@ -4,8 +4,7 @@ import { Container } from "@/components/layout/Container/Container";
 import { getActiveProductByVariant } from "@/lib/products";
 import { getSalesChannels, resolvePurchase } from "@/lib/shop/sales-channels";
 import { RedCastleOrderForm } from "./RedCastleOrderForm";
-import styles from "../../kasse/kasse.module.css";
-import own from "./bestellen.module.css";
+import styles from "./bestellen.module.css";
 
 export const metadata: Metadata = {
   title: "Red Castle Club bestellen - UHC Uster Ticketshop",
@@ -30,7 +29,7 @@ export default async function RedCastleOrderPage({ searchParams }: { searchParam
       <div className={styles.page}>
         <Container>
           <h1>Red Castle Club</h1>
-          <div className={own.notice}>
+          <div className={styles.notice}>
             <p style={{ margin: 0 }}>
               {product
                 ? "Der Red Castle Club wird zurzeit nicht über den Ticketshop bestellt."

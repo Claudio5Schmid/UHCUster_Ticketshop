@@ -1360,3 +1360,25 @@ seither auf «Sponsoren Legi» aus, wenn das Testprodukt inaktiv ist. Nebenbefun
 Mitgliederliste brach bei ~480 Mitgliedern mit «fetch failed», weil alle Order-IDs in einer
 URL standen - die Karten werden jetzt in 100er-Scheiben geladen. Playwright lokal: auf Port 3000
 lief ein fremdes Projekt; die Suite läuft mit `PLAYWRIGHT_PORT=<Port des laufenden Dev-Servers>`.
+
+**D86 — Die Red-Castle-Bestellseite zeigt die Karte, die bestellt wird.** Claudio fand das
+Formular korrekt, aber unpersönlich: «könnte noch etwas kreativer gestaltet werden, packe das Logo
+rein und die Farben der gewählten Stufe». Statt Logo und Metallton als Dekoration oben anzusetzen,
+wird die Zusammenfassung rechts zur Karte selbst - gezeichnet wie die gedruckte (D59/D65):
+schwarzer Korpus mit 24px-Radius, Club-Logo, VIP-Sterne und Stufenwort im Metallton, Saisonzahl als
+Kontur im goldenen Schnitt zwischen Titel und Name, Abrissstub im Metallton mit Perforation und
+Kerben. Der Name auf der Karte folgt der Eingabe, sodass D73 (Firma, sonst Person) sichtbar wird
+statt erklärt werden zu müssen. Drei Variablen tragen die Stufe durch die Seite (`--tier`,
+`--tier-ink`, `--tier-tint`).
+
+`--tier-ink` ist neu in `tier-colors.ts`: die Metalltöne sind für die schwarze Karte abgestimmt und
+erreichen auf Weiss nur 2.2:1 (Gold) bzw. 3.0:1 (Silber), dürfen dort also weder Text noch Linien
+setzen. Der Ink-Wert ist derselbe Farbton, abgedunkelt bis über 4.5:1, und wird ausschliesslich auf
+hellem Grund verwendet; auf Schwarz bleibt es beim Metall, damit Web und Druck weiterhin dasselbe
+«Gold» meinen (D47).
+
+Die Formularfelder waren erneut zu gross: der gemeinsame Input steht in 18px mit der Zeilenhöhe
+1.6 des Fliesstexts, was bei elf Feldern türmt. Auf dieser Seite sind sie auf 16px, Zeilenhöhe 1.25
+und 38px Höhe gesetzt, auf Touch-Geräten weiterhin 44px. Dazu höchstens zwei Spalten, PLZ schmal,
+und die Formularspalte bei 34rem gedeckelt - ein Namensfeld über die halbe Seite lädt zum Aufsatz
+ein. Die Kasse bleibt unverändert; die Regel ist auf diese Seite begrenzt. **Entschieden.**

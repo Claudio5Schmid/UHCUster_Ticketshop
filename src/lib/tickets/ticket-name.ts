@@ -27,18 +27,22 @@ function clean(value: string | null | undefined): string {
   return (value ?? "").trim().replace(/\s+/g, " ");
 }
 
-export function ticketNameFor(input: TicketNameInput): string {
+/**
+ * The rule itself, with nothing filled in yet answered as null rather than as
+ * an error - so the order form can show what the card will say while it is
+ * still being typed, without a second copy of the precedence.
+ */
+export function resolveTicketName(input: TicketNameInput): string | null {
   const company = clean(input.companyName);
   const person = clean(`${clean(input.firstName)} ${clean(input.lastName)}`);
   const line = clean(input.lineHolderName);
 
-  let name: string;
-  if (input.category === "red_castle") {
-    name = company || person || line;
-  } else {
-    name = line || person || company;
-  }
+  const name = input.category === "red_castle" ? company || person || line : line || person || company;
+  return name || null;
+}
 
+export function ticketNameFor(input: TicketNameInput): string {
+  const name = resolveTicketName(input);
   if (!name) {
     throw new Error("Für die Karte fehlt ein Name: Firma oder Vor- und Nachname angeben.");
   }

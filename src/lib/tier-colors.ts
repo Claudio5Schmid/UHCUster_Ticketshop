@@ -21,6 +21,16 @@ export interface TicketAccentColor {
    * D47 - reuses D29's PDF colors for the shop cards instead of inventing new ones). */
   accentHex: string;
   tintHex: string;
+  /**
+   * The metal darkened until it can carry small text and borders on white.
+   *
+   * The metals are tuned for the black card, where they are bright against the
+   * panel; on a white page gold reaches 2.2:1 and silver 3.0:1, so neither may
+   * set a label or a rule there. This is the same hue at a lightness that
+   * clears 4.5:1 - used only on light backgrounds. On black, and anywhere the
+   * colour is decoration rather than information, accentHex stays the metal.
+   */
+  inkHex: string;
 }
 
 function toHex([r, g, b]: [number, number, number]): string {
@@ -28,33 +38,33 @@ function toHex([r, g, b]: [number, number, number]): string {
   return `#${channel(r)}${channel(g)}${channel(b)}`;
 }
 
-function withHex(color: Omit<TicketAccentColor, "accentHex" | "tintHex">): TicketAccentColor {
-  return { ...color, accentHex: toHex(color.accent), tintHex: toHex(color.tint) };
+function withHex(color: Omit<TicketAccentColor, "accentHex" | "tintHex" | "inkHex">, inkHex: string): TicketAccentColor {
+  return { ...color, accentHex: toHex(color.accent), tintHex: toHex(color.tint), inkHex };
 }
 
 const SITE_RED: TicketAccentColor = withHex({
   accent: [0.894, 0.012, 0.18], // #E4032E
   tint: [0.98, 0.94, 0.945],
   metalName: null,
-});
+}, "#c40228");
 
 const BRONZE: TicketAccentColor = withHex({
   accent: [0.596, 0.396, 0.161], // #983F41-ish warm bronze
   tint: [0.965, 0.925, 0.878],
   metalName: "Bronze",
-});
+}, "#7c521f");
 
 const SILBER: TicketAccentColor = withHex({
   accent: [0.502, 0.522, 0.541], // muted silver-grey
   tint: [0.933, 0.937, 0.941],
   metalName: "Silber",
-});
+}, "#5c6165");
 
 const GOLD: TicketAccentColor = withHex({
   accent: [0.812, 0.651, 0.169], // #cfa62b - a fuller gold than the first muted take (D65), still print-safe
   tint: [0.973, 0.945, 0.859],
   metalName: "Gold",
-});
+}, "#8a6a12");
 
 /**
  * The metal by its printed name, for a card whose tier comes from the member
