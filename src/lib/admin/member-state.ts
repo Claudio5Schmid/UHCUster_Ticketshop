@@ -1,3 +1,4 @@
+import type { DeliveryStatus } from "@/lib/email/delivery";
 import type { OrderTicket } from "@/lib/admin/tickets";
 
 /**
@@ -44,6 +45,10 @@ export interface Member {
   cards_sent_at: string | null;
   created_at: string;
   cards: MemberCardCounts;
+  /** What the provider last said about the newest card mail to this member.
+   *  Null while none was sent, or when it went out before the mail log existed -
+   *  the card counts above are then all there is to go on. */
+  delivery_status?: DeliveryStatus | null;
 }
 
 export const EMPTY_COUNTS: MemberCardCounts = {

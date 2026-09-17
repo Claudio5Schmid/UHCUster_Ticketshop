@@ -12,6 +12,7 @@ import { PRODUCT_CATEGORY_LABELS } from "@/lib/products";
 import { formatRappenAsChf } from "@/lib/pricing";
 import type { OrderListItem, OrderStatus, NotificationStatus } from "@/lib/admin/orders";
 import { EMAIL_STATES, type StatusTone } from "@/lib/email/status-labels";
+import { SyncDeliveryButton } from "@/components/admin/SyncDeliveryButton/SyncDeliveryButton";
 import { OrderImportDialog } from "./OrderImportDialog";
 import { previewOrderMailAction, sendOrderMailsAction, sendOrderTestMailAction } from "./notify-actions";
 import styles from "./admin.module.css";
@@ -226,6 +227,7 @@ export function OrdersPageClient({ orders, filterBar, invoiceCsvHref, adminEmail
           <Button as="a" href={invoiceCsvHref} variant="secondary" size="sm">
             Rechnungsdaten als CSV
           </Button>
+          <SyncDeliveryButton />
         </div>
       </div>
 

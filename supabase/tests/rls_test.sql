@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(187);
+select plan(191);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -1290,6 +1290,55 @@ select is(
   (select notification_status from public.orders where id = 'd0000000-0000-0000-0000-000000000003'),
   'versendet',
   'without claiming the customer was not reached'
+);
+
+
+-- ============================================================================
+-- Group R: a member's mail answers for their cards (20260917120001)
+--
+-- The member send marks the cards and the member, never the order's Kundeninfo.
+-- A bounce has to take back exactly that, and nothing else.
+-- ============================================================================
+
+insert into public.members (id, vorname, nachname, email, order_id, cards_sent_at)
+values ('a0000000-0000-0000-0000-000000000009', 'Ruedi', 'Testfall', 'ruedi@example.com',
+        'd0000000-0000-0000-0000-000000000003', now());
+
+update public.orders set notification_status = 'nicht_versendet', notification_error = null
+ where id = 'd0000000-0000-0000-0000-000000000003';
+update public.tickets set card_sent_at = now() where id = 'f0000000-0000-0000-0000-000000000002';
+
+insert into public.email_messages (id, provider_message_id, kind, recipient, order_id, member_id, ticket_ids, sent_at)
+values (
+  '40000001-0000-0000-0000-000000000005',
+  'pgtap-message-member',
+  'member_cards',
+  'ruedi@example.com',
+  'd0000000-0000-0000-0000-000000000003',
+  'a0000000-0000-0000-0000-000000000009',
+  array['f0000000-0000-0000-0000-000000000002'::uuid],
+  now() + interval '3 hours'
+);
+
+select is(
+  public.record_email_status('pgtap-message-member', 'bounced', 'Hard bounce'),
+  true,
+  'a member''s bounced card mail is applied'
+);
+select is(
+  (select card_sent_at is null from public.tickets where id = 'f0000000-0000-0000-0000-000000000002'),
+  true,
+  'the card it carried is open to send again'
+);
+select is(
+  (select cards_sent_at is null from public.members where id = 'a0000000-0000-0000-0000-000000000009'),
+  true,
+  'and the member no longer counts as served'
+);
+select is(
+  (select notification_status from public.orders where id = 'd0000000-0000-0000-0000-000000000003'),
+  'nicht_versendet',
+  'while the order''s Kundeninfo is left to the order mailing'
 );
 
 select * from finish();

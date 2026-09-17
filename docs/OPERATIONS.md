@@ -269,6 +269,13 @@ Ohne diese Variable weist der Endpunkt jedes Ereignis ab, und der Shop bleibt be
 Beides ist seit dem 17.09.2026 eingerichtet und nachweislich in Betrieb - der erste Testversand
 steht mit «Zugestellt» und einem harten Bounce im Protokoll.
 
+**Sendungen von vor dem 17.09.2026, 21:59 kennt das Protokoll nicht.** Sie haben keine Zeile, an
+die Resend ein Ereignis andocken könnte, und lesen sich deshalb weiter als erfolgreich. Der Knopf
+**«Zustellstatus abgleichen»** in der Mitglieder- und in der Bestellliste holt die Historie bei
+Resend ab und trägt sie nach; danach gilt für diese Sendungen dasselbe wie für alle anderen, und
+eine Karte, deren Mail nie ankam, steht wieder auf offen. Der Knopf verschickt nichts, liest nur -
+er darf jederzeit und mehrfach gedrückt werden.
+
 **Bounce-Mails im Postfach gibt es nicht.** Resend leitet Rückläufer nicht an die Absenderadresse
 weiter - es meldet sie im Dashboard und über genau diesen Webhook. Wer nur ins Postfach schaut,
 sieht nichts.

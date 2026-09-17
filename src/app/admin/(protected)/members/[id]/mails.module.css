@@ -1,0 +1,33 @@
+/* The mail history on a member, laid out like the one on an order so the office
+   reads the same shape in both places. */
+.history {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-small-size);
+}
+
+.historyRow {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.historyWhen {
+  color: var(--color-text-secondary);
+}
+
+.historyDetail {
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 40rem) {
+  .historyRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}

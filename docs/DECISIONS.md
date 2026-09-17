@@ -1534,3 +1534,37 @@ angenommen, zugestellt, unzustellbar - mit denselben Wörtern wie auf der Bestel
 Angenommen ist nicht zugestellt, deshalb ist nur die bestätigte Zustellung grün. Bestellungen aus
 der Zeit vor dem Mail-Protokoll haben keine Nachricht zu lesen und zeigen weiter, was der Versand
 damals vermerkt hat. **Entschieden.**
+
+**D93 — Was vor dem Protokoll versendet wurde, wird aus Resend nachgetragen.** Claudio mit einem
+Screenshot von Ruedi Ambühl: «Das stimmt ja jetzt nicht. In Resend heisst es, er kann es nicht
+zustellen, hier sagt er aber vollständig versendet.»
+
+Nachgeschaut statt geraten: Ruedis Karte ging um 20:55 raus, das Zustellprotokoll (D88) ging um
+21:59 live. Sein Versand hat also gar keine Zeile, an die ein Ereignis andocken könnte - der
+Webhook bekommt Resends Bounce, findet nichts und quittiert ihn mit 200. Genau so ist es für den
+gesamten ersten Kartenversand an die 556 Mitglieder. Ohne Gegenmassnahme bleibt für all diese
+Sendungen für immer stehen, was der Versand damals vermutete.
+
+Resend führt die Historie und gibt sie über `GET /emails` heraus, jede Mail mit dem letzten
+Ereignis. Der Knopf **«Zustellstatus abgleichen»** (Mitglieder- und Bestellliste) holt sie, schreibt
+die fehlenden Zeilen und lässt die normale Regel darüber laufen. Er darf beliebig oft gedrückt
+werden: bekannte Nachrichten werden übersprungen, und ein Bounce, den ein späterer Versand bereits
+abgelöst hat, ändert nach D92 ohnehin nichts.
+
+Zugeordnet wird über das, was der Shop selbst in den Betreff geschrieben hat - «Bestellbestätigung
+UHC Uster - <Nr.>» und «Neue … <Nr.> – Rechnung erstellen» tragen die Bestellnummer, was eine
+inzwischen korrigierte Adresse überlebt. Alles andere ist ein Versand an eine Person: zuerst ein
+Mitglied, sonst die Kundin oder der Kunde einer Bestellung. Was sich niemandem zuordnen lässt, wird
+gezählt und gemeldet, nicht geraten - eine falsche Zuordnung würde die Karte der falschen Person
+auf offen setzen.
+
+Dabei kam eine Unwucht aus D88 ans Licht: eine gebouncte Mitglieder-Mail setzte die *Bestellung*
+auf «Kundeninfo: fehlgeschlagen», obwohl der Mitgliederversand diese Spalte nie setzt - er markiert
+die Karten und das Mitglied. Nach dem Nachtrag hätte das die Spalte für 556 Bestellungen still
+umgeschrieben und den Filter «nur nicht informierte» entwertet. Jede Art von Mail nimmt jetzt genau
+das zurück, was ihr Versandweg gesetzt hat: `member_cards` die Karten und `members.cards_sent_at`,
+`order_info` die Karten und die Kundeninfo der Bestellung.
+
+Auf der Mitgliederseite steht neu unter **E-Mails**, was an diese Person rausging und wie es
+ausging, mit dem Grund von Resend. Und das Abzeichen zählt nicht mehr nur Karten: sagt der Anbieter
+zur neusten Mail «unzustellbar», steht das dort, statt «vollständig versendet». **Entschieden.**

@@ -2,7 +2,7 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { issueTicketsForOrder, addMemberTickets, rerenderTicketsForOrder } from "@/lib/tickets/issue";
 import { getOrderTickets, type OrderTicket } from "@/lib/admin/tickets";
 import { sendCardEmail } from "@/lib/email/mailer";
-import { recordSentEmail } from "@/lib/email/delivery";
+import { recordSentEmail, type DeliveryStatus } from "@/lib/email/delivery";
 import { runWithConcurrency } from "@/lib/concurrency";
 import { memberCardsHtml, memberCardsText } from "@/lib/email/member-cards";
 import { applyPlaceholders } from "@/lib/email/templates";
@@ -97,13 +97,51 @@ export async function getAllMembers(filters: MemberFilters = {}): Promise<Member
     }
   }
 
+  const deliveryByMember = await loadDeliveryStatuses(rows.map((row) => row.id));
+
   const members = rows.map(({ orders, ...member }) => ({
     ...member,
     order_number: orders?.order_number ?? null,
     cards: (member.order_id && cardsByOrder.get(member.order_id)) || { ...EMPTY_COUNTS },
+    delivery_status: deliveryByMember.get(member.id) ?? null,
   }));
 
   return applyMemberFilters(members, filters);
+}
+
+/**
+ * What the provider said about the newest card mail to each member.
+ *
+ * A resend gets its own id, so a member written to twice has two rows here and
+ * only the later one still describes where they stand - the same rule the
+ * database applies when it carries an outcome into their cards (D92).
+ *
+ * A member with no row sent before the mail log existed, or has not been
+ * written to at all; either way there is nothing for this to say and the card
+ * counts carry the answer.
+ */
+async function loadDeliveryStatuses(memberIds: string[]): Promise<Map<string, DeliveryStatus>> {
+  const supabase = await getSupabaseServerClient();
+  const newest = new Map<string, { status: DeliveryStatus; sentAt: string }>();
+
+  for (let offset = 0; offset < memberIds.length; offset += ID_SLICE) {
+    const { data, error } = await supabase
+      .from("email_messages")
+      .select("member_id, status, sent_at")
+      .eq("kind", "member_cards")
+      .in("member_id", memberIds.slice(offset, offset + ID_SLICE));
+    if (error) throw new Error(`Failed to load delivery statuses: ${error.message}`);
+
+    for (const row of data ?? []) {
+      const memberId = row.member_id as string | null;
+      if (!memberId) continue;
+      const sentAt = row.sent_at as string;
+      const seen = newest.get(memberId);
+      if (!seen || sentAt > seen.sentAt) newest.set(memberId, { status: row.status as DeliveryStatus, sentAt });
+    }
+  }
+
+  return new Map([...newest].map(([memberId, entry]) => [memberId, entry.status]));
 }
 
 /** The categories actually in use, for the filter bar's dropdown. */

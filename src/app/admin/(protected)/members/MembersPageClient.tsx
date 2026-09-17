@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Input } from "@/components/ui/Input/Input";
 import { Select } from "@/components/ui/Select/Select";
 import { Button } from "@/components/ui/Button/Button";
+import { EMAIL_STATES } from "@/lib/email/status-labels";
+import { SyncDeliveryButton } from "@/components/admin/SyncDeliveryButton/SyncDeliveryButton";
 import { Badge } from "@/components/ui/Badge/Badge";
 import { Modal } from "@/components/ui/Modal/Modal";
 import { Table, type TableColumn } from "@/components/ui/Table/Table";
@@ -40,6 +42,22 @@ const SEND_STATE: Record<MemberSendState, { label: string; variant: "neutral" | 
   teilweise: { label: "Teilweise versendet", variant: "info" },
   vollstaendig: { label: "Vollständig versendet", variant: "success" },
 };
+
+/**
+ * What the row says about this member's cards.
+ *
+ * The counts say how much went out; only the provider can say whether it
+ * arrived. Where it has answered for the newest mail, that answer wins - a row
+ * reading "vollständig versendet" over a hard bounce is the thing this is here
+ * to stop - and only a confirmed delivery is green.
+ */
+function statusBadge(member: Member) {
+  const delivery = member.delivery_status;
+  if (delivery === "bounced" || delivery === "complained" || delivery === "failed") return EMAIL_STATES[delivery];
+  const state = memberSendState(member);
+  if (delivery === "delivered" && state === "vollstaendig") return EMAIL_STATES.delivered;
+  return SEND_STATE[state];
+}
 
 /** "2 von 3 versendet" - the thing the office actually wants to know per row. */
 function sendSummary(member: Member): string {
@@ -476,7 +494,7 @@ export function MembersPageClient({ members, filterBar, adminEmail }: { members:
       key: "status",
       header: sortableHeader("Status", "versand"),
       render: (m) => {
-        const state = SEND_STATE[memberSendState(m)];
+        const state = statusBadge(m);
         return <Badge variant={state.variant}>{state.label}</Badge>;
       },
     },
@@ -532,6 +550,7 @@ export function MembersPageClient({ members, filterBar, adminEmail }: { members:
           <Button type="button" variant="secondary" size="sm" onClick={() => setShowImportedAt((shown) => !shown)}>
             {showImportedAt ? "Importdatum ausblenden" : "Importdatum einblenden"}
           </Button>
+          <SyncDeliveryButton />
         </div>
       </div>
 

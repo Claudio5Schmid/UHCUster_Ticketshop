@@ -393,6 +393,32 @@ export interface OrderEmail {
  * afterwards (D88). "Angenommen" is not "zugestellt": until the provider
  * reports back, that is all the shop can honestly claim.
  */
+interface EmailMessageRow {
+  id: string;
+  kind: string;
+  recipient: string;
+  subject: string | null;
+  status: string;
+  status_detail: string | null;
+  sent_at: string;
+  status_at: string | null;
+  ticket_ids: string[] | null;
+}
+
+function toOrderEmail(row: EmailMessageRow): OrderEmail {
+  return {
+    id: row.id,
+    kind: row.kind as OrderEmail["kind"],
+    recipient: row.recipient,
+    subject: row.subject,
+    status: row.status as OrderEmail["status"],
+    statusDetail: row.status_detail,
+    sentAt: row.sent_at,
+    statusAt: row.status_at,
+    cardCount: (row.ticket_ids ?? []).length,
+  };
+}
+
 export async function getOrderEmails(orderId: string): Promise<OrderEmail[]> {
   const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase
@@ -402,15 +428,24 @@ export async function getOrderEmails(orderId: string): Promise<OrderEmail[]> {
     .order("sent_at", { ascending: false });
   if (error) throw new Error(`Failed to load e-mails: ${error.message}`);
 
-  return (data ?? []).map((row) => ({
-    id: row.id as string,
-    kind: row.kind as OrderEmail["kind"],
-    recipient: row.recipient as string,
-    subject: row.subject as string | null,
-    status: row.status as OrderEmail["status"],
-    statusDetail: row.status_detail as string | null,
-    sentAt: row.sent_at as string,
-    statusAt: row.status_at as string | null,
-    cardCount: ((row.ticket_ids as string[] | null) ?? []).length,
-  }));
+  return (data ?? []).map(toOrderEmail);
+}
+
+/**
+ * The mails sent to one member, newest first.
+ *
+ * Their cards go out per member, not per order, so this reads the member rather
+ * than their order - and a member written to three times has three rows, each
+ * with its own outcome. Only the newest one still describes where they stand
+ * (D92); the older ones are the record of how it got there.
+ */
+export async function getMemberEmails(memberId: string): Promise<OrderEmail[]> {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("email_messages")
+    .select("id, kind, recipient, subject, status, status_detail, sent_at, status_at, ticket_ids")
+    .eq("member_id", memberId)
+    .order("sent_at", { ascending: false });
+  if (error) throw new Error(`Failed to load e-mails: ${error.message}`);
+  return (data ?? []).map(toOrderEmail);
 }

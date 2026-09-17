@@ -9,9 +9,12 @@ import { Badge } from "@/components/ui/Badge/Badge";
 import { Modal } from "@/components/ui/Modal/Modal";
 import { TicketTable } from "@/components/admin/TicketTable/TicketTable";
 import { addCardsToMemberAction } from "../actions";
-import { memberSendState, type Member } from "@/lib/admin/member-state";
+import { memberSendState, type Member, type MemberSendState } from "@/lib/admin/member-state";
 import type { OrderTicket } from "@/lib/admin/tickets";
+import type { OrderEmail } from "@/lib/admin/orders";
+import { EMAIL_STATES } from "@/lib/email/status-labels";
 import styles from "../../admin.module.css";
+import own from "./mails.module.css";
 
 const SEND_STATE_LABEL = {
   ohne: "Keine Karte",
@@ -30,9 +33,35 @@ const SEND_STATE_VARIANT = {
 interface MemberDetailClientProps {
   member: Member;
   tickets: OrderTicket[];
+  /** Every card mail this member was sent, newest first. */
+  emails: OrderEmail[];
 }
 
-export function MemberDetailClient({ member, tickets }: MemberDetailClientProps) {
+const mailDateTime = new Intl.DateTimeFormat("de-CH", {
+  timeZone: "Europe/Zurich",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/**
+ * The headline badge.
+ *
+ * Counting cards says how much went out; it cannot say whether any of it
+ * arrived. Where the provider has answered for the newest mail, that answer
+ * wins - "vollständig versendet" over a hard bounce is the lie this is here to
+ * stop. Only a confirmed delivery is green.
+ */
+function headlineBadge(member: Member, state: MemberSendState) {
+  const delivery = member.delivery_status;
+  if (delivery === "bounced" || delivery === "complained" || delivery === "failed") return EMAIL_STATES[delivery];
+  if (delivery === "delivered" && state === "vollstaendig") return EMAIL_STATES.delivered;
+  return { label: SEND_STATE_LABEL[state], variant: SEND_STATE_VARIANT[state] };
+}
+
+export function MemberDetailClient({ member, tickets, emails }: MemberDetailClientProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showAddCards, setShowAddCards] = useState(false);
@@ -40,6 +69,7 @@ export function MemberDetailClient({ member, tickets }: MemberDetailClientProps)
   const [transferable, setTransferable] = useState(1);
 
   const state = memberSendState(member);
+  const badge = headlineBadge(member, state);
 
   function handleAddCards(event: React.FormEvent) {
     event.preventDefault();
@@ -62,7 +92,7 @@ export function MemberDetailClient({ member, tickets }: MemberDetailClientProps)
         <h1>
           {member.vorname} {member.nachname}
         </h1>
-        <Badge variant={SEND_STATE_VARIANT[state]}>{SEND_STATE_LABEL[state]}</Badge>
+        <Badge variant={badge.variant}>{badge.label}</Badge>
       </div>
 
       {error && <p style={{ color: "var(--color-error-text)", marginBottom: "var(--space-4)" }}>{error}</p>}
@@ -106,6 +136,29 @@ export function MemberDetailClient({ member, tickets }: MemberDetailClientProps)
           <dd>{member.cards.inactive}</dd>
         </dl>
       </div>
+
+      {emails.length > 0 && (
+        <div className={styles.section}>
+          <div className={styles.header}>
+            <h2>E-Mails</h2>
+          </div>
+          <ul className={own.history}>
+            {emails.map((email) => {
+              const mailState = EMAIL_STATES[email.status];
+              return (
+                <li key={email.id} className={own.historyRow}>
+                  <span className={own.historyWhen}>{mailDateTime.format(new Date(email.sentAt))}</span>
+                  <span>
+                    <Badge variant={mailState.variant}>{mailState.label}</Badge> an {email.recipient}
+                    {email.cardCount > 0 ? ` · ${email.cardCount} Karte(n) angehängt` : ""}
+                    {email.statusDetail ? <span className={own.historyDetail}> · {email.statusDetail}</span> : null}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       <div className={styles.section}>
         <div className={styles.header}>
