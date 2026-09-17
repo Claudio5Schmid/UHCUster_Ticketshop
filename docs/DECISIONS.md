@@ -1485,3 +1485,52 @@ der Schlaufe.
 Bewusst **kein** Hintergrund-Job mit Warteschlange: bei zwei Minuten wäre eine Queue plus Cron plus
 unsichtbare Fehlerbehandlung mehr Apparat als Nutzen. Ein abgebrochener Lauf ist ohnehin harmlos -
 Versendetes wird beim nächsten Mal übersprungen. **Entschieden.**
+
+**D91 — Hundert Empfänger pro Lauf, mit Fortschrittsanzeige.** Claudio nach D90: «Okay, dann mache
+eine Sendelimite von 100 E-Mails max. und eine Ladeanzeige, wenn es das braucht - ich dürfte da ja
+den Tab nicht schliessen.» Genau so. Der Versand läuft im Browser-Tab, also ist die Laufzeit auch
+das Risiko: hundert Empfänger sind rund zwanzig Sekunden, sechshundert wären gut zwei Minuten
+Tab-nicht-schliessen.
+
+Die Grenze steht als `MAX_RECIPIENTS_PER_RUN` an einer Stelle und gilt für Mitglieder wie für
+Bestellungen. Sie wird zweimal durchgesetzt: der Dialog nimmt nur die ersten hundert der Auswahl
+und schreibt dazu, wie viele danach noch offen sind, und die Server-Aktion weist mehr ab, egal wie
+sie aufgerufen wird. Der Rest geht mit dem nächsten Klick - eine bereits informierte Bestellung
+wird ohnehin übersprungen.
+
+Während des Laufs zeigt der Dialog einen Balken mit «x von y» und hält den Tab fest
+(`beforeunload`), solange gesendet wird. Kein Fortschritt aus dem Server heraus, sondern aus den
+Blöcken, die der Browser ohnehin schickt: zwanzig Empfänger pro Anfrage, also alle paar Sekunden
+ein sichtbarer Schritt. **Entschieden.**
+
+**D92 — Die neuste Mail entscheidet, und nur die Mail an den Kunden entscheidet mit.** Claudio,
+nachdem die Webhooks liefen: «Wie machen wir das mit dem Status, wenn jede Mail, welche neu
+gesendet wurde, eine neue ID erhält? Dann kann er es einfach anhand des Datums und der
+Mailadresse prüfen - wenn die Adresse mit dem neusten Zeitstempel einen Status von x hat, bitte
+auch so im Webshop anzeigen.»
+
+Die richtige Frage, und in D88 falsch gelöst. Jeder erneute Versand bekommt bei Resend eine neue
+ID, also steht pro Empfänger eine Reihe von Nachrichten in `email_messages` - und die Ausgänge
+treffen verspätet und in beliebiger Reihenfolge ein, ein harter Bounce auch mal einen Tag später.
+Bisher schrieb jeder Bounce ungefragt in die Bestellung. Die Folge: Mail geht raus, kommt nicht an,
+das Büro korrigiert die Adresse und sendet erneut, die zweite kommt an - und dann trifft der
+Bounce der ersten ein und setzt die Bestellung wieder auf «fehlgeschlagen», die Karte wieder auf
+offen, obwohl der Kunde sie hat.
+
+Neu prüft `record_email_status()` vor jeder Übernahme, ob inzwischen eine neuere Mail derselben
+Art an denselben Empfänger rausging. Wenn ja, bleibt der Ausgang auf seiner eigenen Zeile stehen -
+das Protokoll ist vollständig - und die Bestellung rührt er nicht an, weil er Vergangenheit ist.
+Gezählt wird pro Mitglied, wo eines hängt, sonst pro Bestellung: so kann eine korrigierte Adresse
+die alte ablösen, ohne dass sich zwei Personen gegenseitig überschreiben.
+
+Zwei Dinge fielen dabei auf. Erstens setzte ein Bounce der *internen* Mail ans Fibu-Büro den
+Kundenstatus auf «fehlgeschlagen» - dass dort ein Postfach voll ist, sagt nichts darüber, ob der
+Kunde erreicht wurde. Jede Art von Mail fasst jetzt nur noch an, worüber sie etwas aussagt.
+Zweitens fehlte die Gegenrichtung: eine bestätigte Zustellung schreibt jetzt auch den positiven
+Zustand und löscht einen alten Fehler, damit sich eine Bestellung selbst geraderückt.
+
+In der Liste steht nicht mehr «Informiert», sondern was der Anbieter zur neusten Mail gesagt hat -
+angenommen, zugestellt, unzustellbar - mit denselben Wörtern wie auf der Bestellseite.
+Angenommen ist nicht zugestellt, deshalb ist nur die bestätigte Zustellung grün. Bestellungen aus
+der Zeit vor dem Mail-Protokoll haben keine Nachricht zu lesen und zeigen weiter, was der Versand
+damals vermerkt hat. **Entschieden.**

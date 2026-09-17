@@ -250,11 +250,24 @@ Bei einer unzustellbaren Nachricht macht der Shop die Markierungen rückgängig:
 - die Bestellung steht auf **Kundeninfo: fehlgeschlagen** mit dem Grund,
 - eine unzustellbare Bestellbestätigung zählt nicht mehr als versendet.
 
+**Beim erneuten Senden zählt die neuste Mail.** Jeder neue Versand bekommt bei Resend eine eigene
+ID, und die Rückmeldungen treffen verspätet ein - ein harter Bounce auch mal einen Tag später. In
+der Spalte **Zustellung** und in der Bestellung steht deshalb immer der Ausgang der *zuletzt*
+verschickten Mail an diese Person. Trifft danach noch der Bounce eines früheren Versuchs ein, wird
+er unter «E-Mails» protokolliert, ändert aber nichts mehr an der Bestellung. Also: Adresse
+korrigieren, erneut senden, fertig - die alte Rückmeldung kann die Bestellung nicht mehr
+zurückwerfen.
+
+Die interne Mail ans Fibu-Büro zählt dabei nicht als Kundeninformation. Wenn die nicht ankommt,
+steht das unter «E-Mails», die Bestellung bleibt aber so, wie der Versand an den Kunden ausging.
+
 Damit das funktioniert, muss in Resend unter Webhooks ein Endpunkt auf
 `https://tickets-uhcuster.ch/api/webhooks/resend` zeigen, mit den Ereignissen `email.sent`,
 `email.delivered`, `email.delivery_delayed`, `email.bounced` und `email.complained`. Das
 Signing-Secret von Resend (`whsec_…`) gehört als `RESEND_WEBHOOK_SECRET` in die Vercel-Umgebung.
 Ohne diese Variable weist der Endpunkt jedes Ereignis ab, und der Shop bleibt beim alten Verhalten.
+Beides ist seit dem 17.09.2026 eingerichtet und nachweislich in Betrieb - der erste Testversand
+steht mit «Zugestellt» und einem harten Bounce im Protokoll.
 
 **Bounce-Mails im Postfach gibt es nicht.** Resend leitet Rückläufer nicht an die Absenderadresse
 weiter - es meldet sie im Dashboard und über genau diesen Webhook. Wer nur ins Postfach schaut,

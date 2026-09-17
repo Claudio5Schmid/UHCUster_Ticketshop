@@ -216,6 +216,18 @@ insert or update policy for anyone, like `orders` and `tickets`. A later "delive
 bounce back, and an event for a message the shop never recorded is answered rather than raised, so
 the provider stops retrying something nobody can act on.
 
+An outcome only reaches the order while its message is still the newest one sent to that recipient
+(D92). A resend gets a new id at the provider, so each attempt has its own row here, and outcomes
+come back late and out of order: without that guard the first attempt's bounce, arriving hours
+after the corrected second attempt was delivered, would put the order back to failed and the cards
+back to unsent. A superseded outcome is still written to its own row - the log stays complete - and
+goes no further. Newest is counted per member where one is attached, otherwise per order, so a
+corrected address supersedes the old one without two people overwriting each other. Which kinds of
+mail may move the order is explicit: `order_info` and `member_cards` carry the customer's status,
+`order_confirmation` carries `confirmation_email_sent_at`, and `order_notification` (the note to
+the office) and `test` carry nothing - a full mailbox at the treasurer's says nothing about whether
+the customer was reached.
+
 ## Mutation functions (not tables, but part of the data layer)
 
 Every write to `orders`, `tickets`, and non-price fields of `products` goes through one of:

@@ -11,6 +11,7 @@ import { MAX_RECIPIENTS_PER_RUN } from "@/lib/admin/send-confirmation";
 import { PRODUCT_CATEGORY_LABELS } from "@/lib/products";
 import { formatRappenAsChf } from "@/lib/pricing";
 import type { OrderListItem, OrderStatus, NotificationStatus } from "@/lib/admin/orders";
+import { EMAIL_STATES, type StatusTone } from "@/lib/email/status-labels";
 import { OrderImportDialog } from "./OrderImportDialog";
 import { previewOrderMailAction, sendOrderMailsAction, sendOrderTestMailAction } from "./notify-actions";
 import styles from "./admin.module.css";
@@ -31,11 +32,25 @@ function statusBadgeVariant(status: OrderStatus) {
   return "neutral" as const;
 }
 
-const NOTIFIED: Record<NotificationStatus, { label: string; variant: "neutral" | "success" | "warning" }> = {
+const NOTIFIED: Record<NotificationStatus, { label: string; variant: StatusTone }> = {
   nicht_versendet: { label: "Nicht informiert", variant: "neutral" },
-  versendet: { label: "Informiert", variant: "success" },
+  versendet: { label: "Versendet", variant: "info" },
   fehlgeschlagen: { label: "Fehlgeschlagen", variant: "warning" },
 };
+
+/**
+ * What the provider said about the newest mail to this customer.
+ *
+ * A resend gets a new id every time and outcomes come back late, so the newest
+ * send is the only one that still describes where the customer stands - the
+ * same rule the database follows when it writes the order's status.
+ *
+ * An order whose mails predate the mail log has nothing to read, so it falls
+ * back to what the send itself recorded at the time.
+ */
+function deliveryBadge(order: OrderListItem) {
+  return order.delivery_status ? EMAIL_STATES[order.delivery_status] : NOTIFIED[order.notification_status];
+}
 
 const dateFormatter = new Intl.DateTimeFormat("de-CH", {
   timeZone: "Europe/Zurich",
@@ -190,8 +205,11 @@ export function OrdersPageClient({ orders, filterBar, invoiceCsvHref, adminEmail
     },
     {
       key: "notified",
-      header: "Informiert",
-      render: (order) => <Badge variant={NOTIFIED[order.notification_status].variant}>{NOTIFIED[order.notification_status].label}</Badge>,
+      header: "Zustellung",
+      render: (order) => {
+        const badge = deliveryBadge(order);
+        return <Badge variant={badge.variant}>{badge.label}</Badge>;
+      },
     },
     { key: "total", header: "Betrag", render: (order) => formatRappenAsChf(order.total_rappen) },
   ];

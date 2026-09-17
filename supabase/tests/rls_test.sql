@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(178);
+select plan(187);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -1198,6 +1198,98 @@ select throws_ok(
   'P0001',
   'invalid delivery status gelesen',
   'a status the shop does not know is refused'
+);
+
+-- ============================================================================
+-- Group Q: the newest mail decides the status (20260917110001)
+--
+-- Every resend gets its own provider id, and outcomes arrive late and out of
+-- order. A bounce that belongs to a superseded send must stay on its own row.
+-- ============================================================================
+
+-- A second mail to the same order, sent after the one above. Same card.
+insert into public.email_messages (id, provider_message_id, kind, recipient, subject, order_id, ticket_ids, sent_at)
+values (
+  '40000001-0000-0000-0000-000000000002',
+  'pgtap-message-2',
+  'member_cards',
+  'delivery-korrigiert@example.com',
+  'Deine Karte',
+  'd0000000-0000-0000-0000-000000000003',
+  array['f0000000-0000-0000-0000-000000000002'::uuid],
+  now() + interval '1 hour'
+);
+
+select is(
+  public.record_email_status('pgtap-message-2', 'delivered'),
+  true,
+  'the corrected send is delivered'
+);
+select is(
+  (select notification_status from public.orders where id = 'd0000000-0000-0000-0000-000000000003'),
+  'versendet',
+  'a delivery on the newest mail puts the order back to informed'
+);
+select is(
+  (select notification_error from public.orders where id = 'd0000000-0000-0000-0000-000000000003'),
+  null,
+  'and clears the error the earlier bounce left behind'
+);
+
+-- The card the delivered mail carried, marked sent as the send path would.
+update public.tickets set card_sent_at = now() where id = 'f0000000-0000-0000-0000-000000000002';
+
+-- Now the first send's hard bounce finally turns up, hours late.
+insert into public.email_messages (id, provider_message_id, kind, recipient, order_id, ticket_ids, sent_at)
+values (
+  '40000001-0000-0000-0000-000000000003',
+  'pgtap-message-0',
+  'member_cards',
+  'delivery@example.com',
+  'd0000000-0000-0000-0000-000000000003',
+  array['f0000000-0000-0000-0000-000000000002'::uuid],
+  now() - interval '1 hour'
+);
+select is(
+  public.record_email_status('pgtap-message-0', 'bounced', 'Invalid recipient'),
+  true,
+  'a late bounce for a superseded send is accepted'
+);
+select is(
+  (select status from public.email_messages where provider_message_id = 'pgtap-message-0'),
+  'bounced',
+  'and kept on its own message for the record'
+);
+select is(
+  (select notification_status from public.orders where id = 'd0000000-0000-0000-0000-000000000003'),
+  'versendet',
+  'but it does not drag the order back - a newer mail arrived'
+);
+select is(
+  (select card_sent_at is null from public.tickets where id = 'f0000000-0000-0000-0000-000000000002'),
+  false,
+  'and the card the customer is holding stays sent'
+);
+
+-- The internal note to the office is not about the customer.
+insert into public.email_messages (id, provider_message_id, kind, recipient, order_id, sent_at)
+values (
+  '40000001-0000-0000-0000-000000000004',
+  'pgtap-message-intern',
+  'order_notification',
+  'fibu@uhcuster.ch',
+  'd0000000-0000-0000-0000-000000000003',
+  now() + interval '2 hours'
+);
+select is(
+  public.record_email_status('pgtap-message-intern', 'bounced', 'Mailbox full'),
+  true,
+  'a bounced internal note is recorded'
+);
+select is(
+  (select notification_status from public.orders where id = 'd0000000-0000-0000-0000-000000000003'),
+  'versendet',
+  'without claiming the customer was not reached'
 );
 
 select * from finish();

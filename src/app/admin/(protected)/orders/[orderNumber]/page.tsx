@@ -5,6 +5,7 @@ import { getOrderTickets } from "@/lib/admin/tickets";
 import { buildOrderAccessUrl } from "@/lib/orders/access-token";
 import { formatRappenAsChf } from "@/lib/pricing";
 import { PRODUCT_CATEGORY_LABELS } from "@/lib/products";
+import { EMAIL_STATES } from "@/lib/email/status-labels";
 import { Badge } from "@/components/ui/Badge/Badge";
 import { OrderActions } from "./OrderActions";
 import { CustomerLinkButton } from "./CustomerLinkButton";
@@ -28,17 +29,6 @@ const EMAIL_KINDS: Record<OrderEmail["kind"], string> = {
   order_info: "Kundeninfo",
   member_cards: "Mitgliederkarten",
   test: "Testmail",
-};
-
-/** What the provider has said so far. "Angenommen" is where every mail starts
- *  and where it stays until the provider reports back. */
-const EMAIL_STATES: Record<OrderEmail["status"], { label: string; variant: "neutral" | "success" | "warning" | "info" }> = {
-  accepted: { label: "Angenommen", variant: "info" },
-  delivered: { label: "Zugestellt", variant: "success" },
-  delayed: { label: "Verzögert", variant: "warning" },
-  bounced: { label: "Unzustellbar", variant: "warning" },
-  complained: { label: "Als Spam gemeldet", variant: "warning" },
-  failed: { label: "Fehlgeschlagen", variant: "warning" },
 };
 
 const ACTION_LABELS: Record<string, string> = {

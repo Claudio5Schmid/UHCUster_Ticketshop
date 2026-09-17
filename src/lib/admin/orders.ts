@@ -1,8 +1,11 @@
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import type { ProductCategory } from "@/lib/products";
 import type { OrderStatus } from "@/lib/orders/visibility";
+import type { DeliveryStatus } from "@/lib/email/delivery";
+import { newestDeliveryStatus } from "@/lib/email/newest-status";
 
 export type { OrderStatus } from "@/lib/orders/visibility";
+export type { DeliveryStatus } from "@/lib/email/delivery";
 
 export type OrderSource = "shop" | "csv_import";
 export type NotificationStatus = "nicht_versendet" | "versendet" | "fehlgeschlagen";
@@ -29,6 +32,9 @@ export interface OrderListItem {
   invoice_number: string | null;
   notification_status: NotificationStatus;
   notified_at: string | null;
+  /** What the provider last said about the newest mail to this customer, or null
+   *  while nothing has been sent (or sent before the mail log existed). */
+  delivery_status: DeliveryStatus | null;
   /** Of the first line item - a Red Castle or imported order has exactly one. */
   category: ProductCategory | null;
   variant: string | null;
@@ -98,7 +104,7 @@ export async function getOrderStatusCounts(): Promise<OrderStatusCounts> {
 }
 
 const ORDER_COLUMNS =
-  "id, order_number, status, refund_owed, total_rappen, created_at, source, external_ref, invoice_number, notification_status, notified_at, customers(name, email, company_name, first_name, last_name, phone, address_street, address_zip, address_city, customer_reference), order_items(product_name_snapshot, quantity, products(category, variant)), tickets(status)";
+  "id, order_number, status, refund_owed, total_rappen, created_at, source, external_ref, invoice_number, notification_status, notified_at, customers(name, email, company_name, first_name, last_name, phone, address_street, address_zip, address_city, customer_reference), order_items(product_name_snapshot, quantity, products(category, variant)), tickets(status), email_messages(kind, status, sent_at)";
 
 interface CustomerRow {
   name: string;
@@ -134,6 +140,7 @@ interface OrderRow {
       }>
     | null;
   tickets: Array<{ status: string }> | null;
+  email_messages: Array<{ kind: string; status: string; sent_at: string }> | null;
 }
 
 /**
@@ -210,6 +217,7 @@ function toOrderListItem(row: OrderRow, variantLabels: Map<string, string>): Ord
     source: row.source as OrderSource,
     external_ref: row.external_ref,
     invoice_number: row.invoice_number,
+    delivery_status: newestDeliveryStatus(row.email_messages),
     notification_status: row.notification_status as NotificationStatus,
     notified_at: row.notified_at,
     category: (product?.category as ProductCategory | null) ?? null,
