@@ -1470,3 +1470,18 @@ versendende Admins könnten ihn also überschreiten; genau dafür ist der Retry 
 
 Die Batch-Schnittstelle (100 Mails pro Anfrage) wurde geprüft und verworfen: sie unterstützt keine
 Anhänge, und jede Karte hängt als PDF an. **Entschieden.**
+
+**D90 — Vier Empfänger gleichzeitig, damit 600 in einem Zug gehen.** Claudio: «Kann ich irgendwas
+ändern, damit ich 600 aufs Mal versenden kann?» Die Rate war nie das Problem (D89), die
+Reihenfolge war es: pro Mail wurden erst die Karten-PDFs aus dem Storage geladen und erst dann
+gesendet, eine nach der anderen - rund zehn Minuten für die Vereinsliste, den ganzen Tab offen.
+
+Beide Versandwege arbeiten jetzt vier Empfänger gleichzeitig ab (`runWithConcurrency`), und der
+Browser holt zwanzig statt fünf pro Anfrage. Damit überlappen die Storage-Zugriffe und das Tempo
+wird wieder von der Bremse im Mailer bestimmt: ~7,7 pro Sekunde, also **gut zwei Minuten für 600**.
+Die Gleichzeitigkeit kann das Limit nicht überholen, weil die Bremse im Mailer sitzt und nicht in
+der Schlaufe.
+
+Bewusst **kein** Hintergrund-Job mit Warteschlange: bei zwei Minuten wäre eine Queue plus Cron plus
+unsichtbare Fehlerbehandlung mehr Apparat als Nutzen. Ein abgebrochener Lauf ist ohnehin harmlos -
+Versendetes wird beim nächsten Mal übersprungen. **Entschieden.**

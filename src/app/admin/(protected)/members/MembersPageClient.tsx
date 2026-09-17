@@ -46,8 +46,9 @@ function sendSummary(member: Member): string {
   return `${member.cards.sent} von ${member.cards.active} versendet`;
 }
 
-/** Members are sent a few at a time, so the dialog's progress bar moves. */
-const SEND_CHUNK = 5;
+/** One round trip per block. The server sends four at a time inside it, so a
+ *  block of twenty is a few seconds of work and the bar still moves often. */
+const SEND_CHUNK = 20;
 
 export function MembersPageClient({ members, filterBar, adminEmail }: { members: Member[]; filterBar: ReactNode; adminEmail: string }) {
   const [isPending, startTransition] = useTransition();

@@ -273,11 +273,12 @@ Kommt trotzdem ein 429, wartet der Mailer und versucht es erneut (0,5 s, 1,5 s, 
 den Empfänger als fehlgeschlagen abzuhaken. Andere Ablehnungen werden nicht wiederholt - Warten
 repariert eine falsche Adresse nicht.
 
-Die eigentliche Dauer bestimmt nicht das Limit, sondern die Arbeit pro Mail: für jede Karte wird das
-PDF aus dem Storage geladen und angehängt. Rechne für 600 Empfänger mit **rund zehn Minuten**, in
-denen der Browser-Tab offen bleiben muss - der Versand läuft in Fünferblöcken vom Browser aus. Wird
-er unterbrochen, ist nichts kaputt: bereits versendete Karten und bereits informierte Bestellungen
-werden beim nächsten Lauf übersprungen.
+Die eigentliche Arbeit pro Mail ist nicht der Versand, sondern das Laden der Karten-PDFs aus dem
+Storage. Deshalb werden **vier Empfänger gleichzeitig** bearbeitet, in Blöcken von zwanzig pro
+Anfrage aus dem Browser. Damit begrenzt die Bremse im Mailer das Tempo, nicht mehr das Warten auf
+Storage: 600 Empfänger sind **rund zwei Minuten**, in denen der Browser-Tab offen bleiben muss.
+Wird er geschlossen, ist nichts kaputt - bereits versendete Karten und bereits informierte
+Bestellungen werden beim nächsten Lauf übersprungen, der Rest geht dann raus.
 
 Die Batch-Schnittstelle von Resend (100 Mails in einer Anfrage) hilft hier **nicht**: sie
 unterstützt keine Anhänge, und unsere Karten hängen als PDF an.

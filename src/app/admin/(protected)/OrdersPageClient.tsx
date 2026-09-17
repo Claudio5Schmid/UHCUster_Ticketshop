@@ -45,7 +45,9 @@ const dateFormatter = new Intl.DateTimeFormat("de-CH", {
   minute: "2-digit",
 });
 
-const SEND_CHUNK = 5;
+/** One round trip per block. The server sends four at a time inside it, so a
+ *  block of twenty is a few seconds of work and the bar still moves often. */
+const SEND_CHUNK = 20;
 
 interface OrdersPageClientProps {
   orders: OrderListItem[];

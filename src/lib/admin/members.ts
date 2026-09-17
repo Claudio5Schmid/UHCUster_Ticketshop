@@ -3,6 +3,7 @@ import { issueTicketsForOrder, addMemberTickets, rerenderTicketsForOrder } from 
 import { getOrderTickets, type OrderTicket } from "@/lib/admin/tickets";
 import { sendCardEmail } from "@/lib/email/mailer";
 import { recordSentEmail } from "@/lib/email/delivery";
+import { runWithConcurrency } from "@/lib/concurrency";
 import { memberCardsHtml, memberCardsText } from "@/lib/email/member-cards";
 import { applyPlaceholders } from "@/lib/email/templates";
 import { buildOrderAccessUrl } from "@/lib/orders/access-token";
@@ -699,13 +700,19 @@ export async function sendMemberTestMail(memberId: string, subjectTemplate: stri
 }
 
 /**
- * The one place this whole system sends email.
+ * Cards to the members who are still owed them.
  *
  * Sending is driven by an explicit selection - there is deliberately no "send to
  * everyone" path - and each member gets only the cards that have not gone out
  * yet. A member whose cards have all been sent is skipped rather than mailed an
  * empty message, so repeating a partially failed send is safe.
+ *
+ * A few members are handled at once: most of the time per mail goes on fetching
+ * their card PDFs, not on the provider, and the club's list is hundreds long.
+ * The provider's own pace is held in the mailer, so overlapping here cannot
+ * outrun it.
  */
+const SEND_CONCURRENCY = 4;
 export async function sendMemberCards(
   subjectTemplate: string,
   bodyTemplate: string,
@@ -728,11 +735,11 @@ export async function sendMemberCards(
   let sent = 0;
   let cards = 0;
 
-  for (const member of members ?? []) {
+  await runWithConcurrency(members ?? [], SEND_CONCURRENCY, async (member) => {
     try {
       const tickets = await getOrderTickets(member.order_id as string);
       const pending = tickets.filter((ticket) => isLiveTicket(ticket) && !ticket.card_sent_at);
-      if (pending.length === 0) continue;
+      if (pending.length === 0) return;
 
       const missing = pending.filter((ticket) => !ticket.pdf_path);
       if (missing.length > 0) {
@@ -836,7 +843,7 @@ export async function sendMemberCards(
     } catch (sendError) {
       failed.push({ email: member.email, reason: sendError instanceof Error ? sendError.message : "Unbekannter Fehler" });
     }
-  }
+  });
 
   return { sent, cards, failed };
 }

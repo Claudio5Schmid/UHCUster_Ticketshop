@@ -7,6 +7,7 @@ import { buildOrderAccessUrl } from "@/lib/orders/access-token";
 import { ticketFileName, uniqueFileName } from "@/lib/tickets/label";
 import { CURRENT_SEASON_LABEL } from "@/lib/season";
 import { PRODUCT_CATEGORY_LABELS, type ProductCategory } from "@/lib/products";
+import { runWithConcurrency } from "@/lib/concurrency";
 import type { OrderStatus } from "@/lib/orders/visibility";
 
 /**
@@ -15,12 +16,17 @@ import type { OrderStatus } from "@/lib/orders/visibility";
  * and the durable link in the body, exactly like the member cards. Every
  * outcome lands on the order (set_order_notification), per recipient.
  *
- * Sequential on purpose, one recipient at a time: each mail is recorded and
- * marked on its own order, and a failure has to name the one recipient it
- * belongs to. The pace against the provider's rate limit is kept in the mailer,
- * which is where the limit actually applies (it belongs to the API key, not to
- * this loop).
+ * A few recipients are handled at once, because most of the time per mail is
+ * spent fetching its card PDFs rather than talking to the provider. Each one
+ * still stands alone: its own record, its own mark on its own order, its own
+ * reason when it fails. The pace against the provider's rate limit is kept in
+ * the mailer, which is where the limit actually applies - it belongs to the API
+ * key, not to this loop - so overlapping here cannot outrun it.
  */
+
+/** Enough to keep the Storage fetches overlapping, few enough that a run does
+ *  not hold a pile of PDFs in memory at once. */
+const SEND_CONCURRENCY = 4;
 
 export interface OrderSendRecipient {
   id: string;
@@ -213,18 +219,18 @@ export async function sendOrderMails(
   const recipients = await loadRecipients(orderIds);
   const supabase = await getSupabaseServerClient();
 
-  for (const recipient of recipients) {
+  await runWithConcurrency(recipients, SEND_CONCURRENCY, async (recipient) => {
     if (recipient.status === "storniert") {
       result.skipped.push({ orderNumber: recipient.orderNumber, reason: "Bestellung ist storniert." });
-      continue;
+      return;
     }
     if (recipient.notificationStatus === "versendet" && !options.includeAlreadyNotified) {
       result.skipped.push({ orderNumber: recipient.orderNumber, reason: "Bereits informiert." });
-      continue;
+      return;
     }
     if (recipient.tickets.length === 0) {
       result.skipped.push({ orderNumber: recipient.orderNumber, reason: "Keine aktiven Karten." });
-      continue;
+      return;
     }
 
     try {
@@ -256,7 +262,7 @@ export async function sendOrderMails(
       result.failed.push({ orderNumber: recipient.orderNumber, email: recipient.email, reason });
       await supabase.rpc("set_order_notification", { p_order_id: recipient.id, p_status: "fehlgeschlagen", p_error: reason });
     }
-  }
+  });
 
   return result;
 }
