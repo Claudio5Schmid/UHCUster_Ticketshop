@@ -1,6 +1,11 @@
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+import type { ProductCategory } from "@/lib/products";
+import type { OrderStatus } from "@/lib/orders/visibility";
 
-export type OrderStatus = "neu" | "rechnung_versendet" | "bezahlt" | "storniert";
+export type { OrderStatus } from "@/lib/orders/visibility";
+
+export type OrderSource = "shop" | "csv_import";
+export type NotificationStatus = "nicht_versendet" | "versendet" | "fehlgeschlagen";
 
 export interface OrderListItem {
   id: string;
@@ -10,11 +15,40 @@ export interface OrderListItem {
   total_rappen: number;
   created_at: string;
   customer_name: string;
+  customer_email: string;
+  company_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  address_street: string | null;
+  address_zip: string | null;
+  address_city: string | null;
+  customer_reference: string | null;
+  source: OrderSource;
+  external_ref: string | null;
+  invoice_number: string | null;
+  notification_status: NotificationStatus;
+  notified_at: string | null;
+  /** Of the first line item - a Red Castle or imported order has exactly one. */
+  category: ProductCategory | null;
+  variant: string | null;
+  /** The catalog's word for the variant ("Gold"), for screens and exports. */
+  variant_label: string | null;
+  product_name: string;
+  /** Cards on the order, across all line items. */
+  quantity: number;
+  /** Cards that still stand (gueltig/eingeloest) - what a send would attach. */
+  live_tickets: number;
 }
 
 export interface OrderFilters {
   status?: OrderStatus | "alle";
   search?: string;
+  source?: OrderSource | "alle";
+  category?: ProductCategory | "alle";
+  variant?: string | "alle";
+  /** "offen" = not yet told about the new shop (notification_status nicht_versendet). */
+  notified?: "offen" | "alle";
 }
 
 /** The count that drives the page-title/tab badge - office checks this once or
@@ -63,53 +97,99 @@ export async function getOrderStatusCounts(): Promise<OrderStatusCounts> {
   return counts;
 }
 
-const ORDER_COLUMNS = "id, order_number, status, refund_owed, total_rappen, created_at, customers(name)";
+const ORDER_COLUMNS =
+  "id, order_number, status, refund_owed, total_rappen, created_at, source, external_ref, invoice_number, notification_status, notified_at, customers(name, email, company_name, first_name, last_name, phone, address_street, address_zip, address_city, customer_reference), order_items(product_name_snapshot, quantity, products(category, variant)), tickets(status)";
 
-export async function getOrders(filters: OrderFilters): Promise<OrderListItem[]> {
-  const supabase = await getSupabaseServerClient();
-  const term = filters.search?.trim();
-
-  if (!term) {
-    let query = supabase.from("orders").select(ORDER_COLUMNS).order("created_at", { ascending: false });
-    if (filters.status && filters.status !== "alle") {
-      query = query.eq("status", filters.status);
-    }
-    const { data, error } = await query;
-    if (error) throw new Error(`Failed to load orders: ${error.message}`);
-    return (data ?? []).map(toOrderListItem);
-  }
-
-  // Search matches either the order number or the customer's name - PostgREST
-  // can't OR a filter across a joined table in one query, so run both and merge.
-  let byNumberQuery = supabase.from("orders").select(ORDER_COLUMNS).ilike("order_number", `%${term}%`);
-  let byNameQuery = supabase.from("orders").select("id, order_number, status, refund_owed, total_rappen, created_at, customers!inner(name)").ilike("customers.name", `%${term}%`);
-
-  if (filters.status && filters.status !== "alle") {
-    byNumberQuery = byNumberQuery.eq("status", filters.status);
-    byNameQuery = byNameQuery.eq("status", filters.status);
-  }
-
-  const [byNumber, byName] = await Promise.all([byNumberQuery, byNameQuery]);
-  if (byNumber.error) throw new Error(`Failed to load orders: ${byNumber.error.message}`);
-  if (byName.error) throw new Error(`Failed to load orders: ${byName.error.message}`);
-
-  const merged = new Map<string, ReturnType<typeof toOrderListItem>>();
-  for (const row of byNumber.data ?? []) merged.set(row.id, toOrderListItem(row));
-  for (const row of byName.data ?? []) merged.set(row.id, toOrderListItem(row));
-
-  return [...merged.values()].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+interface CustomerRow {
+  name: string;
+  email: string;
+  company_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  address_street: string | null;
+  address_zip: string | null;
+  address_city: string | null;
+  customer_reference: string | null;
 }
 
-function toOrderListItem(row: {
+interface OrderRow {
   id: string;
   order_number: string;
   status: string;
   refund_owed: boolean;
   total_rappen: number;
   created_at: string;
-  customers: { name: string } | { name: string }[] | null;
-}): OrderListItem {
+  source: string;
+  external_ref: string | null;
+  invoice_number: string | null;
+  notification_status: string;
+  notified_at: string | null;
+  customers: CustomerRow | CustomerRow[] | null;
+  order_items:
+    | Array<{
+        product_name_snapshot: string;
+        quantity: number;
+        products: { category: string | null; variant: string | null } | { category: string | null; variant: string | null }[] | null;
+      }>
+    | null;
+  tickets: Array<{ status: string }> | null;
+}
+
+/**
+ * The list behind the Bestellungen tab. Filters that PostgREST can apply are
+ * applied there; category and variant live on the joined product and are
+ * filtered here, in one pass, after the rows come back - the whole table is a
+ * few hundred rows, and "any line item matches" (D71/O21) is easier to say in
+ * code than in a nested filter.
+ */
+export async function getOrders(filters: OrderFilters): Promise<OrderListItem[]> {
+  const supabase = await getSupabaseServerClient();
+
+  let query = supabase.from("orders").select(ORDER_COLUMNS).order("created_at", { ascending: false });
+  if (filters.status && filters.status !== "alle") query = query.eq("status", filters.status);
+  if (filters.source && filters.source !== "alle") query = query.eq("source", filters.source);
+  if (filters.notified === "offen") query = query.eq("notification_status", "nicht_versendet");
+
+  const [{ data, error }, variants] = await Promise.all([query.returns<OrderRow[]>(), getVariantOptions()]);
+  if (error) throw new Error(`Failed to load orders: ${error.message}`);
+  const variantLabels = new Map(variants.map((entry) => [`${entry.category}/${entry.variant}`, entry.label]));
+
+  const term = filters.search?.trim().toLowerCase();
+  const category = filters.category && filters.category !== "alle" ? filters.category : null;
+  const variant = filters.variant && filters.variant !== "alle" ? filters.variant : null;
+
+  return (data ?? [])
+    .filter((row) => {
+      if (category || variant) {
+        const items = row.order_items ?? [];
+        const matches = items.some((item) => {
+          const product = Array.isArray(item.products) ? item.products[0] : item.products;
+          if (category && product?.category !== category) return false;
+          if (variant && product?.variant !== variant) return false;
+          return true;
+        });
+        if (!matches) return false;
+      }
+      if (term) {
+        const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+        const haystack = [row.order_number, row.external_ref, customer?.name, customer?.email, customer?.company_name, row.invoice_number]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+      return true;
+    })
+    .map((row) => toOrderListItem(row, variantLabels));
+}
+
+function toOrderListItem(row: OrderRow, variantLabels: Map<string, string>): OrderListItem {
   const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+  const items = row.order_items ?? [];
+  const first = items[0];
+  const product = first ? (Array.isArray(first.products) ? first.products[0] : first.products) : null;
+
   return {
     id: row.id,
     order_number: row.order_number,
@@ -118,7 +198,56 @@ function toOrderListItem(row: {
     total_rappen: row.total_rappen,
     created_at: row.created_at,
     customer_name: customer?.name ?? "-",
+    customer_email: customer?.email ?? "",
+    company_name: customer?.company_name ?? null,
+    first_name: customer?.first_name ?? null,
+    last_name: customer?.last_name ?? null,
+    phone: customer?.phone ?? null,
+    address_street: customer?.address_street ?? null,
+    address_zip: customer?.address_zip ?? null,
+    address_city: customer?.address_city ?? null,
+    customer_reference: customer?.customer_reference ?? null,
+    source: row.source as OrderSource,
+    external_ref: row.external_ref,
+    invoice_number: row.invoice_number,
+    notification_status: row.notification_status as NotificationStatus,
+    notified_at: row.notified_at,
+    category: (product?.category as ProductCategory | null) ?? null,
+    variant: product?.variant ?? null,
+    variant_label: product?.category && product.variant ? (variantLabels.get(`${product.category}/${product.variant}`) ?? null) : null,
+    product_name: first?.product_name_snapshot ?? "-",
+    quantity: items.reduce((sum, item) => sum + item.quantity, 0),
+    live_tickets: (row.tickets ?? []).filter((ticket) => ticket.status === "gueltig" || ticket.status === "eingeloest").length,
   };
+}
+
+/** The variants in use, for the filter dropdown - grouped by category so the
+ * select can show "Red Castle Club: Gold". */
+export async function getVariantOptions(): Promise<Array<{ category: ProductCategory; variant: string; label: string }>> {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("product_variant_catalog")
+    .select("category, variant, label")
+    .order("category")
+    .order("variant");
+  if (error) throw new Error(`Failed to load variants: ${error.message}`);
+  return (data ?? []).map((row) => ({
+    category: row.category as ProductCategory,
+    variant: row.variant as string,
+    label: row.label as string,
+  }));
+}
+
+export interface OrderHistoryEntry {
+  id: string;
+  action: string;
+  field_name: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  actor_type: "admin" | "system";
+  actor_email: string | null;
+  note: string | null;
+  created_at: string;
 }
 
 export interface OrderDetail {
@@ -130,13 +259,26 @@ export interface OrderDetail {
   created_at: string;
   files_handed_over_at: string | null;
   confirmation_email_sent_at: string | null;
+  source: OrderSource;
+  external_ref: string | null;
+  invoice_number: string | null;
+  terms_accepted_at: string | null;
+  payment_method: string;
+  notification_status: NotificationStatus;
+  notified_at: string | null;
+  notification_error: string | null;
+  import_batch_id: string | null;
   customer: {
     name: string;
+    first_name: string | null;
+    last_name: string | null;
+    company_name: string | null;
+    customer_reference: string | null;
     email: string;
-    phone: string;
-    address_street: string;
-    address_zip: string;
-    address_city: string;
+    phone: string | null;
+    address_street: string | null;
+    address_zip: string | null;
+    address_city: string | null;
   };
   items: Array<{
     id: string;
@@ -145,7 +287,10 @@ export interface OrderDetail {
     unit_price_rappen: number;
     line_total_rappen: number;
     holder_name: string | null;
+    category: ProductCategory | null;
+    variant: string | null;
   }>;
+  history: OrderHistoryEntry[];
 }
 
 export async function getOrderDetail(orderNumber: string): Promise<OrderDetail | null> {
@@ -154,17 +299,25 @@ export async function getOrderDetail(orderNumber: string): Promise<OrderDetail |
   const { data: order, error } = await supabase
     .from("orders")
     .select(
-      "id, order_number, status, refund_owed, total_rappen, created_at, files_handed_over_at, confirmation_email_sent_at, customers(name, email, phone, address_street, address_zip, address_city)"
+      "id, order_number, status, refund_owed, total_rappen, created_at, files_handed_over_at, confirmation_email_sent_at, source, external_ref, invoice_number, terms_accepted_at, payment_method, notification_status, notified_at, notification_error, import_batch_id, customers(name, first_name, last_name, company_name, customer_reference, email, phone, address_street, address_zip, address_city)"
     )
     .eq("order_number", orderNumber)
     .maybeSingle();
 
   if (error || !order) return null;
 
-  const { data: items } = await supabase
-    .from("order_items")
-    .select("id, product_name_snapshot, quantity, unit_price_rappen, line_total_rappen, holder_name")
-    .eq("order_id", order.id);
+  const [{ data: items }, { data: history }] = await Promise.all([
+    supabase
+      .from("order_items")
+      .select("id, product_name_snapshot, quantity, unit_price_rappen, line_total_rappen, holder_name, products(category, variant)")
+      .eq("order_id", order.id),
+    supabase
+      .from("audit_log")
+      .select("id, action, field_name, old_value, new_value, actor_type, actor_email, note, created_at")
+      .eq("entity_type", "order")
+      .eq("entity_id", order.id)
+      .order("created_at", { ascending: false }),
+  ]);
 
   const customer = Array.isArray(order.customers) ? order.customers[0] : order.customers;
 
@@ -177,14 +330,40 @@ export async function getOrderDetail(orderNumber: string): Promise<OrderDetail |
     created_at: order.created_at,
     files_handed_over_at: order.files_handed_over_at,
     confirmation_email_sent_at: order.confirmation_email_sent_at,
+    source: order.source as OrderSource,
+    external_ref: order.external_ref,
+    invoice_number: order.invoice_number,
+    terms_accepted_at: order.terms_accepted_at,
+    payment_method: order.payment_method,
+    notification_status: order.notification_status as NotificationStatus,
+    notified_at: order.notified_at,
+    notification_error: order.notification_error,
+    import_batch_id: order.import_batch_id,
     customer: {
       name: customer?.name ?? "-",
+      first_name: customer?.first_name ?? null,
+      last_name: customer?.last_name ?? null,
+      company_name: customer?.company_name ?? null,
+      customer_reference: customer?.customer_reference ?? null,
       email: customer?.email ?? "-",
-      phone: customer?.phone ?? "-",
-      address_street: customer?.address_street ?? "-",
-      address_zip: customer?.address_zip ?? "-",
-      address_city: customer?.address_city ?? "-",
+      phone: customer?.phone ?? null,
+      address_street: customer?.address_street ?? null,
+      address_zip: customer?.address_zip ?? null,
+      address_city: customer?.address_city ?? null,
     },
-    items: items ?? [],
+    items: (items ?? []).map((item) => {
+      const product = Array.isArray(item.products) ? item.products[0] : item.products;
+      return {
+        id: item.id,
+        product_name_snapshot: item.product_name_snapshot,
+        quantity: item.quantity,
+        unit_price_rappen: item.unit_price_rappen,
+        line_total_rappen: item.line_total_rappen,
+        holder_name: item.holder_name,
+        category: (product?.category as ProductCategory | null) ?? null,
+        variant: product?.variant ?? null,
+      };
+    }),
+    history: (history ?? []) as OrderHistoryEntry[],
   };
 }

@@ -23,10 +23,12 @@ export const dynamic = "force-dynamic";
 
 const dateFormatter = new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", dateStyle: "long" });
 
+// The invoice flow (D77): the office sends the invoice and the cards together,
+// so the second step is the one that makes the cards downloadable here.
 const STEPS = [
   { key: "eingegangen", label: "Bestellung eingegangen" },
-  { key: "rechnung", label: "Rechnung versendet" },
-  { key: "bezahlt", label: "Bezahlt - Karten bereit" },
+  { key: "rechnung", label: "Rechnung und Karten versendet" },
+  { key: "bezahlt", label: "Bezahlt" },
 ] as const;
 
 function currentStepIndex(status: CustomerOrderView["status"]): number {
@@ -157,8 +159,8 @@ function NextStep({ status, orderNumber }: { status: CustomerOrderView["status"]
       <div className={`${styles.panel} ${styles.panelAccent}`}>
         <h2 className={styles.panelTitle}>Zahlung eingegangen</h2>
         <p className={styles.panelText}>
-          Deine Karten stehen unten zum Download bereit. Zeig den QR-Code am Eingang direkt auf dem Handy
-          oder ausgedruckt vor.
+          Vielen Dank. Deine Karten stehen unten zum Download bereit. Zeig den QR-Code am Eingang direkt auf
+          dem Handy oder ausgedruckt vor.
         </p>
       </div>
     );
@@ -167,10 +169,11 @@ function NextStep({ status, orderNumber }: { status: CustomerOrderView["status"]
   if (status === "rechnung_versendet") {
     return (
       <div className={`${styles.panel} ${styles.panelAccent}`}>
-        <h2 className={styles.panelTitle}>Rechnung ist unterwegs</h2>
+        <h2 className={styles.panelTitle}>Rechnung und Karten sind unterwegs</h2>
         <p className={styles.panelText}>
-          Bitte überweise den Betrag mit der Bestellnummer <strong>{orderNumber}</strong> als Referenz.
-          Sobald die Zahlung eingegangen ist, erscheinen deine Karten hier zum Download.
+          Das Büro des UHC Uster hat dir die Rechnung und deine Karten per E-Mail geschickt. Die Karten
+          findest du auch unten zum Download. Bitte überweise den Betrag innert 30 Tagen mit der
+          Bestellnummer <strong>{orderNumber}</strong> als Referenz.
         </p>
       </div>
     );
@@ -180,9 +183,8 @@ function NextStep({ status, orderNumber }: { status: CustomerOrderView["status"]
     <div className={`${styles.panel} ${styles.panelAccent}`}>
       <h2 className={styles.panelTitle}>Wir haben deine Bestellung</h2>
       <p className={styles.panelText}>
-        Das Büro des UHC Uster sendet dir die Rechnung innerhalb weniger Werktage per E-Mail. Bitte
-        überweise noch nichts, bevor du sie erhalten hast. Danach erscheinen deine Karten hier zum
-        Download.
+        Das Büro des UHC Uster sendet dir die Rechnung und deine Karten innert 2 bis 4 Werktagen per
+        E-Mail. Ab dann findest du die Karten auch hier zum Download.
       </p>
     </div>
   );

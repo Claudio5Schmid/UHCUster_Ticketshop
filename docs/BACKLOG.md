@@ -22,10 +22,17 @@ any of this - just an honest inventory so nothing is quietly forgotten.
   no effect on which products a member receives (D40) - Claudio marked the category
   list itself "tbd". Revisit if/when a real category list and a category-to-benefit
   rule are decided.
-- **Already-placed season pass orders shown under admin "Bestellungen".** Explicitly
-  deprioritized by Claudio to "a later time" when the member-import feature was
-  specified - orders created via `create_member_order()` currently only show up in
-  the `/admin/members` list, not cross-linked from the regular orders view.
+- ~~Already-placed season pass orders shown under admin "Bestellungen".~~ Closed 2026-09-16:
+  the orders tab lists every order with source, product and variant filters; member orders
+  appear there as `Import · Mitglieder`.
+- **Datenschutzerklärung nennt Resend und Cloudflare Turnstile?** (D72) The PDF under
+  `public/datenschutz-uhc-uster.pdf` is the club's signed-off text; whether it lists the two
+  processors the shop actually uses (mail via Resend, spam check via Turnstile) has to be
+  checked by Claudio - the shop only links it.
+- **Price of `red-castle-club-spezial`** (D81): 0 until set under Einstellungen → Preise -
+  must happen before the first legacy import, since the import freezes the product price.
+- **Billing addresses of imported orders** (D81): the legacy CSV carries none, so imported
+  customers have no address; an invoice re-issued from the shop's data would lack it.
 - **Apple Wallet and Google Wallet (D28).** Neither built. Apple needs a paid developer
   program enrollment and certificates; Google needs a Business Console issuer account.
   Every ticket already has a fully functional PDF regardless - revisit Google first

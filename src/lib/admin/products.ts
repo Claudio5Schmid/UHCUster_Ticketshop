@@ -1,5 +1,5 @@
 import { getSupabaseServerClient } from "@/lib/supabase-server";
-import type { ProductBenefits } from "@/lib/products";
+import type { ProductBenefits, ProductCategory } from "@/lib/products";
 
 export interface AdminProduct {
   id: string;
@@ -13,13 +13,15 @@ export interface AdminProduct {
   active: boolean;
   sort_order: number;
   valid_season: string;
+  category: ProductCategory | null;
+  variant: string | null;
 }
 
 export async function getAllProducts(): Promise<AdminProduct[]> {
   const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase
     .from("products")
-    .select("id, slug, name, description, type, price_rappen, tier_level, benefits, active, sort_order, valid_season")
+    .select("id, slug, name, description, type, price_rappen, tier_level, benefits, active, sort_order, valid_season, category, variant")
     .order("sort_order", { ascending: true });
 
   if (error) throw new Error(`Failed to load products: ${error.message}`);
@@ -30,7 +32,7 @@ export async function getProduct(id: string): Promise<AdminProduct | null> {
   const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase
     .from("products")
-    .select("id, slug, name, description, type, price_rappen, tier_level, benefits, active, sort_order, valid_season")
+    .select("id, slug, name, description, type, price_rappen, tier_level, benefits, active, sort_order, valid_season, category, variant")
     .eq("id", id)
     .maybeSingle();
 

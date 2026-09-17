@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(123);
+select plan(161);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -175,15 +175,35 @@ update public.tickets set holder_name = 'Hacked' where id = 'f0000000-0000-0000-
 select is((select holder_name from public.tickets where id = 'f0000000-0000-0000-0000-000000000001'), 'Test Holder', 'bare UPDATE on tickets has no effect - no update policy exists');
 
 -- The dedicated functions succeed and log to audit_log.
-select lives_ok(
+-- Transitions are enforced since 20260916100003 (D78): neu goes to
+-- rechnung_versendet, and only with an invoice number.
+select throws_ok(
   $$select public.transition_order_status('d0000000-0000-0000-0000-000000000001', 'bezahlt')$$,
+  'P0001',
+  'order status cannot change from neu to bezahlt',
+  'transition_order_status refuses neu -> bezahlt'
+);
+select throws_ok(
+  $$select public.transition_order_status('d0000000-0000-0000-0000-000000000001', 'rechnung_versendet')$$,
+  'P0001',
+  'an invoice number is required to mark an order as rechnung_versendet',
+  'transition_order_status refuses rechnung_versendet without an invoice number'
+);
+select lives_ok(
+  $$select public.transition_order_status('d0000000-0000-0000-0000-000000000001', 'rechnung_versendet', 'RE-0001')$$,
   'admin can call transition_order_status'
 );
-select is((select status from public.orders where id = 'd0000000-0000-0000-0000-000000000001'), 'bezahlt', 'order status actually changed via the function');
+select is((select status from public.orders where id = 'd0000000-0000-0000-0000-000000000001'), 'rechnung_versendet', 'order status actually changed via the function');
+select is((select invoice_number from public.orders where id = 'd0000000-0000-0000-0000-000000000001'), 'RE-0001', 'the invoice number was recorded with the transition');
 select is(
   (select count(*) from public.audit_log where entity_type = 'order' and entity_id = 'd0000000-0000-0000-0000-000000000001' and action = 'status_change'),
   1::bigint,
   'status change was logged to audit_log'
+);
+select is(
+  (select count(*) from public.audit_log where entity_type = 'order' and entity_id = 'd0000000-0000-0000-0000-000000000001' and action = 'invoice_number_change'),
+  1::bigint,
+  'the invoice number was logged to audit_log'
 );
 
 select lives_ok(
@@ -247,10 +267,11 @@ select is(
   'product name change was logged to audit_log'
 );
 
--- reissue_ticket: void the old ticket, issue a linked replacement.
+-- regenerate_ticket (replaced reissue_ticket in 20260909100002): void the old
+-- ticket, issue a linked replacement under an id the caller chose.
 select lives_ok(
-  $$select public.reissue_ticket('f0000000-0000-0000-0000-000000000001', 'TEST-TOKEN-0002', 'New Holder')$$,
-  'admin can call reissue_ticket'
+  $$select public.regenerate_ticket('f0000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000004', 'TEST-TOKEN-0002', '2627/f0000000-0000-0000-0000-000000000004.pdf', 'New Holder')$$,
+  'admin can call regenerate_ticket'
 );
 select is((select status from public.tickets where id = 'f0000000-0000-0000-0000-000000000001'), 'ersetzt', 'old ticket is voided, not deleted');
 select is(
@@ -341,9 +362,43 @@ select lives_ok(
   $$select public.create_order(
     '{"name":"Test Customer","address_street":"Teststrasse 9","address_zip":"8610","address_city":"Uster","email":"order-test@example.com","phone":"0791234567"}'::jsonb,
     jsonb_build_array(jsonb_build_object('product_id', 'b0000000-0000-0000-0000-000000000001', 'holder_name', 'Test Holder', 'price_rappen', 1, 'unit_price_rappen', 1)),
-    '2627'
+    '2627',
+    true
   )$$,
   'create_order succeeds for a valid product, even with extra tampered fields in the line'
+);
+
+-- The payment terms (D65) are part of the order, not of the form.
+select throws_ok(
+  $$select public.create_order(
+    '{"name":"Test","address_street":"X","address_zip":"1","address_city":"X","email":"terms@example.com"}'::jsonb,
+    jsonb_build_array(jsonb_build_object('product_id', 'b0000000-0000-0000-0000-000000000001', 'holder_name', 'X')),
+    '2627'
+  )$$,
+  'P0001',
+  'the payment terms must be accepted',
+  'create_order refuses an order without accepted payment terms'
+);
+
+-- The company form (D70/D73): person plus optional company, no phone.
+select lives_ok(
+  $$select public.create_order(
+    '{"first_name":"Anna","last_name":"Muster","company_name":"Muster AG","customer_reference":"PO-77","address_street":"Teststrasse 9","address_zip":"8610","address_city":"Uster","email":"company-test@example.com"}'::jsonb,
+    jsonb_build_array(jsonb_build_object('product_id', 'b0000000-0000-0000-0000-000000000001', 'holder_name', 'Muster AG')),
+    '2627',
+    true
+  )$$,
+  'create_order accepts the company form without a phone number'
+);
+select is(
+  (select c.name from public.customers c where c.email = 'company-test@example.com'),
+  'Muster AG',
+  'the billing name is the company when one is given'
+);
+select is(
+  (select o.terms_accepted_at is not null from public.orders o join public.customers c on c.id = o.customer_id where c.email = 'company-test@example.com'),
+  true,
+  'accepting the terms is recorded on the order'
 );
 
 select is(
@@ -365,7 +420,8 @@ select throws_ok(
   $$select public.create_order(
     '{"name":"Test","address_street":"X","address_zip":"1","address_city":"X","email":"x@example.com","phone":"1"}'::jsonb,
     jsonb_build_array(jsonb_build_object('product_id', '99999999-9999-9999-9999-999999999999', 'holder_name', 'X')),
-    '2627'
+    '2627',
+    true
   )$$,
   'P0001',
   'product 99999999-9999-9999-9999-999999999999 is not available',
@@ -399,7 +455,7 @@ reset request.jwt.claim.sub;
 set local role authenticated;
 set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
 
--- d...0001 was flipped to bezahlt in Group C and already has its fixture ticket -
+-- d...0001 was flipped to rechnung_versendet in Group C and already has its fixture ticket -
 -- the idempotency guard must reject a second issuance attempt on it.
 select throws_ok(
   $$select public.issue_tickets_for_order('d0000000-0000-0000-0000-000000000001'::uuid, '[]'::jsonb)$$,
@@ -408,12 +464,13 @@ select throws_ok(
   'issue_tickets_for_order refuses an order that already has a ticket'
 );
 
--- d...0002 is storniert (auto-cancelled in Group F) - not bezahlt.
+-- d...0002 is storniert (auto-cancelled in Group F). Since 20260916100003 tickets
+-- are issued at order time, so any status but storniert may receive them.
 select throws_ok(
   $$select public.issue_tickets_for_order('d0000000-0000-0000-0000-000000000002'::uuid, '[]'::jsonb)$$,
   'P0001',
-  'order d0000000-0000-0000-0000-000000000002 is not marked as bezahlt (status: storniert)',
-  'issue_tickets_for_order refuses an order that is not bezahlt'
+  'order d0000000-0000-0000-0000-000000000002 is storniert and cannot receive tickets',
+  'issue_tickets_for_order refuses a cancelled order'
 );
 
 -- d...0003 is bezahlt with one order_item (e...0002) and no tickets yet.
@@ -583,7 +640,7 @@ select is(public.check_order_rate_limit('rl-test-ip', 2, 10), false, 'third atte
 
 set local role anon;
 select throws_ok(
-  $$select public.create_member_order('X', 'x@example.com', true, 0, '2627')$$,
+  $$select public.create_member_order('X', 'x@example.com', 1, 0, '2627')$$,
   '42501',
   'permission denied for function create_member_order',
   'anon cannot call create_member_order'
@@ -593,7 +650,7 @@ reset role;
 set local role authenticated;
 set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
 select throws_ok(
-  $$select public.create_member_order('X', 'x@example.com', true, 0, '2627')$$,
+  $$select public.create_member_order('X', 'x@example.com', 1, 0, '2627')$$,
   'P0001',
   'only admins can create member orders',
   'non-admin authenticated cannot call create_member_order'
@@ -605,7 +662,7 @@ set local role authenticated;
 set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
 
 select lives_ok(
-  $$select public.create_member_order('Test Member', 'member-test@example.com', true, 2, '2627')$$,
+  $$select public.create_member_order('Test Member', 'member-test@example.com', 1, 2, '2627')$$,
   'admin can call create_member_order'
 );
 select is(
@@ -818,6 +875,222 @@ select ok(
      where entity_type = 'order' and entity_id = 'd0000000-0000-0000-0000-000000000001'
        and action = 'holder_name_change')),
   'the rename was written to audit_log'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+-- ============================================================================
+-- Group O: invoice flow and order import (20260916100003/4) - access control,
+-- enforced transitions, cancelling voids tickets, import and rollback.
+-- ============================================================================
+set local role anon;
+select throws_ok(
+  $$select public.issue_tickets_system('00000000-0000-0000-0000-000000000000'::uuid, '[]'::jsonb)$$,
+  '42501',
+  'permission denied for function issue_tickets_system',
+  'anon cannot call issue_tickets_system'
+);
+select throws_ok(
+  $$select public.create_import_order('{}'::jsonb, null, 1, null, 'bezahlt', null, null, null, null, '2627')$$,
+  '42501',
+  'permission denied for function create_import_order',
+  'anon cannot call create_import_order'
+);
+select throws_ok(
+  $$select public.issue_tickets_internal('00000000-0000-0000-0000-000000000000'::uuid, '[]'::jsonb, 'system', null)$$,
+  '42501',
+  'permission denied for function issue_tickets_internal',
+  'anon cannot call the shared issuance body'
+);
+select is((select count(*) from public.product_variant_catalog)::int, 10, 'anon can read the variant catalog');
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
+select throws_ok(
+  $$select public.issue_tickets_system('00000000-0000-0000-0000-000000000000'::uuid, '[]'::jsonb)$$,
+  '42501',
+  'permission denied for function issue_tickets_system',
+  'non-admin authenticated cannot call issue_tickets_system - system-only, like create_order'
+);
+select throws_ok(
+  $$select public.create_import_order('{}'::jsonb, null, 1, null, 'bezahlt', null, null, null, null, '2627')$$,
+  'P0001',
+  'only admins can import orders',
+  'non-admin authenticated cannot call create_import_order'
+);
+select throws_ok(
+  $$select public.rollback_import_batch('00000000-0000-0000-0000-000000000000'::uuid)$$,
+  'P0001',
+  'only admins can roll back an import',
+  'non-admin authenticated cannot call rollback_import_batch'
+);
+select throws_ok(
+  $$select public.set_order_notification('d0000000-0000-0000-0000-000000000001'::uuid, 'versendet')$$,
+  'P0001',
+  'only admins can record order notifications',
+  'non-admin authenticated cannot call set_order_notification'
+);
+select is((select count(*) from public.import_batches)::int, 0, 'non-admin authenticated sees no import batches');
+reset role;
+reset request.jwt.claim.sub;
+
+-- Owner level, standing in for the checkout's service-role connection.
+select lives_ok(
+  $$select public.issue_tickets_system(
+    (select o.id from public.orders o join public.customers c on c.id = o.customer_id where c.email = 'company-test@example.com'),
+    jsonb_build_array(jsonb_build_object(
+      'id', 'f0000000-0000-0000-0000-000000000010',
+      'order_item_id', (select oi.id from public.order_items oi join public.orders o on o.id = oi.order_id join public.customers c on c.id = o.customer_id where c.email = 'company-test@example.com'),
+      'product_id', 'b0000000-0000-0000-0000-000000000001',
+      'season', '2627',
+      'holder_name', 'Muster AG',
+      'transferable', false,
+      'token', 'TEST-TOKEN-0010',
+      'pdf_path', '2627/f0000000-0000-0000-0000-000000000010.pdf'
+    ))
+  )$$,
+  'the checkout can issue tickets for a brand-new (neu) order without a session'
+);
+select is(
+  (select actor_type from public.audit_log where entity_type = 'ticket' and entity_id = 'f0000000-0000-0000-0000-000000000010' and action = 'issued'),
+  'system',
+  'a ticket issued by the checkout is attributed to the system'
+);
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+
+-- Cancelling a new order voids its tickets (D78 / brief status table).
+select lives_ok(
+  $$select public.transition_order_status(
+    (select o.id from public.orders o join public.customers c on c.id = o.customer_id where c.email = 'company-test@example.com'),
+    'storniert'
+  )$$,
+  'admin can cancel a neu order'
+);
+select is(
+  (select status from public.tickets where id = 'f0000000-0000-0000-0000-000000000010'),
+  'storniert',
+  'cancelling the order voided its ticket'
+);
+select ok(
+  (select exists(select 1 from public.audit_log where entity_type = 'ticket' and entity_id = 'f0000000-0000-0000-0000-000000000010' and action = 'voided')),
+  'the voided ticket was logged'
+);
+select throws_ok(
+  $$select public.transition_order_status('d0000000-0000-0000-0000-000000000003', 'storniert')$$,
+  'P0001',
+  'order status cannot change from bezahlt to storniert',
+  'a paid order cannot be cancelled (D78)'
+);
+
+-- Import: batch, one order, duplicate guard, rollback, and the scan guard.
+insert into public.import_batches (id, filename, row_count, created_by)
+values ('30000001-0000-0000-0000-000000000001', 'test.csv', 1, 'a0000000-0000-0000-0000-000000000001');
+select is(
+  (select created_by_email from public.import_batches where id = '30000001-0000-0000-0000-000000000001'),
+  'admin@uhcuster.ch',
+  'the batch remembers who imported it by address'
+);
+
+select lives_ok(
+  $$select public.create_import_order(
+    '{"first_name":"Luca","last_name":"Meier","email":"import-test@example.com"}'::jsonb,
+    'b0000000-0000-0000-0000-000000000002'::uuid,
+    2, 'Luca Meier', 'bezahlt', 'RE-1023', 'SA-2025-201',
+    '30000001-0000-0000-0000-000000000001'::uuid, '2026-07-01T10:00:00Z'::timestamptz, '2627'
+  )$$,
+  'admin can import an order against an inactive product'
+);
+select is(
+  (select o.status || '|' || o.source || '|' || o.invoice_number || '|' || o.created_at::date::text || '|' || o.total_rappen::text
+     from public.orders o where o.external_ref = 'SA-2025-201'),
+  'bezahlt|csv_import|RE-1023|2026-07-01|16000',
+  'the imported order carries status, invoice number, order date and the frozen price times quantity'
+);
+select throws_ok(
+  $$select public.create_import_order(
+    '{"first_name":"Luca","last_name":"Meier","email":"import-test@example.com"}'::jsonb,
+    'b0000000-0000-0000-0000-000000000002'::uuid,
+    1, 'Luca Meier', 'bezahlt', null, 'SA-2025-201',
+    '30000001-0000-0000-0000-000000000001'::uuid, null, '2627'
+  )$$,
+  'P0001',
+  'external_ref SA-2025-201 has already been imported',
+  'the same external_ref cannot be imported twice'
+);
+select throws_ok(
+  $$select public.create_import_order(
+    '{"email":"nobody@example.com"}'::jsonb,
+    'b0000000-0000-0000-0000-000000000002'::uuid,
+    1, null, 'bezahlt', null, 'SA-2025-202',
+    '30000001-0000-0000-0000-000000000001'::uuid, null, '2627'
+  )$$,
+  'P0001',
+  'a company or a person name is required',
+  'an import row needs a company or a person'
+);
+
+select lives_ok(
+  $$select public.issue_tickets_for_order(
+    (select id from public.orders where external_ref = 'SA-2025-201'),
+    jsonb_build_array(jsonb_build_object(
+      'id', 'f0000000-0000-0000-0000-000000000011',
+      'order_item_id', (select oi.id from public.order_items oi join public.orders o on o.id = oi.order_id where o.external_ref = 'SA-2025-201'),
+      'product_id', 'b0000000-0000-0000-0000-000000000002',
+      'season', '2627',
+      'holder_name', 'Luca Meier',
+      'transferable', false,
+      'token', 'TEST-TOKEN-0011',
+      'pdf_path', '2627/f0000000-0000-0000-0000-000000000011.pdf'
+    ))
+  )$$,
+  'the import issues tickets through the admin door'
+);
+
+select lives_ok(
+  $$select public.set_order_notification((select id from public.orders where external_ref = 'SA-2025-201'), 'fehlgeschlagen', 'mailbox full')$$,
+  'admin can record a failed notification'
+);
+select is(
+  (select notification_status || '|' || notification_error from public.orders where external_ref = 'SA-2025-201'),
+  'fehlgeschlagen|mailbox full',
+  'the failure and its reason are stored on the order'
+);
+
+select is(
+  (select (public.rollback_import_batch('30000001-0000-0000-0000-000000000001'::uuid))->>'orders'),
+  '1',
+  'rolling the batch back reports the one order it removed'
+);
+select is((select count(*) from public.orders where external_ref = 'SA-2025-201')::int, 0, 'the imported order is gone');
+select is((select count(*) from public.tickets where id = 'f0000000-0000-0000-0000-000000000011')::int, 0, 'its ticket is gone');
+select is((select count(*) from public.customers where email = 'import-test@example.com')::int, 0, 'its customer is gone');
+select is(
+  (select rolled_back_at is not null from public.import_batches where id = '30000001-0000-0000-0000-000000000001'),
+  true,
+  'the batch is marked as rolled back'
+);
+select throws_ok(
+  $$select public.rollback_import_batch('30000001-0000-0000-0000-000000000001'::uuid)$$,
+  'P0001',
+  'import batch 30000001-0000-0000-0000-000000000001 does not exist or was already rolled back',
+  'a batch cannot be rolled back twice'
+);
+
+-- A batch whose ticket has been through the door stays.
+reset role;
+reset request.jwt.claim.sub;
+insert into public.import_batches (id, filename, row_count) values ('30000001-0000-0000-0000-000000000002', 'scanned.csv', 1);
+update public.orders set import_batch_id = '30000001-0000-0000-0000-000000000002' where id = 'd0000000-0000-0000-0000-000000000001';
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+select throws_ok(
+  $$select public.rollback_import_batch('30000001-0000-0000-0000-000000000002'::uuid)$$,
+  'P0001',
+  'batch 30000001-0000-0000-0000-000000000002 has tickets that were already scanned and cannot be rolled back',
+  'a batch with a scanned ticket cannot be rolled back'
 );
 reset role;
 reset request.jwt.claim.sub;

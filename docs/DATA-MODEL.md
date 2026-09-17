@@ -15,6 +15,22 @@ decide how many tickets a purchase produces and whether they share one holder la
 readable where `active = true`; every other read/write is admin-only, and products are deactivated
 rather than deleted so historical orders always resolve to a real row.
 
+### Category and variant (migration brief, D71/O1)
+
+`products.category` (`red_castle | saisonabo | mitglieder`) and `products.variant` (`gold`, `silber`,
+`bronze`, `normal`, `spezial` / `erwachsene`, `reduziert`, `legi` / `persoenlich`, `uebertragbar`) are
+the two-level naming the order import and the Red Castle order form speak in. The valid pairs live in
+`product_variant_catalog`, referenced by a composite foreign key, and one product per pair and season
+is enforced by a partial unique index - "Saisonabo + Gold" cannot exist. `type` stays what drives
+the card design and the sales-channel switch. The test product carries neither column (both null,
+paired by a check constraint). `red-castle-club-spezial` (two transferable cards, no VIP status) exists
+only for the import of this season's legacy orders and is inactive (D74).
+
+## product_variant_catalog
+
+Ten rows, readable by anyone, extended by migration only - the constraint behind "invalid
+combinations are excluded" (see above).
+
 ## price_history
 
 An append-only ledger of every price a product has ever had, populated automatically by a trigger on
@@ -39,6 +55,28 @@ D16). `total_rappen` is maintained automatically from `order_items`, never suppl
 can read all orders; there is no insert/update policy for anyone — every creation and status/refund
 change goes through a `SECURITY DEFINER` function (see below), never a bare write.
 
+### Invoice-flow columns (migration brief, D75-D78)
+
+Since 2026-09-16 every order is an invoice order: `payment_method` (`invoice`, the only value),
+`invoice_number` (the accounting system's number, recorded with the transition to
+`rechnung_versendet` or corrected via `set_invoice_number`), `terms_accepted_at` (the 30-days-net tick,
+D65). Tickets are issued the moment the order exists (see `issue_tickets_system`), and cancelling voids
+them (`transition_order_status` enforces `neu → rechnung_versendet → bezahlt` and `neu |
+rechnung_versendet → storniert`, D78 - a paid order cannot be cancelled). The automatic 14-day
+cancellation (D14) is unscheduled (D69); the function still exists, nothing calls it.
+
+Imported legacy orders carry `external_ref` (the old order number, unique among non-null values - the
+duplicate guard), `import_batch_id` (see `import_batches`) and `created_at` set to the file's
+`bestelldatum`. `notification_status` (`nicht_versendet | versendet | fehlgeschlagen`), `notified_at`
+and `notification_error` record the office's manual "new ticket shop" mail from the orders tab
+(`set_order_notification`); the automatic checkout confirmation keeps `confirmation_email_sent_at`.
+
+## import_batches
+
+One row per imported CSV file: filename, row count, who (`created_by`, with the address copied to
+`created_by_email` by a trigger, as `audit_log` does), and `rolled_back_at/by` once
+`rollback_import_batch()` has taken it back. Admin select/insert only.
+
 ## order_items
 
 The frozen line items of an order: product, quantity, holder name, and the exact unit price at the
@@ -53,6 +91,12 @@ at order time" is a structural guarantee, not a convention.
 Contact and address details for the person or entity an order belongs to, with an optional
 membership number for club members who arrive via the (future) CSV import rather than a shop order.
 Admin-managed only; no public access, no delete policy.
+
+### customers, since the Red Castle form (D70/D76)
+
+`first_name`, `last_name`, `company_name` (optional; when set it is the billing `name` and the name
+on transferable cards, D73), `customer_reference` (a PO number for the invoice). `phone` is optional
+since the Red Castle form (O9). `name` stays the billing name everything prints.
 
 ## tickets
 
@@ -197,6 +241,18 @@ unchanged, since to that code a member-card order looks exactly like any other p
 `docs/DECISIONS.md` D38). Admin-only (`is_admin()` check, `authenticated`-only grant), same pattern as
 every other mutation function above.
 
+`transition_order_status(p_order_id, p_new_status, p_invoice_number)` (2026-09-16) enforces the
+transitions above, records the invoice number, and on `storniert` voids every live ticket of the
+order with its own audit row. `set_invoice_number` corrects the number afterwards.
+`issue_tickets_internal` is the shared body behind `issue_tickets_for_order` (admin session: the
+import, the member list, the order page's "Karten erstellen") and `issue_tickets_system` (service
+role only: the two checkouts; `actor_type = 'system'` in `audit_log`); it accepts any status but
+`storniert` and still refuses a second issuance. `create_order` takes `p_terms_accepted` and the
+split customer fields; `create_import_order` writes one legacy order with its status, invoice
+number, external reference, batch and order date; `rollback_import_batch` deletes a batch's
+orders, tickets and customers while none of its tickets was scanned, and returns the PDF paths
+for the caller to remove; `set_order_notification` records the manual send's outcome.
+
 `void_ticket(p_ticket_id)` (post-Phase-8, D46) sets a ticket's status to `storniert` with nothing
 issued in its place - distinct from `reissue_ticket()`, which always creates a replacement. Same
 shape as `rename_ticket_holder()`: `is_admin()` check, row-locked read, `audit_log` write, refuses a
@@ -204,7 +260,7 @@ ticket that's already `storniert` or `ersetzt`.
 
 ## RLS verification
 
-`supabase/tests/rls_test.sql` is a 111-assertion pgTAP suite (run via the Supabase SQL editor or
+`supabase/tests/rls_test.sql` is a 161-assertion pgTAP suite (run via the Supabase SQL editor or
 `execute_sql`, wrapped in a rolled-back transaction) covering: the public/admin product split, full
 lockout of `anon` and non-admin `authenticated` sessions across every other table, that bare
 writes to `orders`/`tickets` have no effect while the dedicated functions succeed and log correctly,
@@ -213,8 +269,9 @@ generation, the auto-cancel job, `create_order()` (system-only access, and that 
 injected into a line is silently ignored in favour of the real product price), Phase 6's
 `issue_tickets_for_order`/`set_files_handed_over`, Phase 7/8's `game_scanner_codes` and
 `check_order_rate_limit`, the post-Phase-8 member-import additions (`create_member_order` access
-control and output shape, `members` table RLS), and `void_ticket` (D46). All 111 pass as of this
-writing.
+control and output shape, `members` table RLS), `void_ticket` (D46), and the invoice flow and order import (Group O: enforced transitions, the
+system issuance door, cancelling voids tickets, import with duplicate guard, rollback and its scan
+guard). All 161 pass as of 2026-09-16.
 
 Phase 7's scanner writes aren't in this suite: they don't go through a `SECURITY DEFINER` Postgres
 function at all (see D32) — `/api/scanner/scan` verifies its own signed session token and writes via

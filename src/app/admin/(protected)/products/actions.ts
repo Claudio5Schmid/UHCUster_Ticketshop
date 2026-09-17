@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { CURRENT_SEASON } from "@/lib/season";
+import type { ProductCategory } from "@/lib/products";
 
 interface ProductFormInput {
   slug: string;
@@ -18,6 +19,17 @@ interface ProductFormInput {
   singleTicketPriceRappen: number | null;
   includedPasses: number | null;
   transferable: boolean;
+  category: ProductCategory | null;
+  variant: string | null;
+}
+
+/** Both or neither - the database refuses a half-set pair. */
+function categoryColumns(input: ProductFormInput) {
+  const paired = input.category && input.variant ? { category: input.category, variant: input.variant } : { category: null, variant: null };
+  if ((input.category && !input.variant) || (!input.category && input.variant)) {
+    throw new Error("Kategorie und Variante gehören zusammen - beide setzen oder beide leer lassen.");
+  }
+  return paired;
 }
 
 function buildBenefits(input: ProductFormInput) {
@@ -42,6 +54,7 @@ export async function createProduct(input: ProductFormInput) {
     active: input.active,
     valid_season: CURRENT_SEASON,
     benefits: buildBenefits(input),
+    ...categoryColumns(input),
   });
 
   if (error) {
@@ -65,6 +78,11 @@ export async function updateProduct(productId: string, currentPriceRappen: numbe
       .eq("id", productId);
     if (priceError) throw new Error(priceError.message);
   }
+
+  // Category and variant are catalog keys, not audited product details: a
+  // direct update under the admin's own update policy, like the price.
+  const { error: categoryError } = await supabase.from("products").update(categoryColumns(input)).eq("id", productId);
+  if (categoryError) throw new Error(categoryError.message);
 
   const { error } = await supabase.rpc("update_product_details", {
     p_product_id: productId,

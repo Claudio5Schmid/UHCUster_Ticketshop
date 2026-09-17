@@ -34,10 +34,11 @@ export function orderConfirmationSubject(orderNumber: string): string {
 
 /**
  * Deliberately says the same three things as the on-screen confirmation
- * (src/app/(shop)/kasse/page.tsx), because this mail is the only durable copy the
- * customer gets - closing the tab used to lose the order number entirely. It also
- * states outright that it is *not* the invoice, since there is no online payment and
- * the real bill follows by hand from the club office days later.
+ * (src/app/(shop)/kasse/page.tsx, the Red Castle order page), because this mail is
+ * the only durable copy the customer gets - closing the tab used to lose the order
+ * number entirely. It also states outright that it is *not* the invoice, and that
+ * the cards are not attached: the office sends both together, by hand, within a
+ * few working days (D77).
  */
 export function orderConfirmationText(input: OrderConfirmationEmailInput): string {
   const lines = input.items.map((item) => `  - ${itemLabel(item)}: ${formatRappenAsChf(item.line_total_rappen)}`);
@@ -55,12 +56,12 @@ export function orderConfirmationText(input: OrderConfirmationEmailInput): strin
     `Total: ${formatRappenAsChf(input.totalRappen)}`,
     "",
     "So geht es weiter:",
-    "  1. Das Büro des UHC Uster sendet dir die Rechnung mit den Zahlungsdetails",
-    "     innerhalb weniger Werktage an diese E-Mail-Adresse.",
-    `  2. Du überweist den Betrag und gibst dabei die Bestellnummer ${input.orderNumber}`,
-    "     als Referenz an.",
-    "  3. Sobald die Zahlung eingegangen ist, schicken wir dir deine Karte(n) per",
-    "     E-Mail - und du findest sie ab dann jederzeit unter demselben Link:",
+    "  1. Das Büro des UHC Uster sendet dir die Rechnung und deine Karte(n) innert",
+    "     2 bis 4 Werktagen per E-Mail an diese Adresse.",
+    `  2. Du überweist den Betrag innert 30 Tagen und gibst dabei die Bestellnummer`,
+    `     ${input.orderNumber} als Referenz an.`,
+    "  3. Sobald die Karten unterwegs sind, findest du sie jederzeit auch unter",
+    "     diesem Link:",
     "",
     `  ${input.statusUrl}`,
     "",
@@ -68,7 +69,7 @@ export function orderConfirmationText(input: OrderConfirmationEmailInput): strin
     "dir, und behandle ihn wie ein Ticket - wer ihn hat, kommt an deine Karten.",
     "",
     "Diese E-Mail bestätigt nur den Eingang deiner Bestellung - sie ist noch keine",
-    "Rechnung. Bitte überweise noch nichts, bevor du die Rechnung erhalten hast.",
+    "Rechnung, und die Karten sind nicht angehängt. Beides folgt vom Büro.",
     "",
     "Bei Fragen kannst du direkt auf diese E-Mail antworten.",
     "",
@@ -118,11 +119,11 @@ export function orderConfirmationHtml(input: OrderConfirmationEmailInput): strin
 
         <p style="margin:32px 0 8px;font-size:15px;font-weight:700;">So geht es weiter</p>
         <ol style="margin:0 0 24px;padding-left:20px;font-size:14px;line-height:1.7;color:#444444;">
-          <li>Das Büro des UHC Uster sendet dir die Rechnung mit den Zahlungsdetails innerhalb weniger Werktage an diese E-Mail-Adresse.</li>
-          <li>Du überweist den Betrag und gibst dabei die Bestellnummer <strong>${escapeHtml(
+          <li>Das Büro des UHC Uster sendet dir die Rechnung und deine Karte(n) innert 2 bis 4 Werktagen per E-Mail an diese Adresse.</li>
+          <li>Du überweist den Betrag innert 30 Tagen und gibst dabei die Bestellnummer <strong>${escapeHtml(
             input.orderNumber
           )}</strong> als Referenz an.</li>
-          <li>Sobald die Zahlung eingegangen ist, schicken wir dir deine Karte(n) per E-Mail - und du findest sie ab dann jederzeit in deinem Bereich im Shop.</li>
+          <li>Sobald die Karten unterwegs sind, findest du sie jederzeit auch über den Link unten.</li>
         </ol>
 
         <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
@@ -135,14 +136,15 @@ export function orderConfirmationHtml(input: OrderConfirmationEmailInput): strin
           </tr>
         </table>
         <p style="margin:0 0 24px;font-size:13px;line-height:1.6;color:#6b6b6b;word-break:break-all;">
-          Über diesen Link siehst du jederzeit den Stand deiner Bestellung und lädst später deine Karten
-          herunter. Speichere ihn dir, und behandle ihn wie ein Ticket - wer ihn hat, kommt an deine Karten.<br />
+          Über diesen Link siehst du jederzeit den Stand deiner Bestellung und lädst deine Karten herunter,
+          sobald das Büro sie verschickt hat. Speichere ihn dir, und behandle ihn wie ein Ticket - wer ihn hat,
+          kommt an deine Karten.<br />
           <a href="${escapeHtml(input.statusUrl)}" style="color:#6b6b6b;">${escapeHtml(input.statusUrl)}</a>
         </p>
 
         <p style="margin:0 0 24px;padding:12px 16px;background:#fafafa;border-radius:8px;font-size:13px;line-height:1.6;color:#6b6b6b;">
-          Diese E-Mail bestätigt nur den Eingang deiner Bestellung - sie ist noch keine Rechnung.
-          Bitte überweise noch nichts, bevor du die Rechnung erhalten hast.
+          Diese E-Mail bestätigt nur den Eingang deiner Bestellung - sie ist noch keine Rechnung, und die
+          Karten sind nicht angehängt. Beides folgt vom Büro des UHC Uster.
         </p>
 
         <p style="margin:0;font-size:14px;line-height:1.6;color:#444444;">

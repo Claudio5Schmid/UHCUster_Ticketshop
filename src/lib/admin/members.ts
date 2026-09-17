@@ -3,6 +3,7 @@ import { issueTicketsForOrder, addMemberTickets, rerenderTicketsForOrder } from 
 import { getOrderTickets, type OrderTicket } from "@/lib/admin/tickets";
 import { sendCardEmail } from "@/lib/email/mailer";
 import { memberCardsHtml, memberCardsText } from "@/lib/email/member-cards";
+import { applyPlaceholders } from "@/lib/email/templates";
 import { buildOrderAccessUrl } from "@/lib/orders/access-token";
 import { CURRENT_SEASON } from "@/lib/season";
 import { parseMemberCsvRows, type CsvColumnMapping } from "@/lib/csv/memberCsv";
@@ -22,6 +23,9 @@ import {
 
 export type { Member, MemberCardCounts, MemberSendState, MemberFilters } from "@/lib/admin/member-state";
 export { memberSendState, applyMemberFilters, countCards } from "@/lib/admin/member-state";
+
+/** How many ids one `in()` filter may carry - each is 36 characters of URL. */
+const ID_SLICE = 100;
 
 export interface MemberInput {
   /** The club's member number. Optional here because the single-member form has no
@@ -67,14 +71,21 @@ export async function getAllMembers(filters: MemberFilters = {}): Promise<Member
 
   const cardsByOrder = new Map<string, ReturnType<typeof countCards>>();
   if (orderIds.length > 0) {
-    const { data: tickets, error: ticketsError } = await supabase
-      .from("tickets")
-      .select("order_id, status, transferable, card_sent_at")
-      .in("order_id", orderIds);
-    if (ticketsError) throw new Error(`Failed to load member cards: ${ticketsError.message}`);
+    // In slices: every id goes into the request URL, and the whole club in one
+    // `in()` is a URL the server refuses - the list then failed with a bare
+    // "fetch failed" once the roster passed a few hundred members.
+    const tickets: CountableTicket[] = [];
+    for (let offset = 0; offset < orderIds.length; offset += ID_SLICE) {
+      const { data, error: ticketsError } = await supabase
+        .from("tickets")
+        .select("order_id, status, transferable, card_sent_at")
+        .in("order_id", orderIds.slice(offset, offset + ID_SLICE));
+      if (ticketsError) throw new Error(`Failed to load member cards: ${ticketsError.message}`);
+      tickets.push(...((data ?? []) as Array<CountableTicket & { order_id: string }>));
+    }
 
     const grouped = new Map<string, CountableTicket[]>();
-    for (const ticket of tickets ?? []) {
+    for (const ticket of tickets as Array<CountableTicket & { order_id: string }>) {
       const list = grouped.get(ticket.order_id) ?? [];
       list.push(ticket);
       grouped.set(ticket.order_id, list);
@@ -606,7 +617,82 @@ export interface SendCardsResult {
 }
 
 function applyTemplate(template: string, member: Pick<Member, "vorname" | "nachname">): string {
-  return template.replaceAll("{{vorname}}", member.vorname).replaceAll("{{nachname}}", member.nachname);
+  return applyPlaceholders(template, { vorname: member.vorname, nachname: member.nachname });
+}
+
+export interface MemberMailPreview {
+  to: string;
+  subject: string;
+  bodyText: string;
+  attachmentNames: string[];
+}
+
+/** What one member would get from the send dialog, before anything goes out:
+ *  the rendered text and the names of the cards that would be attached. */
+export async function previewMemberMail(memberId: string, subjectTemplate: string, bodyTemplate: string): Promise<MemberMailPreview> {
+  const supabase = await getSupabaseServerClient();
+  const { data: member, error } = await supabase
+    .from("members")
+    .select("id, vorname, nachname, email, order_id, orders(order_number)")
+    .eq("id", memberId)
+    .maybeSingle();
+  if (error || !member) throw new Error(error?.message ?? "Mitglied nicht gefunden.");
+
+  const joined = (member as unknown as { orders?: { order_number: string } | { order_number: string }[] | null }).orders;
+  const orderNumber = Array.isArray(joined) ? joined[0]?.order_number : joined?.order_number;
+  const tickets = member.order_id ? await getOrderTickets(member.order_id as string) : [];
+  const pending = tickets.filter((ticket) => isLiveTicket(ticket) && !ticket.card_sent_at);
+  const taken = new Map<string, number>();
+
+  return {
+    to: member.email as string,
+    subject: applyTemplate(subjectTemplate, member as Pick<Member, "vorname" | "nachname">),
+    bodyText: memberCardsText({
+      bodyText: applyTemplate(bodyTemplate, member as Pick<Member, "vorname" | "nachname">),
+      statusUrl: orderNumber ? buildOrderAccessUrl(orderNumber) : "(noch keine Bestellung)",
+      cardCount: pending.length,
+    }),
+    attachmentNames: pending.map((ticket) =>
+      uniqueFileName(
+        ticketFileName(
+          {
+            productName: ticket.product_name_snapshot,
+            kategorie: ticket.kategorie,
+            holderName: ticket.holder_name,
+            transferable: ticket.transferable,
+            transferableIndex: ticket.transferable_index,
+          },
+          CURRENT_SEASON_LABEL
+        ),
+        taken
+      )
+    ),
+  };
+}
+
+/** The real mail for one member, delivered to the admin instead. Nothing is marked as sent. */
+export async function sendMemberTestMail(memberId: string, subjectTemplate: string, bodyTemplate: string, to: string): Promise<void> {
+  const preview = await previewMemberMail(memberId, subjectTemplate, bodyTemplate);
+  const supabase = await getSupabaseServerClient();
+  const { data: member } = await supabase.from("members").select("order_id").eq("id", memberId).maybeSingle<{ order_id: string | null }>();
+  const tickets = member?.order_id ? await getOrderTickets(member.order_id) : [];
+  const pending = tickets.filter((ticket) => isLiveTicket(ticket) && !ticket.card_sent_at);
+
+  const attachments = [];
+  for (const [index, ticket] of pending.entries()) {
+    if (!ticket.pdf_path) continue;
+    const { data: file, error } = await supabase.storage.from("tickets").download(ticket.pdf_path);
+    if (error || !file) throw new Error(`PDF ${ticket.pdf_path} konnte nicht geladen werden: ${error?.message}`);
+    attachments.push({ filename: preview.attachmentNames[index], content: new Uint8Array(await file.arrayBuffer()) });
+  }
+
+  const delivered = await sendCardEmail({
+    to,
+    subject: `[TEST] ${preview.subject}`,
+    bodyText: preview.bodyText,
+    attachments,
+  });
+  if (!delivered) throw new Error("Testadresse ist nicht zustellbar (reservierte Domain).");
 }
 
 /**

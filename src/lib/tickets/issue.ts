@@ -1,4 +1,5 @@
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+import { getSupabaseAdminClient } from "@/lib/supabase";
 import { generateTicketId } from "./token";
 import { renderTicketPdf } from "./pdf";
 import type { ProductBenefits } from "@/lib/products";
@@ -90,7 +91,7 @@ async function buildTicket(spec: TicketSpec): Promise<BuiltTicket> {
   };
 }
 
-type SupabaseClient = Awaited<ReturnType<typeof getSupabaseServerClient>>;
+type SupabaseClient = Awaited<ReturnType<typeof getSupabaseServerClient>> | ReturnType<typeof getSupabaseAdminClient>;
 
 /** What the card prints as its headline comes from the member list (D60): the
  * member whose order this is, or nothing for a shop order, which has no member
@@ -111,6 +112,13 @@ async function getKategorieForOrder(supabase: SupabaseClient, orderId: string): 
  * linked to its order; looked up by everyone else. */
 interface IssueOptions {
   kategorie?: string | null;
+  /**
+   * Who is issuing. "admin" (default) runs in the signed-in admin's session and
+   * lands in audit_log under their id; "system" is the checkout, which has no
+   * session and goes through the service-role client and issue_tickets_system -
+   * the same arrangement create_order() has always had (D75/D77).
+   */
+  actor?: "admin" | "system";
 }
 
 /**
@@ -145,18 +153,19 @@ async function uploadAll(supabase: SupabaseClient, built: BuiltTicket[]): Promis
 }
 
 /**
- * Renders and stores one PDF per ticket for every item on a paid order, then
- * records the tickets via issue_tickets_for_order (docs/ARCHITECTURE.md #3: "on
- * transition to bezahlt"). Called from the order-status Server Action right after
- * transition_order_status succeeds - never automatically from anywhere else, so an
- * order can't accidentally get tickets before it's actually paid.
+ * Renders and stores one PDF per ticket for every item on an order, then records
+ * the tickets. Since the invoice flow (D75/D77) this runs the moment an order
+ * exists: from the checkout (actor "system"), from the order import and the
+ * member list (actor "admin"), and as a fallback from the order page for an order
+ * that predates the flow and still has no cards.
  *
- * issue_tickets_for_order refuses a second call for the same order, so retrying
- * after a failed upload is safe. Adding cards to an order that already has some
- * is deliberately NOT this function's job - see addMemberTickets.
+ * The database refuses a second call for the same order, so retrying after a
+ * failed upload is safe. Adding cards to an order that already has some is
+ * deliberately NOT this function's job - see addMemberTickets.
  */
 export async function issueTicketsForOrder(orderId: string, options: IssueOptions = {}): Promise<{ issued: number }> {
-  const supabase = await getSupabaseServerClient();
+  const actor = options.actor ?? "admin";
+  const supabase = actor === "system" ? getSupabaseAdminClient() : await getSupabaseServerClient();
   const kategorie = options.kategorie !== undefined ? options.kategorie : await getKategorieForOrder(supabase, orderId);
 
   const { data: order, error: orderError } = await supabase
@@ -208,10 +217,13 @@ export async function issueTicketsForOrder(orderId: string, options: IssueOption
   const built = await Promise.all(specs.map((spec) => buildTicket(spec)));
   await uploadAll(supabase, built);
 
-  const { error: issueError } = await supabase.rpc("issue_tickets_for_order", {
-    p_order_id: orderId,
-    p_tickets: built.map((ticket) => ticket.row),
-  });
+  const { error: issueError } = await supabase.rpc(
+    actor === "system" ? "issue_tickets_system" : "issue_tickets_for_order",
+    {
+      p_order_id: orderId,
+      p_tickets: built.map((ticket) => ticket.row),
+    }
+  );
   if (issueError) {
     throw new Error(issueError.message);
   }

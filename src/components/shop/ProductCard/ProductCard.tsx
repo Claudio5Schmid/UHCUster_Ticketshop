@@ -24,6 +24,12 @@ interface ProductCardProps {
    * a blank line would not, because a note long enough to wrap takes two.
    */
   reserveNote?: string | null;
+  /**
+   * Where "Bestellen" leads when the product has its own order form instead of
+   * the cart - the Red Castle Club packages (brief §2, D71/O8). Only honoured
+   * while the sales switch says the shop sells it.
+   */
+  orderHref?: string;
 }
 
 export function ProductCard({
@@ -32,6 +38,7 @@ export function ProductCard({
   eyebrow,
   purchase = { kind: "cart", note: null },
   reserveNote,
+  orderHref,
 }: ProductCardProps) {
   const highlights = product.benefits?.highlights ?? [];
   const savings = calculateSavings(product.price_rappen, product.benefits?.single_ticket_price_rappen, gameCount);
@@ -70,6 +77,10 @@ export function ProductCard({
             <Button type="button" size="sm" fullWidth disabled>
               Auswählen
             </Button>
+          ) : orderHref ? (
+            <Button as="a" href={orderHref} size="sm" fullWidth>
+              Bestellen
+            </Button>
           ) : (
             <AddToCartButton
               productId={product.id}
@@ -105,7 +116,9 @@ export function ProductCard({
           visitor will never reach is just a wrong instruction. */}
       {transferable && includedPasses > 1 && purchase.kind === "cart" && (
         <p className={styles.bundleNote}>
-          Im Checkout hinterlegst du einen Namen (z.B. eure Firma) für alle {includedPasses} Karten.
+          {orderHref
+            ? `Alle ${includedPasses} Karten lauten auf deine Firma oder deinen Namen. Bestellung auf Rechnung, 30 Tage netto.`
+            : `Im Checkout hinterlegst du einen Namen (z.B. eure Firma) für alle ${includedPasses} Karten.`}
         </p>
       )}
     </Card>

@@ -65,6 +65,11 @@ export default async function RedCastleClubPage() {
                 gameCount={games.length}
                 purchase={resolvePurchase(product, salesChannels)}
                 reserveNote={membershipsNote}
+                orderHref={
+                  product.category === "red_castle" && product.variant
+                    ? `/red-castle-club/bestellen?variante=${encodeURIComponent(product.variant)}`
+                    : undefined
+                }
               />
             ))}
           </div>

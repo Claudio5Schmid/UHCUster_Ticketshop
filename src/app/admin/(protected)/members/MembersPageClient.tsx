@@ -15,11 +15,14 @@ import {
   sendMemberCardsAction,
   updateMemberKategorieAction,
   deleteMembersAction,
+  previewMemberMailAction,
+  sendMemberTestMailAction,
 } from "./actions";
 import { memberSendState, type Member, type MemberSendState } from "@/lib/admin/member-state";
 import { CSV_FIELDS, parseCsvHeader, detectColumnMapping, decodeCsvBytes, type CsvColumnMapping, type CsvField } from "@/lib/csv/memberCsv";
 import type { CsvImportPlan } from "@/lib/admin/members";
-import { matchesSendConfirmation } from "@/lib/admin/send-confirmation";
+import { SendMailDialog, type SendSummary } from "@/components/admin/SendMailDialog/SendMailDialog";
+import { MEMBER_PLACEHOLDERS, MEMBER_TEMPLATES } from "@/lib/email/templates";
 import styles from "../admin.module.css";
 
 type SortKey = "name" | "email" | "kategorie" | "karten" | "versand" | "importiert" | "mitgliedsnummer";
@@ -29,14 +32,6 @@ const importDateFormatter = new Intl.DateTimeFormat("de-CH", {
   dateStyle: "short",
   timeStyle: "short",
 });
-
-const DEFAULT_SUBJECT = "Deine Mitgliederkarte UHC Uster";
-const DEFAULT_BODY = `Hallo {{vorname}},
-
-im Anhang findest du deine Mitgliederkarte(n) für die Saison 26/27 als PDF.
-
-Sportliche Grüsse
-UHC Uster`;
 
 const SEND_STATE: Record<MemberSendState, { label: string; variant: "neutral" | "warning" | "success" | "info" }> = {
   ohne: { label: "Keine Karte", variant: "neutral" },
@@ -51,7 +46,10 @@ function sendSummary(member: Member): string {
   return `${member.cards.sent} von ${member.cards.active} versendet`;
 }
 
-export function MembersPageClient({ members, filterBar }: { members: Member[]; filterBar: ReactNode }) {
+/** Members are sent a few at a time, so the dialog's progress bar moves. */
+const SEND_CHUNK = 5;
+
+export function MembersPageClient({ members, filterBar, adminEmail }: { members: Member[]; filterBar: ReactNode; adminEmail: string }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -90,9 +88,6 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
      file of any size takes long enough that a still screen reads as a hang. */
   const [csvProgress, setCsvProgress] = useState<{ done: number; total: number } | null>(null);
 
-  const [subject, setSubject] = useState(DEFAULT_SUBJECT);
-  const [body, setBody] = useState(DEFAULT_BODY);
-  const [confirmation, setConfirmation] = useState("");
   /* The tone travels with the text. This used to be a bare string always rendered in
      the green success banner, so "0 Karte(n) versendet. 3 fehlgeschlagen" was reported
      to the office as a success - the one thing a status colour must never do. */
@@ -245,30 +240,45 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
     });
   }
 
-  function handleSend() {
-    setError(null);
-    setSendResult(null);
-    startTransition(async () => {
-      try {
-        const result = await sendMemberCardsAction(subject, body, confirmation, selectedSendableIds);
-        const failures = result.failed.length;
-        setSendResult({
-          // Nothing out at all is an error; a partial send is a warning that still has
-          // to say what did go through, so the office knows what not to resend.
-          tone: failures === 0 ? "success" : result.sent === 0 ? "error" : "warning",
-          text:
-            `${result.cards} Karte(n) an ${result.sent} Mitglied(er) versendet.` +
-            (failures > 0
-              ? ` ${failures} fehlgeschlagen: ${result.failed.map((f) => `${f.email} (${f.reason})`).join("; ")}`
-              : ""),
-        });
-        setConfirmation("");
-        setShowSendForm(false);
-        setSelectedIds(new Set());
-      } catch (submitError) {
-        setError(submitError instanceof Error ? submitError.message : "Fehler beim Versand.");
-      }
+  /** The send, chunk by chunk, through the shared dialog. Only members with
+   *  cards still to send are addressed - a member whose cards all went out is
+   *  never mailed an empty message. */
+  async function runSend(
+    subject: string,
+    body: string,
+    phrase: string,
+    _options: { includeAlreadyNotified: boolean },
+    onProgress: (done: number, total: number) => void
+  ): Promise<SendSummary> {
+    const ids = selectedSendableIds;
+    const summary: SendSummary = { sent: 0, skipped: [], failed: [] };
+    let cards = 0;
+    onProgress(0, ids.length);
+    for (let offset = 0; offset < ids.length; offset += SEND_CHUNK) {
+      const chunk = await sendMemberCardsAction(subject, body, phrase, ids.slice(offset, offset + SEND_CHUNK));
+      summary.sent += chunk.sent;
+      cards += chunk.cards;
+      summary.failed.push(...chunk.failed.map((f) => ({ label: f.email, reason: f.reason })));
+      onProgress(Math.min(offset + SEND_CHUNK, ids.length), ids.length);
+    }
+    // The member summary counts cards, not just people; carried in the label.
+    summary.skipped = cards > 0 ? [{ label: `${cards} Karte(n)`, reason: "versendet" }] : [];
+    return summary;
+  }
+
+  function handleSendDone(summary: SendSummary) {
+    const failures = summary.failed.length;
+    const cards = summary.skipped[0]?.label ?? "0 Karte(n)";
+    setSendResult({
+      // Nothing out at all is an error; a partial send is a warning that still has
+      // to say what did go through, so the office knows what not to resend.
+      tone: failures === 0 ? "success" : summary.sent === 0 ? "error" : "warning",
+      text:
+        `${cards} an ${summary.sent} Mitglied(er) versendet.` +
+        (failures > 0 ? ` ${failures} fehlgeschlagen: ${summary.failed.map((f) => `${f.label} (${f.reason})`).join("; ")}` : ""),
     });
+    setShowSendForm(false);
+    setSelectedIds(new Set());
   }
 
   function handleSortClick(key: SortKey) {
@@ -828,33 +838,24 @@ export function MembersPageClient({ members, filterBar }: { members: Member[]; f
         </div>
       </Modal>
 
-      <Modal open={showSendForm} onClose={() => setShowSendForm(false)} title="Karten versenden">
-        <div className={styles.form}>
-          <p style={{ color: "var(--color-text-secondary)" }}>
-            {selectedOpenCards} noch nicht versendete Karte(n) an {selectedSendableIds.length} ausgewählte Mitglieder.
-            Bereits versendete Karten werden nicht erneut angehängt. Platzhalter <code>{"{{vorname}}"}</code> und{" "}
-            <code>{"{{nachname}}"}</code> stehen zur Verfügung.
-          </p>
-          <Input label="Betreff" value={subject} onChange={(e) => setSubject(e.target.value)} />
-          <label className={styles.textareaLabel}>
-            Nachricht
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={8} className={styles.textarea} />
-          </label>
-          <Input
-            label='Zum Bestätigen "Versenden" eingeben'
-            value={confirmation}
-            onChange={(e) => setConfirmation(e.target.value)}
-          />
-          <div className={styles.actions}>
-            <Button onClick={handleSend} disabled={isPending || !matchesSendConfirmation(confirmation) || selectedOpenCards === 0}>
-              {selectedOpenCards} Karte(n) jetzt versenden
-            </Button>
-            <Button type="button" variant="secondary" onClick={() => setShowSendForm(false)}>
-              Abbrechen
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <SendMailDialog
+        open={showSendForm}
+        onClose={() => setShowSendForm(false)}
+        title={`Karten versenden (${selectedOpenCards} noch nicht versendete Karte(n))`}
+        recipientNoun={{ one: "Mitglied", many: "Mitglieder" }}
+        recipientCount={selectedSendableIds.length}
+        emptyCount={selectedMembers.length - selectedSendableIds.length}
+        previewCandidates={selectedMembers
+          .filter((member) => member.cards.open > 0)
+          .map((member) => ({ id: member.id, label: `${member.vorname} ${member.nachname}` }))}
+        templates={MEMBER_TEMPLATES}
+        placeholders={MEMBER_PLACEHOLDERS}
+        defaultTestAddress={adminEmail}
+        onPreview={previewMemberMailAction}
+        onSendTest={sendMemberTestMailAction}
+        onSend={runSend}
+        onDone={handleSendDone}
+      />
     </div>
   );
 }

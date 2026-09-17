@@ -9,6 +9,9 @@ import {
   updateMemberKategorie,
   deleteMembers,
   addCardsToMember,
+  previewMemberMail,
+  sendMemberTestMail,
+  type MemberMailPreview,
   type MemberInput,
   type CsvImportResult,
   type CsvImportPlan,
@@ -83,4 +86,12 @@ export async function sendMemberCardsAction(
   const result = await sendMemberCards(subject, body, memberIds);
   revalidatePath("/admin/members");
   return result;
+}
+
+export async function previewMemberMailAction(memberId: string, subject: string, body: string): Promise<MemberMailPreview> {
+  return previewMemberMail(memberId, subject, body);
+}
+
+export async function sendMemberTestMailAction(memberId: string, subject: string, body: string, to: string): Promise<void> {
+  await sendMemberTestMail(memberId, subject, body, to);
 }

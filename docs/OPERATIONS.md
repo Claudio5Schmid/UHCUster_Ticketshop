@@ -189,3 +189,37 @@ Three places hold this number and they must agree: `ADMIN_INACTIVITY_TIMEOUT_MS`
 
 Scanner devices are unaffected - they authenticate with signed tokens, not a Supabase Auth
 session, so no timeout here can log a scanner out mid-match.
+
+
+## Bestellung auf Rechnung (seit 2026-09-16, D75–D78)
+
+Jede Shop-Bestellung - Red Castle Club über sein eigenes Formular, Saisonkarte über den
+Warenkorb - entsteht mit Status `neu` und **fertigen Karten**. Der Kunde bekommt sofort eine
+Bestätigungsmail ohne Karten; das Büro bekommt «Neue Bestellung … – Rechnung erstellen» an
+`ORDER_NOTIFICATION_EMAIL`. Der Ablauf im Admin (Bestellung öffnen):
+
+1. **Rechnungsdaten** kopieren (Feld für Feld oder «Alles kopieren»), Rechnung in der Fibu
+   erstellen. Alternativ die Liste als «Rechnungsdaten als CSV» exportieren.
+2. Karten unter «Tickets» als ZIP herunterladen, **zusammen mit der Rechnung** aus der Fibu an
+   den Kunden senden.
+3. «Als 'Rechnung versendet' markieren» und die Rechnungsnummer eintragen. Ab jetzt zeigt der
+   Kundenlink die Karten zum Download.
+4. Nach Zahlungseingang «Als 'Bezahlt' markieren». Eine bezahlte Bestellung kann nicht mehr
+   storniert werden.
+5. Bleibt die Zahlung aus: «Stornieren» (mit Dialog). Alle Karten der Bestellung werden
+   deaktiviert - der Scanner weist sie ab, der Kundenlink zeigt «storniert». Laufende
+   Scannergeräte kennen die Änderung erst nach einem Neustart.
+
+Es gibt keinen automatischen Storno mehr (D69).
+
+## Migration: Bestellungen aus CSV importieren
+
+Reiter Bestellungen → «CSV importieren». Datei mit Kopfzeile
+`external_ref;produkt;variante;firma;vorname;nachname;email;anzahl;status;rechnungsnummer;bestelldatum`
+(Semikolon, UTF-8). Die Vorschau zeigt pro Zeile ok / Fehler / bereits importiert; der Import legt
+Bestellungen, Karten und PDFs an und **versendet keine Mail**. Danach über die Mehrfachauswahl
+«E-Mail versenden…» die Kunden mit der Vorlage «Einführung neuer Ticketshop» informieren (Vorschau
+und Testmail vor dem Versand; bereits informierte werden übersprungen, ausser die Checkbox wird
+gesetzt). Ein Batch lässt sich auf seiner Seite (`/admin/import/<id>`) zurückrollen, solange keine
+seiner Karten gescannt wurde. Vor dem ersten Import den Preis von «Red Castle Club Spezial» setzen
+(D81).

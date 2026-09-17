@@ -1,12 +1,13 @@
 import { getSupabaseAdminClient } from "@/lib/supabase";
+import { ticketsVisibleToCustomer, type OrderStatus } from "@/lib/orders/visibility";
 
 /**
- * Shared guard for both customer download routes: a ticket PDF is only ever handed
- * out for an order the office has actually marked `bezahlt`. Tickets do not exist
- * before that point anyway - this makes the rule explicit rather than relying on
- * that ordering staying true.
+ * Shared guard for both customer download routes: a ticket PDF is handed out only
+ * once the office has sent the invoice - and the cards with it (D77) - so from
+ * `rechnung_versendet` on, and never for a cancelled order, whose cards no longer
+ * scan anyway.
  */
-export async function loadPaidOrderForToken(orderNumber: string): Promise<{ id: string } | null> {
+export async function loadDownloadableOrderForToken(orderNumber: string): Promise<{ id: string } | null> {
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("orders")
@@ -14,6 +15,6 @@ export async function loadPaidOrderForToken(orderNumber: string): Promise<{ id: 
     .eq("order_number", orderNumber)
     .maybeSingle();
 
-  if (error || !data || data.status !== "bezahlt") return null;
+  if (error || !data || !ticketsVisibleToCustomer(data.status as OrderStatus)) return null;
   return { id: data.id };
 }

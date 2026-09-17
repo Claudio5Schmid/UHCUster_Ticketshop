@@ -4,13 +4,9 @@ import { after } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import { CURRENT_SEASON } from "@/lib/season";
 import { getClientIp, checkOrderRateLimit } from "@/lib/rate-limit";
-import { assertOrderLinkConfigured, buildOrderAccessPath, buildOrderAccessUrl } from "@/lib/orders/access-token";
-import { sendEmail } from "@/lib/email/mailer";
-import {
-  orderConfirmationSubject,
-  orderConfirmationText,
-  orderConfirmationHtml,
-} from "@/lib/email/order-confirmation";
+import { assertOrderLinkConfigured, buildOrderAccessPath } from "@/lib/orders/access-token";
+import { notifyOrderPlaced } from "@/lib/email/order-notifications";
+import { verifyTurnstile, issueTicketsAfterCheckout } from "@/lib/orders/checkout";
 
 export interface OrderLineInput {
   productId: string;
@@ -41,40 +37,31 @@ export interface OrderConfirmation {
   totalRappen: number;
   items: OrderConfirmationItem[];
   /** Signed link to this order's status page - the customer's durable way back to
-   * the order and, once paid, to the ticket PDFs (docs/DECISIONS.md D54). */
+   * the order and, once the office has sent them, to the ticket PDFs (D54, D77). */
   statusPath: string;
 }
 
-async function verifyTurnstile(token: string): Promise<boolean> {
-  const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (!secret) {
-    throw new Error("TURNSTILE_SECRET_KEY is not set.");
-  }
-  if (!token) return false;
-
-  const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ secret, response: token }),
-  });
-
-  const result = (await response.json()) as { success?: boolean };
-  return result.success === true;
-}
-
 /**
- * The only thing the client ever sends per line is a product id and a holder name -
- * never a price or quantity. Every price/quantity is resolved inside create_order()
- * from the current `products` row, so there is nothing here for a tampered client
- * request to override.
+ * The season-pass checkout. The only thing the client ever sends per line is a
+ * product id and a holder name - never a price or quantity. Every price/quantity
+ * is resolved inside create_order() from the current `products` row, so there is
+ * nothing here for a tampered client request to override.
+ *
+ * Since the invoice flow (D75/D77) the cards are issued right here, before the
+ * confirmation is shown: the office downloads them and sends them with the
+ * invoice. Nothing is attached to the automatic mail.
  */
 export async function submitOrder(
   customer: CustomerInput,
   lines: OrderLineInput[],
-  turnstileToken: string
+  turnstileToken: string,
+  termsAccepted: boolean
 ): Promise<OrderConfirmation> {
   if (!lines || lines.length === 0) {
     throw new Error("Der Warenkorb ist leer.");
+  }
+  if (!termsAccepted) {
+    throw new Error("Bitte bestätige die Zahlungsbedingungen (30 Tage netto).");
   }
 
   const clientIp = await getClientIp();
@@ -105,11 +92,14 @@ export async function submitOrder(
     },
     p_lines: lines.map((line) => ({ product_id: line.productId, holder_name: line.holderName })),
     p_season: CURRENT_SEASON,
+    p_terms_accepted: true,
   });
 
   if (error) {
     throw new Error(error.message);
   }
+
+  await issueTicketsAfterCheckout(data.order_id, data.order_number);
 
   const confirmation: OrderConfirmation = {
     orderNumber: data.order_number,
@@ -120,41 +110,13 @@ export async function submitOrder(
     statusPath: buildOrderAccessPath(data.order_number),
   };
 
-  // Runs after the response is flushed, so a slow or failing mail provider never delays the
-  // customer's confirmation screen - and, critically, never fails an order that is
-  // already committed. The order is the thing that matters; the email is a courtesy
-  // copy of it. Failures are logged and left visible as a null
-  // orders.confirmation_email_sent_at for the office.
+  // Runs after the response is flushed, so a slow or failing mail provider never
+  // delays the confirmation screen - and never fails an order that is already
+  // committed. Whether mail may go out at all is decided inside, from the order's
+  // stored source (brief §4).
   after(async () => {
-    await sendOrderConfirmationEmail(confirmation);
+    await notifyOrderPlaced(data.order_id);
   });
 
   return confirmation;
-}
-
-async function sendOrderConfirmationEmail(confirmation: OrderConfirmation): Promise<void> {
-  try {
-    const statusUrl = buildOrderAccessUrl(confirmation.orderNumber);
-    const sent = await sendEmail({
-      to: confirmation.customerEmail,
-      subject: orderConfirmationSubject(confirmation.orderNumber),
-      // The mail carries the absolute link; the on-screen confirmation only needs
-      // the relative path it was already rendered from.
-      bodyText: orderConfirmationText({ ...confirmation, statusUrl }),
-      bodyHtml: orderConfirmationHtml({ ...confirmation, statusUrl }),
-    });
-
-    if (!sent) return;
-
-    const supabase = getSupabaseAdminClient();
-    await supabase
-      .from("orders")
-      .update({ confirmation_email_sent_at: new Date().toISOString() })
-      .eq("order_number", confirmation.orderNumber);
-  } catch (emailError) {
-    console.error(
-      `[order-confirmation] Failed to send confirmation for ${confirmation.orderNumber}:`,
-      emailError instanceof Error ? emailError.message : emailError
-    );
-  }
 }

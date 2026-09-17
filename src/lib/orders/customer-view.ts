@@ -1,5 +1,5 @@
 import { getSupabaseAdminClient } from "@/lib/supabase";
-import type { OrderStatus } from "@/lib/admin/orders";
+import { ticketsVisibleToCustomer, type OrderStatus } from "@/lib/orders/visibility";
 
 /**
  * The customer-facing read of an order, for /meine-tickets (docs/DECISIONS.md D54).
@@ -76,10 +76,11 @@ export async function getCustomerOrderView(orderNumber: string): Promise<Custome
       holderName: item.holder_name,
       lineTotalRappen: item.line_total_rappen,
     })),
-    // Tickets only exist once the office marks the order paid, and only the ones
+    // The cards exist from the moment the order does, but they are the customer's
+    // only once the office has sent them with the invoice (D77). Only the ones
     // still standing are offered: a voided or replaced pass would open a PDF that
     // no longer scans at the door.
-    tickets: status === "bezahlt" ? await getDownloadableTickets(order.id) : [],
+    tickets: ticketsVisibleToCustomer(status) ? await getDownloadableTickets(order.id) : [],
   };
 }
 

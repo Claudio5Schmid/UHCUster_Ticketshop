@@ -144,6 +144,30 @@
   background: rgba(0, 0, 0, 0.04);
 }
 
+/* The tick sits on the first line of its text, and the text wraps under itself
+   rather than under the box. */
+.terms {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  font-size: var(--text-small-size);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.terms input {
+  margin-top: 0.2em;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+}
+
+.terms a {
+  color: inherit;
+  text-decoration: underline;
+}
+
 .error {
   color: var(--color-error-text);
   background: var(--color-error-bg);

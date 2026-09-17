@@ -1,4 +1,5 @@
 import { getAllMembers, getMemberKategorien, type MemberSendState } from "@/lib/admin/members";
+import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { MembersPageClient } from "./MembersPageClient";
 import { MemberFilters } from "./MemberFilters";
 
@@ -22,9 +23,10 @@ export default async function AdminMembersPage({
     versand: parseSendState(params.versand),
   };
 
-  const [members, kategorien] = await Promise.all([getAllMembers(filters), getMemberKategorien()]);
+  const supabase = await getSupabaseServerClient();
+  const [members, kategorien, { data: auth }] = await Promise.all([getAllMembers(filters), getMemberKategorien(), supabase.auth.getUser()]);
 
   return (
-    <MembersPageClient members={members} filterBar={<MemberFilters search={filters.search} kategorie={filters.kategorie} versand={params.versand ?? ""} kategorien={kategorien} />} />
+    <MembersPageClient members={members} adminEmail={auth.user?.email ?? ""} filterBar={<MemberFilters search={filters.search} kategorie={filters.kategorie} versand={params.versand ?? ""} kategorien={kategorien} />} />
   );
 }

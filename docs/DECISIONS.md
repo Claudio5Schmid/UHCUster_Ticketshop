@@ -1259,3 +1259,104 @@ akzeptiert am, externe Referenz (alte Bestellnummer aus dem CSV), Import-Batch, 
 (nicht versendet / versendet / fehlgeschlagen) und Zeitpunkt.
 Produkt: Kategorie (Red Castle / Saisonabo / Mitglieder) und Variante (Gold, Silber, Bronze,
 Normal / Erwachsene, Reduziert, Legi / persönlich, übertragbar).
+
+### Antworten Runde 2 (2026-09-16)
+
+**D73 — Name auf der Karte (O2b): Firma, falls angegeben, sonst Vor- und Nachname.** Gilt für
+Red Castle; Saisonabo druckt immer Vor- und Nachname. Die Regel liegt zentral in der
+Ticket-Erzeugung. **Entschieden.**
+
+**D74 — Red-Castle-Pakete: Paketpreis fix, Kartenzahl pro Stufe im Admin einstellbar (O3).**
+Gold 5000.– = 3 übertragbare VIP-Saisonkarten, Silber und Bronze analog, Normal = 1 nicht
+übertragbare Saisonkarte ohne VIP-Status. Die Kartenzahl und die Übertragbarkeit pro Stufe müssen
+unter Einstellungen → Preise editierbar sein (heute liegen sie in `products.benefits`
+als `included_passes`/`transferable`, aber ohne Eingabefeld im Produktformular — das kommt dazu).
+Im Shop gibt es kein Anzahl-Feld. Zusätzlich, **nur für den Import dieser Saison**: Variante
+`spezial` = 2 übertragbare Saisonkarten ohne VIP-Status, im Shop nicht bestellbar
+(`active = false`). Damit kennt der Import die Red-Castle-Varianten gold, silber, bronze, normal
+und spezial; `anzahl` aus dem CSV darf von der Stufe abweichen. **Entschieden.**
+
+**D75 — Saisonkarten wechseln ebenfalls auf den Rechnungs-Ablauf (O7):** Tickets entstehen
+sofort bei der Bestellung, nicht erst bei `bezahlt`. Der Auto-Storno ist ohnehin weg (D69).
+**Entschieden.** Offen bleibt, wer die Karten dem Kunden übergibt — siehe O7b.
+
+**D76 — Rechnungsadresse wird auch im neuen Red-Castle-Formular erfasst** (Strasse und Nr.,
+PLZ, Ort, wie heute). **Entschieden.**
+
+**Noch offen nach Runde 2:**
+- **O7b — Wer übergibt die Karten?** Claudio: «die Karten dürfen nur generiert und
+  heruntergeladen werden, nicht automatisch versendet; versenden tut das Fibu-Büro zusammen mit
+  der Rechnung, sie passen lediglich den Status an.» Das widerspricht Abschnitt 2 des Auftrags
+  (Bestätigungsseite mit PDF-Download, Bestätigungsmail mit Tickets/Link). Zwei Lesarten:
+  - **A:** Der Kunde bekommt die Karten sofort — Download auf der Bestätigungsseite und Link in
+    der automatischen Bestätigungsmail. Das Büro schickt die Rechnung separat und stellt den Status um.
+  - **B:** Der Kunde bekommt sofort nur eine Bestätigungsmail *ohne* Karten. Das Büro lädt die
+    PDFs im Admin herunter, schickt sie zusammen mit der Rechnung aus der Fibu und stellt den
+    Status auf «Rechnung versendet». Der Kunden-Link zeigt die Karten erst ab diesem Status.
+
+### Antworten Runde 3 (2026-09-16) — Gate geschlossen
+
+**D77 — Karten übergibt das Büro, nicht der Shop (O7b = Variante B).** Bei jeder Shop-Bestellung
+(Red Castle und Saisonkarte) entstehen die Tickets sofort, aber der Kunde bekommt sie nicht
+automatisch: die Bestätigungsmail geht ohne Karten raus (Bestellübersicht, Rechnungshinweis,
+Kunden-Link), die Bestätigungsseite zeigt den Kunden-Link. Das Büro lädt die PDFs im Admin
+herunter, schickt sie zusammen mit der Rechnung aus der Fibu und setzt den Status auf
+«Rechnung versendet»; erst ab diesem Status (und bei «bezahlt») zeigt der Kunden-Link die Karten
+zum Download. Importierte Bestellungen tragen ihren Status aus dem CSV und zeigen die Karten
+entsprechend. Abschnitt 2 des Auftrags (PDF-Download auf der Bestätigungsseite, Tickets in der
+Bestätigungsmail) ist damit überholt. **Entschieden.**
+
+**D78 — Übergänge exakt nach Auftrag, also kein Storno einer bezahlten Bestellung.** Erlaubt:
+`neu → rechnung_versendet → bezahlt`, `neu | rechnung_versendet → storniert`. Eine bezahlte
+Bestellung kann nicht mehr storniert werden (bisher ging das, D16 nutzte es für Rückerstattungen).
+Konsequenz: eine falsch importierte, bereits bezahlte Bestellung wird über den Batch-Rollback
+entfernt, nicht storniert; `refund_owed` bleibt für bestehende stornierte Bestellungen erhalten.
+Bewusst nach Auftrag umgesetzt — wenn Storno nach Zahlung doch nötig ist, ist es eine
+Zeile in `transition_order_status()`. **Entschieden, leicht umkehrbar.**
+
+### Umsetzung (2026-09-16/17) — Notizen, die nicht aus dem Code hervorgehen
+
+**D79 — Import: Red Castle braucht Firma *oder* Person.** Der Auftrag sagt «bei red_castle ist
+firma Pflicht»; mit D70 (Besteller sind Privatpersonen) und D73 (Firma, sonst Person) gilt im
+Import dieselbe Regel wie im Formular: eine Zeile ohne Firma ist gültig, wenn Vor- und Nachname da
+sind. Saisonabo verlangt weiterhin beide Namen. **Entschieden, aus D70 abgeleitet.**
+
+**D80 — Storno-Semantik im Rollback.** Ein Batch wird hart gelöscht (D71/O17) und der Rollback
+verweigert, sobald *irgendeine* Karte des Batches gescannt wurde — auch aus einer anderen Bestellung
+desselben Batches. Einzelne Bestellungen bleiben dann über Stornieren erreichbar. Stornierte
+Zeilen aus dem CSV werden ohne Karten importiert. **Entschieden.**
+
+**D81 — Was der Import nicht übernimmt.** Den Betrag: der Preis wird beim Import aus dem
+Produkt eingefroren, wie bei jeder Bestellung (`order_items.unit_price_rappen`). Für «Spezial»
+steht der Preis auf 0, bis Claudio ihn unter Einstellungen → Preise setzt — **vor dem ersten
+Import**, sonst tragen die importierten Bestellungen 0. Adressen: das CSV hat keine, `customers`
+bleibt dort leer (kein Problem für Karten und Kundenlink; für eine Nachrechnung müsste sie im
+Admin nachgetragen werden — heute nicht vorgesehen). **Bewusst so.**
+
+**D82 — Rate-Limit beim Versand.** Sequenziell mit 600 ms Abstand (Resend erlaubt zwei Requests
+pro Sekunde), in Fünferblöcken aus dem Browser, damit die Fortschrittsanzeige läuft. Jeder
+Empfänger bekommt sein eigenes Ergebnis auf der Bestellung (`notification_status`,
+`notification_error`). **Entschieden.**
+
+**D83 — Saisonkarten-Checkout.** Der bestehende Warenkorb bleibt (Saisonkarten sind ohnehin auf
+«Website» geschaltet), bekommt aber die Pflicht-Checkbox 30 Tage netto, stellt die Karten sofort
+aus und sagt in Bestätigung und Mail, dass Rechnung und Karten vom Büro kommen (D75/D77).
+Telefon bleibt dort Pflicht; im Red-Castle-Formular ist es optional (O9). **Entschieden.**
+
+**D84 — Vitest als Unit-Test-Runner (O20).** `npm test` läuft `tests/unit/**` mit gemocktem
+Resend: ein Import erzeugt 0 Mails, eine Shop-Bestellung genau eine Kunden- und eine interne
+Mail, plus CSV-Regeln und Platzhalter. `@types/node` wurde dafür auf ^22 angehoben (Node 24
+lokal). Playwright bleibt für E2E: `rcc-membership-order.spec.ts` ist durch
+`red-castle-order.spec.ts` ersetzt (O22), dazu `order-import.spec.ts` und der erweiterte
+`customer-order-status.spec.ts` (Rechnungsnummer-Dialog, Storno sperrt Karten). **Entschieden.**
+
+**D85 — Stand der Tests am Ende der Umsetzung (2026-09-17).** Unit (Vitest): 18/18. pgTAP: 161
+Assertions, die neun Abweichungen waren veraltete Aufrufe im Suite-Text (`reissue_ticket`,
+`create_member_order`-Signatur) und sind korrigiert. Playwright lokal: 9 von 11 Specs grün; die
+zwei übrigen (`season-pass-order`, `sales-channel-switch`) brauchen das Testprodukt «TEST - Bitte
+nicht kaufen» sichtbar im Shop, das seit 15.9.2026 deaktiviert ist (Audit-Log, Admin
+thomasschmid777) - sie sind nicht kaputt, sondern blockiert; die RPC-gestützten Specs weichen
+seither auf «Sponsoren Legi» aus, wenn das Testprodukt inaktiv ist. Nebenbefund, behoben: die
+Mitgliederliste brach bei ~480 Mitgliedern mit «fetch failed», weil alle Order-IDs in einer
+URL standen - die Karten werden jetzt in 100er-Scheiben geladen. Playwright lokal: auf Port 3000
+lief ein fremdes Projekt; die Suite läuft mit `PLAYWRIGHT_PORT=<Port des laufenden Dev-Servers>`.

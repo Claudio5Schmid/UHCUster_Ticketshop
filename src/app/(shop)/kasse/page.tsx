@@ -40,6 +40,7 @@ export default function KassePage() {
   const [turnstile, setTurnstile] = useState<TurnstileState>("loading");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileAttempt, setTurnstileAttempt] = useState(0);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const handleTurnstile = useCallback((state: TurnstileState, token: string) => {
     setTurnstile(state);
@@ -67,6 +68,10 @@ export default function KassePage() {
       setError(TURNSTILE_MESSAGES[turnstile] ?? TURNSTILE_MESSAGES.loading);
       return;
     }
+    if (!termsAccepted) {
+      setError("Bitte bestätige die Zahlungsbedingungen, um zu bestellen.");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -80,7 +85,8 @@ export default function KassePage() {
           phone: String(formData.get("phone") ?? ""),
         },
         lines.map((line) => ({ productId: line.productId, holderName: line.holderName })),
-        turnstileToken
+        turnstileToken,
+        termsAccepted
       );
       setConfirmation(result);
       clear();
@@ -130,14 +136,11 @@ export default function KassePage() {
               <h2 className={styles.nextStepsTitle}>Wie es weitergeht</h2>
               <ol className={styles.nextStepsList}>
                 <li>
-                  Das Büro des UHC Uster sendet dir die Rechnung mit den Zahlungsdetails innerhalb weniger Werktage an{" "}
-                  <strong>{confirmation.customerEmail}</strong>.
+                  Das Büro des UHC Uster sendet dir die Rechnung und deine Karten innert 2 bis 4 Werktagen per
+                  E-Mail an <strong>{confirmation.customerEmail}</strong>.
                 </li>
-                <li>Du überweist den Betrag mit der Bestellnummer als Referenz.</li>
-                <li>
-                  Sobald die Zahlung eingegangen ist, schicken wir dir deine Karten per E-Mail - und du findest
-                  sie ab dann jederzeit in deinem Bereich im Shop.
-                </li>
+                <li>Du überweist den Betrag innert 30 Tagen mit der Bestellnummer als Referenz.</li>
+                <li>Sobald die Karten unterwegs sind, findest du sie jederzeit auch über den Link unten.</li>
               </ol>
             </div>
 
@@ -146,9 +149,9 @@ export default function KassePage() {
             <div className={styles.ticketPanel}>
               <h2 className={styles.nextStepsTitle}>Deine Tickets</h2>
               <p className={styles.ticketPanelText}>
-                Über diesen Button kommst du jederzeit zu deiner Bestellung und deinen Karten - auch später
-                wieder. Alternativ findest du sie im Ticketportal unter <strong>Meine Tickets</strong>, mit
-                deiner Bestellnummer.
+                Über diesen Button kommst du jederzeit zu deiner Bestellung - und zu deinen Karten, sobald das
+                Büro sie dir geschickt hat. Alternativ findest du sie im Ticketportal unter{" "}
+                <strong>Meine Tickets</strong>, mit deiner Bestellnummer.
               </p>
               <Button
                 as="a"
@@ -251,6 +254,26 @@ export default function KassePage() {
                 </div>
               )}
             </div>
+
+            {/* The payment terms (D65) are part of the order, recorded with it - so
+                they are a required tick, not a line of small print. */}
+            <label className={styles.terms}>
+              <input
+                type="checkbox"
+                name="terms"
+                checked={termsAccepted}
+                onChange={(event) => setTermsAccepted(event.target.checked)}
+                required
+              />
+              <span>
+                Ich bestelle auf Rechnung und bezahle den Betrag innert <strong>30 Tagen netto</strong> nach
+                Erhalt der Rechnung. Es gelten die{" "}
+                <Link href="/ticket-bedingungen" target="_blank">
+                  Ticket-Bedingungen
+                </Link>
+                .
+              </span>
+            </label>
 
             {error && <p className={styles.error}>{error}</p>}
 

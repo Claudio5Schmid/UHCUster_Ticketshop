@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import JSZip from "jszip";
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import { verifyOrderAccessToken } from "@/lib/orders/access-token";
-import { loadPaidOrderForToken } from "../order-access";
+import { loadDownloadableOrderForToken } from "../order-access";
 import { TICKET_DOWNLOAD_COLUMNS, ticketDownloadName, type TicketDownloadRow } from "@/lib/tickets/download-name";
 import { uniqueFileName } from "@/lib/tickets/label";
 
@@ -16,7 +16,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const order = await loadPaidOrderForToken(orderNumber);
+  const order = await loadDownloadableOrderForToken(orderNumber);
   if (!order) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

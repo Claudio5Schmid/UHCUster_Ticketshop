@@ -140,6 +140,7 @@ against printing `.env` contents.
 | `APPLE_WALLET_WWDR_CERTIFICATE` | server-only | Apple WWDR intermediate certificate |
 | `GOOGLE_WALLET_SERVICE_ACCOUNT_JSON` | server-only | Google Wallet API service account credentials |
 | `GOOGLE_WALLET_ISSUER_ID` / `_CLASS_ID` | server-only | Google Wallet API identifiers |
+| `ORDER_NOTIFICATION_EMAIL` | server-only | The office mailbox that gets "Neue Bestellung … – Rechnung erstellen" after every shop order (migration brief §2.4, D77). Unset means nobody is told; the send logs a warning |
 | `NEXT_PUBLIC_SITE_URL` | public | Canonical site URL for absolute links. Read through `src/lib/site-url.ts`, which falls back to `VERCEL_PROJECT_PRODUCTION_URL` and then localhost - set it in production so the order link in a confirmation e-mail always points at the real domain (D54) |
 
 Not needed, and must never be added: any email/SMTP provider credential, any payment provider key.

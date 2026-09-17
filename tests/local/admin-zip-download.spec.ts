@@ -2,14 +2,14 @@ import { readFile } from "node:fs/promises";
 import JSZip from "jszip";
 import { test, expect } from "@playwright/test";
 import { createServiceRoleClient } from "./fixtures/cleanup";
-import { makeTestCustomer } from "./fixtures/test-data";
+import { makeTestCustomer, seedProductId } from "./fixtures/test-data";
 
 const CURRENT_SEASON = "2627";
-const TEST_PRODUCT_ID = "f0000000-0000-0000-0000-00000000aa02";
 
 test("Admin: ZIP-Download nach Bezahlt-Markierung enthält Ticket-PDF, korrekter Dateiname", async ({ page }) => {
   const customer = makeTestCustomer("admin-zip");
   const supabase = createServiceRoleClient();
+  const productId = await seedProductId();
 
   const { data: order, error } = await supabase.rpc("create_order", {
     p_customer: {
@@ -21,8 +21,9 @@ test("Admin: ZIP-Download nach Bezahlt-Markierung enthält Ticket-PDF, korrekter
       email: customer.email,
       phone: customer.phone,
     },
-    p_lines: [{ product_id: TEST_PRODUCT_ID, holder_name: "Playwright ZIP Test" }],
+    p_lines: [{ product_id: productId, holder_name: "Playwright ZIP Test" }],
     p_season: CURRENT_SEASON,
+    p_terms_accepted: true,
   });
   expect(error).toBeNull();
   const orderNumber: string = order.order_number;
@@ -35,11 +36,18 @@ test("Admin: ZIP-Download nach Bezahlt-Markierung enthält Ticket-PDF, korrekter
 
   await page.goto(`/admin/orders/${orderNumber}`);
 
-  // Ticket PDFs (and with them the ZIP link) only exist once an order is "bezahlt" - walk
-  // the real two-step status transition an admin would click, same as OrderActions.tsx.
+  // Seeded through the RPC alone, the order has no cards yet; the office's
+  // fallback creates them. Then the real status walk an admin would click
+  // (OrderActions.tsx): invoice number, then paid.
+  await page.getByRole("button", { name: "Karten erstellen" }).click();
+  await expect(page.getByRole("heading", { name: "Tickets" })).toBeVisible();
   await page.getByRole("button", { name: "Als 'Rechnung versendet' markieren" }).click();
+  await page.getByRole("dialog").getByLabel("Rechnungsnummer").fill("RE-PLAYWRIGHT-ZIP");
+  await page.getByRole("dialog").getByRole("button", { name: "Speichern" }).click();
   await expect(page.getByRole("button", { name: "Als 'Bezahlt' markieren" })).toBeVisible();
   await page.getByRole("button", { name: "Als 'Bezahlt' markieren" }).click();
+  await page.getByRole("button", { name: "Ja, bezahlt" }).click();
+  await expect(page.getByRole("button", { name: "Als 'Bezahlt' markieren" })).toHaveCount(0);
 
   const zipLink = page.getByRole("link", { name: "Alle als ZIP herunterladen" });
   await expect(zipLink).toBeVisible();

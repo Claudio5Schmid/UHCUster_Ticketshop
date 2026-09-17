@@ -98,8 +98,10 @@ test("an undeliverable address leaves the cards open instead of marking them sen
 
   // Counted in cards, not members.
   await page.getByRole("button", { name: "1 Karte(n) versenden" }).click();
+  // The shared send dialog: write, then confirm with the typed phrase.
+  await page.getByRole("dialog").getByRole("button", { name: "Weiter zum Versand" }).click();
   await page.getByRole("dialog").getByLabel('Zum Bestätigen "Versenden" eingeben').fill("Versenden");
-  await page.getByRole("dialog").getByRole("button", { name: /jetzt versenden/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /^Jetzt an .* senden$/ }).click();
 
   // The bounce guard refuses a reserved-TLD address, and the card must stay
   // open rather than be recorded as delivered.

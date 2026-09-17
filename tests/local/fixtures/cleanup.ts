@@ -81,6 +81,10 @@ export async function sweepTestData() {
   const { error: delCustErr } = await supabase.from("customers").delete().in("id", customerIds);
   if (delCustErr) throw delCustErr;
 
+  // Import batches the order-import test created; their orders are gone above.
+  const { error: batchErr } = await supabase.from("import_batches").delete().like("filename", "playwright-%");
+  if (batchErr) throw batchErr;
+
   return { customers: customerIds.length, orders: orderIds.length, tickets: ticketCount };
 }
 

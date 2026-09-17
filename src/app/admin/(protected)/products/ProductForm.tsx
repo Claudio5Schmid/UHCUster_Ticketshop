@@ -5,16 +5,20 @@ import { Input } from "@/components/ui/Input/Input";
 import { Select } from "@/components/ui/Select/Select";
 import { Button } from "@/components/ui/Button/Button";
 import type { AdminProduct } from "@/lib/admin/products";
+import { PRODUCT_CATEGORY_LABELS, type ProductCategory } from "@/lib/products";
 import { createProduct, updateProduct } from "./actions";
 import styles from "../admin.module.css";
 
 interface ProductFormProps {
   product?: AdminProduct;
+  /** The valid (category, variant) pairs, from product_variant_catalog. */
+  variants: Array<{ category: ProductCategory; variant: string; label: string }>;
 }
 
-export function ProductForm({ product }: ProductFormProps) {
+export function ProductForm({ product, variants }: ProductFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [category, setCategory] = useState<string>(product?.category ?? "");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +43,8 @@ export function ProductForm({ product }: ProductFormProps) {
         : null,
       includedPasses: formData.get("includedPasses") ? Number(formData.get("includedPasses")) : null,
       transferable: formData.get("transferable") === "on",
+      category: (String(formData.get("category") ?? "") || null) as ProductCategory | null,
+      variant: String(formData.get("variant") ?? "") || null,
     };
 
     startTransition(async () => {
@@ -62,6 +68,27 @@ export function ProductForm({ product }: ProductFormProps) {
       <Select name="type" label="Typ" defaultValue={product?.type ?? "season_pass"}>
         <option value="season_pass">Saisonkarte</option>
         <option value="membership">Red Castle Club</option>
+      </Select>
+      {/* Category and variant are what the import and the Red Castle form refer
+          to; the pairs come from the catalog, so an impossible combination cannot
+          be picked here either. */}
+      <Select name="category" label="Kategorie (für Import und Bestellformular)" value={category} onChange={(event) => setCategory(event.target.value)}>
+        <option value="">– keine –</option>
+        {(Object.keys(PRODUCT_CATEGORY_LABELS) as ProductCategory[]).map((key) => (
+          <option key={key} value={key}>
+            {PRODUCT_CATEGORY_LABELS[key]}
+          </option>
+        ))}
+      </Select>
+      <Select name="variant" label="Variante" defaultValue={product?.variant ?? ""} disabled={!category}>
+        <option value="">– keine –</option>
+        {variants
+          .filter((entry) => entry.category === category)
+          .map((entry) => (
+            <option key={entry.variant} value={entry.variant}>
+              {entry.label}
+            </option>
+          ))}
       </Select>
       <Input
         name="priceChf"
@@ -94,7 +121,7 @@ export function ProductForm({ product }: ProductFormProps) {
       />
       <Input
         name="includedPasses"
-        label="Enthaltene Karten (optional, für Red Castle Club Bundles)"
+        label="Enthaltene Karten pro Bestellung (Red Castle Club: Gold 3, Silber 2, Bronze 2, Normal 1)"
         type="number"
         min="1"
         defaultValue={product?.benefits?.included_passes ?? ""}
