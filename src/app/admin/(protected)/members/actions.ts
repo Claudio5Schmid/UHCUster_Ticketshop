@@ -18,7 +18,7 @@ import {
   type SendCardsResult,
 } from "@/lib/admin/members";
 import type { CsvColumnMapping } from "@/lib/csv/memberCsv";
-import { SEND_CONFIRMATION_PHRASE, matchesSendConfirmation } from "@/lib/admin/send-confirmation";
+import { MAX_RECIPIENTS_PER_RUN, SEND_CONFIRMATION_PHRASE, matchesSendConfirmation } from "@/lib/admin/send-confirmation";
 
 export async function createMemberAction(input: MemberInput) {
   await createMemberAndIssueCards(input);
@@ -82,6 +82,11 @@ export async function sendMemberCardsAction(
   }
   if (memberIds.length === 0) {
     throw new Error("Keine Mitglieder ausgewählt.");
+  }
+  // The browser walks the selection a block at a time and already stops at the
+  // limit; this is the backstop, so the cap holds however the action is called.
+  if (memberIds.length > MAX_RECIPIENTS_PER_RUN) {
+    throw new Error(`Pro Versand sind höchstens ${MAX_RECIPIENTS_PER_RUN} Empfänger möglich.`);
   }
   const result = await sendMemberCards(subject, body, memberIds);
   revalidatePath("/admin/members");

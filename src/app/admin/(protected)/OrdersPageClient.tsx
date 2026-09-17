@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button/Button";
 import { Table, type TableColumn } from "@/components/ui/Table/Table";
 import { SendMailDialog, type SendSummary } from "@/components/admin/SendMailDialog/SendMailDialog";
 import { ORDER_PLACEHOLDERS, ORDER_TEMPLATES } from "@/lib/email/templates";
+import { MAX_RECIPIENTS_PER_RUN } from "@/lib/admin/send-confirmation";
 import { PRODUCT_CATEGORY_LABELS } from "@/lib/products";
 import { formatRappenAsChf } from "@/lib/pricing";
 import type { OrderListItem, OrderStatus, NotificationStatus } from "@/lib/admin/orders";
@@ -102,7 +103,8 @@ export function OrdersPageClient({ orders, filterBar, invoiceCsvHref, adminEmail
     options: { includeAlreadyNotified: boolean },
     onProgress: (done: number, total: number) => void
   ): Promise<SendSummary> {
-    const ids = (options.includeAlreadyNotified ? sendable : notYetNotified).map((order) => order.id);
+    // One block per run, the rest on the next click (see MAX_RECIPIENTS_PER_RUN).
+    const ids = (options.includeAlreadyNotified ? sendable : notYetNotified).map((order) => order.id).slice(0, MAX_RECIPIENTS_PER_RUN);
     const summary: SendSummary = { sent: 0, skipped: [], failed: [] };
     onProgress(0, ids.length);
     for (let offset = 0; offset < ids.length; offset += SEND_CHUNK) {

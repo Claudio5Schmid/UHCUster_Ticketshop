@@ -23,6 +23,7 @@ import { CSV_FIELDS, parseCsvHeader, detectColumnMapping, decodeCsvBytes, type C
 import type { CsvImportPlan } from "@/lib/admin/members";
 import { SendMailDialog, type SendSummary } from "@/components/admin/SendMailDialog/SendMailDialog";
 import { MEMBER_PLACEHOLDERS, MEMBER_TEMPLATES } from "@/lib/email/templates";
+import { MAX_RECIPIENTS_PER_RUN } from "@/lib/admin/send-confirmation";
 import styles from "../admin.module.css";
 
 type SortKey = "name" | "email" | "kategorie" | "karten" | "versand" | "importiert" | "mitgliedsnummer";
@@ -251,7 +252,8 @@ export function MembersPageClient({ members, filterBar, adminEmail }: { members:
     _options: { includeAlreadyNotified: boolean },
     onProgress: (done: number, total: number) => void
   ): Promise<SendSummary> {
-    const ids = selectedSendableIds;
+    // One block per run, the rest on the next click (see MAX_RECIPIENTS_PER_RUN).
+    const ids = selectedSendableIds.slice(0, MAX_RECIPIENTS_PER_RUN);
     const summary: SendSummary = { sent: 0, skipped: [], failed: [] };
     let cards = 0;
     onProgress(0, ids.length);
@@ -842,7 +844,7 @@ export function MembersPageClient({ members, filterBar, adminEmail }: { members:
       <SendMailDialog
         open={showSendForm}
         onClose={() => setShowSendForm(false)}
-        title={`Karten versenden (${selectedOpenCards} noch nicht versendete Karte(n))`}
+        title="Karten versenden"
         recipientNoun={{ one: "Mitglied", many: "Mitglieder" }}
         recipientCount={selectedSendableIds.length}
         emptyCount={selectedMembers.length - selectedSendableIds.length}

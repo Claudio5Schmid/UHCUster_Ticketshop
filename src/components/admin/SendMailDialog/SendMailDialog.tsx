@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Modal } from "@/components/ui/Modal/Modal";
 import { Input } from "@/components/ui/Input/Input";
 import { Select } from "@/components/ui/Select/Select";
 import { Button } from "@/components/ui/Button/Button";
-import { matchesSendConfirmation, SEND_CONFIRMATION_PHRASE } from "@/lib/admin/send-confirmation";
+import { matchesSendConfirmation, MAX_RECIPIENTS_PER_RUN, SEND_CONFIRMATION_PHRASE } from "@/lib/admin/send-confirmation";
 import { placeholdersIn, type MailTemplate, type PlaceholderInfo } from "@/lib/email/templates";
 import styles from "@/app/admin/(protected)/admin.module.css";
 import own from "./SendMailDialog.module.css";
@@ -119,8 +119,21 @@ function SendMailDialogBody(props: SendMailDialogProps) {
   const known = new Set(placeholders.map((info) => info.key));
   const unknownPlaceholders = placeholdersIn(`${subject}\n${body}`).filter((key) => !known.has(key));
 
-  const total = props.recipientCount + (includeAlreadyNotified ? (props.alreadyNotifiedCount ?? 0) : 0);
+  const selected = props.recipientCount + (includeAlreadyNotified ? (props.alreadyNotifiedCount ?? 0) : 0);
+  // One run covers at most a block; the rest is the same two clicks afterwards.
+  const total = Math.min(selected, MAX_RECIPIENTS_PER_RUN);
+  const remaining = selected - total;
   const noun = total === 1 ? props.recipientNoun.one : props.recipientNoun.many;
+
+  /* A send is a few seconds to a couple of minutes of the browser walking the
+     list, so closing the tab stops it half-way. Nothing breaks - what went out
+     is skipped next time - but it should be a decision rather than a slip. */
+  useEffect(() => {
+    if (!progress) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [progress]);
 
   function handlePreview() {
     if (!previewId) return;
@@ -176,6 +189,14 @@ function SendMailDialogBody(props: SendMailDialogProps) {
             ausgewählt, an die etwas versendet wird.
             {props.emptyCount ? ` ${props.emptyCount} ohne aktive Karten werden übersprungen.` : ""}
           </p>
+
+          {remaining > 0 && (
+            <p className={styles.warningMessage} style={{ marginBottom: 0 }}>
+              Pro Versand gehen höchstens <strong>{MAX_RECIPIENTS_PER_RUN}</strong> E-Mails raus. Dieser Durchgang nimmt die ersten{" "}
+              {MAX_RECIPIENTS_PER_RUN}, {remaining} bleiben offen. Für den Rest den Versand danach einfach nochmals starten - bereits
+              versendete werden übersprungen.
+            </p>
+          )}
 
           {(props.alreadyNotifiedCount ?? 0) > 0 && (
             <label className={styles.checkboxRow}>
@@ -272,8 +293,8 @@ function SendMailDialogBody(props: SendMailDialogProps) {
         <div className={styles.form}>
           <p style={{ margin: 0 }}>
             Die E-Mail «{subject}» wird jetzt an <strong>{total}</strong> {noun} versendet
-            {includeAlreadyNotified && (props.alreadyNotifiedCount ?? 0) > 0 ? ", bereits informierte eingeschlossen" : ""}. Das lässt sich nicht
-            rückgängig machen.
+            {includeAlreadyNotified && (props.alreadyNotifiedCount ?? 0) > 0 ? ", bereits informierte eingeschlossen" : ""}
+            {remaining > 0 ? `; ${remaining} bleiben für den nächsten Durchgang offen` : ""}. Das lässt sich nicht rückgängig machen.
           </p>
           {progress ? (
             <div className={styles.progressPanel}>
@@ -286,6 +307,11 @@ function SendMailDialogBody(props: SendMailDialogProps) {
               <div className={styles.progressTrack}>
                 <div className={styles.progressBar} style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
               </div>
+              {/* The one thing someone watching this needs to know. */}
+              <p className={styles.progressNote}>
+                Versand läuft - bitte dieses Fenster und den Tab offen lassen. Wird abgebrochen, geht nichts verloren: bereits versendete
+                E-Mails werden beim nächsten Durchgang übersprungen.
+              </p>
             </div>
           ) : (
             <Input

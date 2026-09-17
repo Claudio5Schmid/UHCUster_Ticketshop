@@ -448,6 +448,14 @@
   overflow: hidden;
 }
 
+/* Sits inside the progress panel, under the bar. */
+.progressNote {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-micro-size);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
 .progressBar {
   height: 100%;
   background: var(--color-accent);

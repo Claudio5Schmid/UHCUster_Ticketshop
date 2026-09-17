@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { previewOrderMail, sendOrderMails, sendOrderTestMail, type OrderSendResult, type RenderedOrderMail } from "@/lib/admin/order-notify";
-import { SEND_CONFIRMATION_PHRASE, matchesSendConfirmation } from "@/lib/admin/send-confirmation";
+import { MAX_RECIPIENTS_PER_RUN, SEND_CONFIRMATION_PHRASE, matchesSendConfirmation } from "@/lib/admin/send-confirmation";
 
 export async function previewOrderMailAction(orderId: string, subject: string, body: string): Promise<RenderedOrderMail & { to: string }> {
   return previewOrderMail(orderId, subject, body);
@@ -40,6 +40,11 @@ export async function sendOrderMailsAction(
   }
   if (orderIds.length === 0) {
     throw new Error("Keine Bestellungen ausgewählt.");
+  }
+  // The browser walks the selection a block at a time and already stops at the
+  // limit; this is the backstop, so the cap holds however the action is called.
+  if (orderIds.length > MAX_RECIPIENTS_PER_RUN) {
+    throw new Error(`Pro Versand sind höchstens ${MAX_RECIPIENTS_PER_RUN} Empfänger möglich.`);
   }
   const result = await sendOrderMails(subject, body, orderIds, options);
   revalidatePath("/admin");

@@ -15,3 +15,15 @@ export const SEND_CONFIRMATION_PHRASE = "Versenden";
 export function matchesSendConfirmation(input: string): boolean {
   return input.trim().toLocaleLowerCase("de-CH") === SEND_CONFIRMATION_PHRASE.toLocaleLowerCase("de-CH");
 }
+
+/**
+ * How many recipients one send may cover.
+ *
+ * Not a technical ceiling - the sending itself would manage the club's whole
+ * list in about two minutes. It is a deliberate one: a sender that has sent
+ * little so far and then posts six hundred at once is what large providers
+ * filter, and a block that lands badly is a hundred addresses to look at rather
+ * than six hundred. Sending the rest is the same two clicks, because everything
+ * already sent is skipped on the next run.
+ */
+export const MAX_RECIPIENTS_PER_RUN = 100;
