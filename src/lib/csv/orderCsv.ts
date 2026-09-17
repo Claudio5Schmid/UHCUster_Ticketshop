@@ -7,30 +7,64 @@ import type { OrderStatus } from "@/lib/orders/visibility";
  * imports, so the admin dialog can read the file in the browser and the unit
  * tests can exercise every rule without a database.
  *
- * Fixed columns, by name, in any order:
- *   external_ref;produkt;variante;firma;vorname;nachname;email;anzahl;status;rechnungsnummer;bestelldatum
+ * The file decides nothing by itself. As in the member import, the admin says
+ * which column belongs to which field and confirms a guess made from the header
+ * names; a misdetected or unusual header can then never import the wrong column
+ * into the right-looking field.
+ *
+ * Three fields may instead be given one value for the whole file. A legacy
+ * export of Red Castle orders usually has no column saying "red_castle" - that
+ * it is a Red Castle file is what the office knows about it - and the same goes
+ * for a file that is all one package, or all already paid.
  */
 
-export const ORDER_CSV_COLUMNS = [
-  "external_ref",
-  "produkt",
-  "variante",
-  "firma",
-  "vorname",
-  "nachname",
-  "email",
-  "anzahl",
-  "status",
-  "rechnungsnummer",
-  "bestelldatum",
-] as const;
+export type OrderCsvField =
+  | "externalRef"
+  | "category"
+  | "variant"
+  | "company"
+  | "firstName"
+  | "lastName"
+  | "email"
+  | "quantity"
+  | "status"
+  | "invoiceNumber"
+  | "orderedAt";
 
-export type OrderCsvColumn = (typeof ORDER_CSV_COLUMNS)[number];
+/** A field takes its value from a column of the file, or from one value the
+ *  admin picked for every row. */
+export type OrderFieldSource = { column: number } | { fixed: string };
 
-const REQUIRED_COLUMNS: OrderCsvColumn[] = ["external_ref", "produkt", "variante", "email", "anzahl", "status"];
+export type OrderCsvMapping = Partial<Record<OrderCsvField, OrderFieldSource>>;
 
-const IMPORTABLE_CATEGORIES: ProductCategory[] = ["red_castle", "saisonabo"];
-const STATUSES: OrderStatus[] = ["neu", "rechnung_versendet", "bezahlt", "storniert"];
+export interface OrderCsvFieldInfo {
+  key: OrderCsvField;
+  label: string;
+  required: boolean;
+  /** Whether one value may stand for the whole file. */
+  allowsFixed: boolean;
+  hint?: string;
+}
+
+export const ORDER_CSV_FIELDS: OrderCsvFieldInfo[] = [
+  {
+    key: "externalRef",
+    label: "Bestellnummer im Altsystem",
+    required: true,
+    allowsFixed: false,
+    hint: "Verhindert, dass dieselbe Bestellung zweimal importiert wird.",
+  },
+  { key: "category", label: "Produkt", required: true, allowsFixed: true },
+  { key: "variant", label: "Variante", required: true, allowsFixed: true },
+  { key: "company", label: "Firma", required: false, allowsFixed: false },
+  { key: "firstName", label: "Vorname", required: false, allowsFixed: false },
+  { key: "lastName", label: "Nachname", required: false, allowsFixed: false },
+  { key: "email", label: "E-Mail", required: true, allowsFixed: false },
+  { key: "quantity", label: "Anzahl Karten", required: false, allowsFixed: true, hint: "Ohne Angabe: die Kartenzahl des Pakets." },
+  { key: "status", label: "Status", required: true, allowsFixed: true },
+  { key: "invoiceNumber", label: "Rechnungsnummer", required: false, allowsFixed: false },
+  { key: "orderedAt", label: "Bestelldatum", required: false, allowsFixed: false, hint: "Ohne Angabe: das Importdatum." },
+];
 
 /** One product the import may resolve a row to. */
 export interface ImportableProduct {
@@ -38,12 +72,10 @@ export interface ImportableProduct {
   name: string;
   category: ProductCategory;
   variant: string;
-}
-
-export interface OrderCsvRecord {
-  /** 1-based line in the file, header included, as the office counts it. */
-  line: number;
-  values: Record<OrderCsvColumn, string>;
+  /** The catalog's word for the variant ("Gold"), so a file may spell it either way. */
+  label: string;
+  /** Cards this package includes, when the file does not say. */
+  includedPasses: number;
 }
 
 export interface OrderCsvRow {
@@ -68,38 +100,145 @@ export type OrderCsvRowResult =
   | { ok: true; line: number; row: OrderCsvRow }
   | { ok: false; line: number; externalRef: string | null; reason: string };
 
-/** Splits the file into records keyed by column name. Errors here are about the
- * file as a whole (missing columns), not about single rows. */
-export function parseOrderCsv(content: string): { records: OrderCsvRecord[]; errors: string[] } {
-  const table = parseCsvTable(content);
-  if (table.length === 0) {
-    return { records: [], errors: ["Die Datei ist leer."] };
-  }
+/** Umlauts spelt out and everything else reduced to words, so "Red Castle Club",
+ *  "red_castle" and "RED-CASTLE" are one value. */
+function slug(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/ä/g, "a")
+    .replace(/ö/g, "o")
+    .replace(/ü/g, "u")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
 
-  const header = table[0].map((cell) => cell.replace(/^﻿/, "").trim().toLowerCase());
-  const index = new Map<string, number>();
-  header.forEach((name, i) => {
-    if (!index.has(name)) index.set(name, i);
+/** Header names an export is likely to use, per field. First match wins, and a
+ *  column is only claimed once. */
+const HEADER_ALIASES: Record<string, OrderCsvField> = {
+  external_ref: "externalRef",
+  externalref: "externalRef",
+  bestellnummer: "externalRef",
+  bestell_nr: "externalRef",
+  bestellnr: "externalRef",
+  auftragsnummer: "externalRef",
+  referenz: "externalRef",
+  nummer: "externalRef",
+  nr: "externalRef",
+  id: "externalRef",
+
+  produkt: "category",
+  produktgruppe: "category",
+  kategorie: "category",
+  typ: "category",
+  art: "category",
+
+  variante: "variant",
+  stufe: "variant",
+  paket: "variant",
+  produktvariante: "variant",
+  kategorie_2: "variant",
+
+  firma: "company",
+  firmenname: "company",
+  company: "company",
+  unternehmen: "company",
+
+  vorname: "firstName",
+  first_name: "firstName",
+  firstname: "firstName",
+
+  nachname: "lastName",
+  name: "lastName",
+  last_name: "lastName",
+  lastname: "lastName",
+
+  email: "email",
+  e_mail: "email",
+  mail: "email",
+  mailadresse: "email",
+
+  anzahl: "quantity",
+  anzahl_karten: "quantity",
+  menge: "quantity",
+  karten: "quantity",
+  quantity: "quantity",
+
+  status: "status",
+  bestellstatus: "status",
+  zahlungsstatus: "status",
+
+  rechnungsnummer: "invoiceNumber",
+  rechnung: "invoiceNumber",
+  rechnungs_nr: "invoiceNumber",
+  belegnummer: "invoiceNumber",
+
+  bestelldatum: "orderedAt",
+  datum: "orderedAt",
+  date: "orderedAt",
+  bestellt_am: "orderedAt",
+};
+
+export function parseOrderCsvHeader(content: string): string[] {
+  return parseCsvTable(content)[0]?.map((cell) => cell.replace(/^﻿/, "").trim()) ?? [];
+}
+
+/** The guess the mapping step opens with - confirmed or corrected by the admin,
+ *  never used to import on its own. */
+export function detectOrderMapping(header: string[]): OrderCsvMapping {
+  const mapping: OrderCsvMapping = {};
+  header.forEach((name, index) => {
+    const field = HEADER_ALIASES[slug(name)];
+    if (field && mapping[field] === undefined) mapping[field] = { column: index };
   });
+  return mapping;
+}
 
-  const missing = REQUIRED_COLUMNS.filter((column) => !index.has(column));
-  if (missing.length > 0) {
-    return {
-      records: [],
-      errors: [`Spalten fehlen in der Kopfzeile: ${missing.join(", ")}. Erwartet: ${ORDER_CSV_COLUMNS.join(";")}`],
-    };
-  }
+const CATEGORY_ALIASES: Record<string, ProductCategory> = {
+  red_castle: "red_castle",
+  red_castle_club: "red_castle",
+  redcastle: "red_castle",
+  rcc: "red_castle",
+  sponsor: "red_castle",
+  saisonabo: "saisonabo",
+  saisonkarte: "saisonabo",
+  saison: "saisonabo",
+  abo: "saisonabo",
+  saisonpass: "saisonabo",
+};
 
-  const records: OrderCsvRecord[] = table.slice(1).map((cells, i) => {
-    const values = {} as Record<OrderCsvColumn, string>;
-    for (const column of ORDER_CSV_COLUMNS) {
-      const position = index.get(column);
-      values[column] = position === undefined ? "" : (cells[position] ?? "").trim();
-    }
-    return { line: i + 2, values };
-  });
+const STATUS_ALIASES: Record<string, OrderStatus> = {
+  neu: "neu",
+  offen: "neu",
+  new: "neu",
+  rechnung_versendet: "rechnung_versendet",
+  rechnung: "rechnung_versendet",
+  verrechnet: "rechnung_versendet",
+  fakturiert: "rechnung_versendet",
+  bezahlt: "bezahlt",
+  paid: "bezahlt",
+  beglichen: "bezahlt",
+  storniert: "storniert",
+  annulliert: "storniert",
+  cancelled: "storniert",
+};
 
-  return { records, errors: [] };
+export function normaliseCategory(value: string): ProductCategory | null {
+  return CATEGORY_ALIASES[slug(value)] ?? null;
+}
+
+export function normaliseStatus(value: string): OrderStatus | null {
+  return STATUS_ALIASES[slug(value)] ?? null;
+}
+
+/** Matches the file's word for a package against the variant key and against
+ *  the catalog's label, so "gold" and "Gold" both land. */
+export function findProduct(products: ImportableProduct[], category: ProductCategory, value: string): ImportableProduct | null {
+  const wanted = slug(value);
+  return (
+    products.find((product) => product.category === category && (slug(product.variant) === wanted || slug(product.label) === wanted)) ?? null
+  );
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -111,8 +250,8 @@ export function parseOrderDate(value: string): string | null | undefined {
   if (!text) return null;
 
   let year: number, month: number, day: number;
-  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-  const swiss = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(text);
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(text);
+  const swiss = /^(\d{1,2})\.(\d{1,2})\.(\d{4})/.exec(text);
   if (iso) {
     [year, month, day] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
   } else if (swiss) {
@@ -126,51 +265,68 @@ export function parseOrderDate(value: string): string | null | undefined {
   return date.toISOString();
 }
 
+/** Which required fields the mapping still leaves open - what keeps the
+ *  dialog's "Weiter" disabled. */
+export function missingRequiredFields(mapping: OrderCsvMapping): OrderCsvFieldInfo[] {
+  return ORDER_CSV_FIELDS.filter((field) => field.required && mapping[field.key] === undefined);
+}
+
+function readValue(source: OrderFieldSource | undefined, cells: string[]): string {
+  if (!source) return "";
+  if ("fixed" in source) return source.fixed.trim();
+  return (cells[source.column] ?? "").trim();
+}
+
 /** The rules from brief §3, plus D70: a Red Castle row needs a company or a person. */
-export function validateOrderRecord(record: OrderCsvRecord, products: ImportableProduct[]): OrderCsvRowResult {
-  const { line, values } = record;
-  const externalRef = values.external_ref || null;
+function validateRow(line: number, cells: string[], mapping: OrderCsvMapping, products: ImportableProduct[]): OrderCsvRowResult {
+  const value = (field: OrderCsvField) => readValue(mapping[field], cells);
+  const externalRef = value("externalRef") || null;
   const fail = (reason: string): OrderCsvRowResult => ({ ok: false, line, externalRef, reason });
 
-  if (!externalRef) return fail("external_ref fehlt.");
+  if (!externalRef) return fail("Bestellnummer im Altsystem fehlt.");
 
-  const category = values.produkt.toLowerCase() as ProductCategory;
-  if (!IMPORTABLE_CATEGORIES.includes(category)) {
-    return fail(`Unbekanntes Produkt «${values.produkt}» - erlaubt sind ${IMPORTABLE_CATEGORIES.join(", ")}.`);
+  const categoryRaw = value("category");
+  const category = normaliseCategory(categoryRaw);
+  if (!category) {
+    return fail(`Unbekanntes Produkt «${categoryRaw}» - erlaubt sind Red Castle Club und Saisonabo.`);
   }
 
-  const variant = values.variante.toLowerCase();
-  const product = products.find((candidate) => candidate.category === category && candidate.variant === variant);
+  const variantRaw = value("variant");
+  const product = findProduct(products, category, variantRaw);
   if (!product) {
     const known = products
       .filter((candidate) => candidate.category === category)
-      .map((candidate) => candidate.variant)
+      .map((candidate) => candidate.label)
       .join(", ");
-    return fail(`Variante «${values.variante}» passt nicht zu ${category} - erlaubt sind ${known || "keine"}.`);
+    return fail(`Variante «${variantRaw}» passt nicht zu diesem Produkt - erlaubt sind ${known || "keine"}.`);
   }
 
-  const companyName = values.firma || null;
-  const firstName = values.vorname || null;
-  const lastName = values.nachname || null;
+  const companyName = value("company") || null;
+  const firstName = value("firstName") || null;
+  const lastName = value("lastName") || null;
 
   if (category === "red_castle" && !companyName && !(firstName && lastName)) {
-    return fail("Bei red_castle braucht es eine Firma oder Vor- und Nachname.");
+    return fail("Bei Red Castle Club braucht es eine Firma oder Vor- und Nachname.");
   }
   if (category === "saisonabo" && !(firstName && lastName)) {
-    return fail("Bei saisonabo sind Vorname und Nachname Pflicht.");
+    return fail("Beim Saisonabo sind Vorname und Nachname Pflicht.");
   }
 
-  const email = values.email.toLowerCase();
-  if (!EMAIL_PATTERN.test(email)) return fail(`Ungültige E-Mail-Adresse «${values.email}».`);
+  const email = value("email").toLowerCase();
+  if (!EMAIL_PATTERN.test(email)) return fail(`Ungültige E-Mail-Adresse «${value("email")}».`);
 
-  const quantity = Number(values.anzahl);
-  if (!Number.isInteger(quantity) || quantity < 1) return fail(`Ungültige Anzahl «${values.anzahl}» - ganze Zahl ab 1.`);
+  // Unmapped, the package's own card count applies - the usual case for a file
+  // that lists one order per line without repeating what the package contains.
+  const quantityRaw = value("quantity");
+  const quantity = quantityRaw ? Number(quantityRaw) : product.includedPasses;
+  if (!Number.isInteger(quantity) || quantity < 1) return fail(`Ungültige Anzahl «${quantityRaw}» - ganze Zahl ab 1.`);
 
-  const status = values.status.toLowerCase() as OrderStatus;
-  if (!STATUSES.includes(status)) return fail(`Ungültiger Status «${values.status}» - erlaubt sind ${STATUSES.join(", ")}.`);
+  const statusRaw = value("status");
+  const status = normaliseStatus(statusRaw);
+  if (!status) return fail(`Ungültiger Status «${statusRaw}» - erlaubt sind neu, Rechnung versendet, bezahlt, storniert.`);
 
-  const orderedAt = parseOrderDate(values.bestelldatum);
-  if (orderedAt === undefined) return fail(`Ungültiges Bestelldatum «${values.bestelldatum}» - JJJJ-MM-TT oder TT.MM.JJJJ.`);
+  const orderedAt = parseOrderDate(value("orderedAt"));
+  if (orderedAt === undefined) return fail(`Ungültiges Bestelldatum «${value("orderedAt")}» - JJJJ-MM-TT oder TT.MM.JJJJ.`);
 
   return {
     ok: true,
@@ -179,7 +335,7 @@ export function validateOrderRecord(record: OrderCsvRecord, products: Importable
       line,
       externalRef,
       category,
-      variant,
+      variant: product.variant,
       productId: product.id,
       productName: product.name,
       companyName,
@@ -188,25 +344,43 @@ export function validateOrderRecord(record: OrderCsvRecord, products: Importable
       email,
       quantity,
       status,
-      invoiceNumber: values.rechnungsnummer || null,
+      invoiceNumber: value("invoiceNumber") || null,
       orderedAt,
     },
   };
 }
 
-/** The whole file: parsed, validated row by row, and checked for a reference
- * that appears twice in the same file - two rows racing the unique index would
- * otherwise come back as a raw constraint error. */
-export function readOrderCsv(content: string, products: ImportableProduct[]): { results: OrderCsvRowResult[]; errors: string[] } {
-  const { records, errors } = parseOrderCsv(content);
-  if (errors.length > 0) return { results: [], errors };
+/**
+ * The whole file under a confirmed mapping: every data row validated, and a
+ * reference that appears twice in the same file caught here - two rows racing
+ * the unique index would otherwise come back as a raw constraint error.
+ */
+export function readOrderCsv(
+  content: string,
+  mapping: OrderCsvMapping,
+  products: ImportableProduct[]
+): { results: OrderCsvRowResult[]; errors: string[] } {
+  const table = parseCsvTable(content);
+  if (table.length === 0) return { results: [], errors: ["Die Datei ist leer."] };
+
+  const missing = missingRequiredFields(mapping);
+  if (missing.length > 0) {
+    return { results: [], errors: [`Diesen Feldern ist noch keine Spalte zugeordnet: ${missing.map((f) => f.label).join(", ")}.`] };
+  }
 
   const seen = new Set<string>();
-  const results = records.map((record) => {
-    const result = validateOrderRecord(record, products);
+  const results = table.slice(1).map((cells, index) => {
+    // +2: past the header row, and from zero-based to what the file calls line 1.
+    const line = index + 2;
+    const result = validateRow(line, cells, mapping, products);
     if (!result.ok) return result;
     if (seen.has(result.row.externalRef)) {
-      return { ok: false as const, line: record.line, externalRef: result.row.externalRef, reason: `external_ref ${result.row.externalRef} kommt in der Datei mehrfach vor.` };
+      return {
+        ok: false as const,
+        line,
+        externalRef: result.row.externalRef,
+        reason: `Bestellnummer ${result.row.externalRef} kommt in der Datei mehrfach vor.`,
+      };
     }
     seen.add(result.row.externalRef);
     return result;

@@ -26,14 +26,26 @@ vi.mock("resend", () => ({
 vi.mock("@/lib/tickets/issue", () => ({ issueTicketsForOrder }));
 
 const PRODUCTS = [
-  { id: "p-gold", name: "Red Castle Club Gold", category: "red_castle", variant: "gold" },
-  { id: "p-legi", name: "UHC Sponsoren Legi", category: "saisonabo", variant: "legi" },
+  { id: "p-gold", name: "Red Castle Club Gold", category: "red_castle", variant: "gold", benefits: { included_passes: 3 } },
+  { id: "p-legi", name: "UHC Sponsoren Legi", category: "saisonabo", variant: "legi", benefits: {} },
+];
+
+const CATALOG = [
+  { category: "red_castle", variant: "gold", label: "Gold" },
+  { category: "saisonabo", variant: "legi", label: "Sponsoren Legi" },
 ];
 
 /** A thenable query builder that answers with whatever the table has, whatever
  * the chain of filters was. Enough for the two reads the import makes. */
 function table(name: string) {
-  const data = name === "products" ? PRODUCTS : name === "orders" ? [{ external_ref: "RC-2025-001" }] : [];
+  const data =
+    name === "products"
+      ? PRODUCTS
+      : name === "product_variant_catalog"
+        ? CATALOG
+        : name === "orders"
+          ? [{ external_ref: "RC-2025-001" }]
+          : [];
   const builder: Record<string, unknown> = {};
   const self = new Proxy(builder, {
     get(_target, property) {
@@ -56,6 +68,7 @@ process.env.RESEND_API_KEY = "re_test";
 process.env.MAIL_FROM_EMAIL = "tickets@uhcuster.ch";
 
 import { applyOrderImport, planOrderImport } from "@/lib/admin/order-import";
+import { detectOrderMapping, parseOrderCsvHeader } from "@/lib/csv/orderCsv";
 
 const CSV = [
   "external_ref;produkt;variante;firma;vorname;nachname;email;anzahl;status;rechnungsnummer;bestelldatum",
@@ -65,6 +78,9 @@ const CSV = [
   "SA-2025-202;saisonabo;legi;;;Meier;nobody@example.ch;1;bezahlt;;",
 ].join("\n");
 
+/** The header is the brief's own, so the dialog's guess maps every field. */
+const MAPPING = detectOrderMapping(parseOrderCsvHeader(CSV));
+
 describe("order import", () => {
   beforeEach(() => {
     send.mockClear();
@@ -73,7 +89,7 @@ describe("order import", () => {
   });
 
   it("plans ok, duplicate and error rows without writing", async () => {
-    const plan = await planOrderImport(CSV);
+    const plan = await planOrderImport(CSV, MAPPING);
 
     expect(plan.errors).toEqual([]);
     expect(plan.counts).toEqual({ ok: 2, duplicate: 1, error: 1 });
@@ -83,7 +99,7 @@ describe("order import", () => {
   });
 
   it("creates the valid orders with cards and sends zero mails", async () => {
-    const result = await applyOrderImport(CSV, "batch-1");
+    const result = await applyOrderImport(CSV, MAPPING, "batch-1");
 
     expect(result.imported).toBe(2);
     expect(result.skipped).toBe(2);

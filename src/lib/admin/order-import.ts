@@ -2,7 +2,7 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { issueTicketsForOrder } from "@/lib/tickets/issue";
 import { ticketNameFor } from "@/lib/tickets/ticket-name";
 import { CURRENT_SEASON } from "@/lib/season";
-import { readOrderCsv, type ImportableProduct, type OrderCsvRow, type OrderCsvRowResult } from "@/lib/csv/orderCsv";
+import { readOrderCsv, type ImportableProduct, type OrderCsvMapping, type OrderCsvRow, type OrderCsvRowResult } from "@/lib/csv/orderCsv";
 import type { OrderStatus } from "@/lib/orders/visibility";
 
 /**
@@ -29,20 +29,38 @@ export interface OrderImportPlan {
   errors: string[];
 }
 
-async function loadImportableProducts(): Promise<ImportableProduct[]> {
+/**
+ * Everything the import may resolve a row to: the season's products that carry
+ * a category, with the catalog's word for each variant so a file may spell it
+ * either way. Read by the dialog too, which offers these as the fixed value a
+ * whole file can share.
+ */
+export async function loadImportableProducts(): Promise<ImportableProduct[]> {
   const supabase = await getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select("id, name, category, variant")
-    .eq("valid_season", CURRENT_SEASON)
-    .not("category", "is", null);
+  const [{ data, error }, { data: catalog }] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id, name, category, variant, benefits")
+      .eq("valid_season", CURRENT_SEASON)
+      .not("category", "is", null),
+    supabase.from("product_variant_catalog").select("category, variant, label"),
+  ]);
   if (error) throw new Error(`Failed to load products: ${error.message}`);
-  return (data ?? []).map((product) => ({
-    id: product.id as string,
-    name: product.name as string,
-    category: product.category as ImportableProduct["category"],
-    variant: product.variant as string,
-  }));
+
+  const labels = new Map((catalog ?? []).map((row) => [`${row.category}/${row.variant}`, row.label as string]));
+
+  return (data ?? [])
+    // Only what an order can actually be for: the member cards are issued from
+    // the member list, never imported as an order.
+    .filter((product) => product.category !== "mitglieder")
+    .map((product) => ({
+      id: product.id as string,
+      name: product.name as string,
+      category: product.category as ImportableProduct["category"],
+      variant: product.variant as string,
+      label: labels.get(`${product.category}/${product.variant}`) ?? (product.variant as string),
+      includedPasses: Number((product.benefits as { included_passes?: number } | null)?.included_passes ?? 1),
+    }));
 }
 
 function describe(row: OrderCsvRow): string {
@@ -63,9 +81,9 @@ async function findImportedRefs(refs: string[]): Promise<Set<string>> {
  * anything. A row whose reference already exists is reported as such rather
  * than silently skipped or duplicated.
  */
-export async function planOrderImport(content: string): Promise<OrderImportPlan> {
+export async function planOrderImport(content: string, mapping: OrderCsvMapping): Promise<OrderImportPlan> {
   const products = await loadImportableProducts();
-  const { results, errors } = readOrderCsv(content, products);
+  const { results, errors } = readOrderCsv(content, mapping, products);
   if (errors.length > 0) {
     return { rows: [], counts: { ok: 0, error: 0, duplicate: 0 }, errors };
   }
@@ -118,11 +136,12 @@ const IMPORT_CONCURRENCY = 4;
  */
 export async function applyOrderImport(
   content: string,
+  mapping: OrderCsvMapping,
   batchId: string,
   range?: { offset: number; limit: number }
 ): Promise<OrderImportResult> {
   const products = await loadImportableProducts();
-  const { results: allResults, errors } = readOrderCsv(content, products);
+  const { results: allResults, errors } = readOrderCsv(content, mapping, products);
   if (errors.length > 0) throw new Error(errors.join(" "));
 
   const results = range ? allResults.slice(range.offset, range.offset + range.limit) : allResults;

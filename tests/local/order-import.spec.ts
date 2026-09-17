@@ -26,9 +26,15 @@ test("CSV-Import: Vorschau mit Prüfung pro Zeile, Import, Batch zurückrollen",
   await page.getByRole("button", { name: "CSV importieren" }).click();
   await page.getByLabel("CSV-Datei").setInputFiles({ name: "playwright-import.csv", mimeType: "text/csv", buffer: Buffer.from(csv, "utf-8") });
 
+  // Step two: the header is the canonical one, so every field is mapped for us
+  // and "Weiter" is the only thing left to do.
+  await expect(page.getByLabel("Bestellnummer im Altsystem *")).toHaveValue("col:0");
+  await expect(page.getByLabel("Produkt *")).toHaveValue("col:1");
+  await page.getByRole("button", { name: "Weiter" }).click();
+
   // The preview names the verdict per row before anything is written.
   await expect(page.getByRole("button", { name: "2 Bestellung(en) importieren" })).toBeVisible();
-  await expect(page.getByText(/passt nicht zu saisonabo/)).toBeVisible();
+  await expect(page.getByText(/passt nicht zu diesem Produkt/)).toBeVisible();
 
   await page.getByRole("button", { name: "2 Bestellung(en) importieren" }).click();
   await expect(page.getByText(/2 Bestellung\(en\) importiert/)).toBeVisible({ timeout: 60_000 });
@@ -54,9 +60,48 @@ test("CSV-Import: Vorschau mit Prüfung pro Zeile, Import, Batch zurückrollen",
   await page.getByRole("button", { name: "Fertig" }).click();
   await page.getByRole("button", { name: "CSV importieren" }).click();
   await page.getByLabel("CSV-Datei").setInputFiles({ name: "playwright-import.csv", mimeType: "text/csv", buffer: Buffer.from(csv, "utf-8") });
+  await page.getByRole("button", { name: "Weiter" }).click();
   await expect(page.getByText("Bereits importiert").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "0 Bestellung(en) importieren" })).toBeDisabled();
   await page.getByRole("button", { name: "Abbrechen" }).click();
+
+
+  // A file with the club's own column names: nothing is detected, so the
+  // mapping is set by hand - including the two values that hold for the whole
+  // file and have no column at all.
+  const ref = `PW-MAN-${stamp}`;
+  const ownWording = [
+    "Auftrag;Kunde;Mailadresse",
+    `${ref};Playwright Handzuordnung AG;e2e-import-d-${stamp}@${TEST_EMAIL_DOMAIN}`,
+  ].join("\n");
+  await page.getByRole("button", { name: "CSV importieren" }).click();
+  await page.getByLabel("CSV-Datei").setInputFiles({ name: "playwright-eigene-spalten.csv", mimeType: "text/csv", buffer: Buffer.from(ownWording, "utf-8") });
+  await expect(page.getByRole("button", { name: /Noch zuordnen/ })).toBeVisible();
+  await page.getByLabel("Bestellnummer im Altsystem *").selectOption("col:0");
+  await page.getByLabel("Firma").selectOption("col:1");
+  await page.getByLabel("E-Mail *").selectOption("col:2");
+  await page.getByLabel("Produkt *").selectOption("fix:red_castle");
+  await page.getByLabel("Variante *").selectOption("fix:gold");
+  await page.getByLabel("Status *").selectOption("fix:bezahlt");
+  await page.getByRole("button", { name: "Weiter" }).click();
+  await expect(page.getByRole("button", { name: "1 Bestellung(en) importieren" })).toBeVisible();
+  await page.getByRole("button", { name: "1 Bestellung(en) importieren" }).click();
+  await expect(page.getByText(/1 Bestellung\(en\) importiert/)).toBeVisible({ timeout: 60_000 });
+
+  const { data: manual } = await supabase
+    .from("orders")
+    .select("id, status, customers(name), order_items(quantity), import_batch_id")
+    .eq("external_ref", ref)
+    .single();
+  expect(manual?.status).toBe("bezahlt");
+  expect((manual?.customers as unknown as { name: string }).name).toBe("Playwright Handzuordnung AG");
+  // No quantity column and none fixed: the Gold package's own three cards.
+  expect((manual?.order_items as Array<{ quantity: number }>)[0].quantity).toBe(3);
+  await page.getByRole("button", { name: "Fertig" }).click();
+  await page.goto(`/admin/import/${manual!.import_batch_id}`);
+  await page.getByRole("button", { name: "Batch zurückrollen" }).click();
+  await page.getByRole("button", { name: "Ja, zurückrollen" }).click();
+  await expect(page.getByText(/1 Bestellung\(en\)/)).toBeVisible();
 
   // The batch page takes it all back.
   const { data: batchOrder } = await supabase.from("orders").select("import_batch_id").eq("external_ref", refGold).single();

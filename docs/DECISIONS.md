@@ -1397,3 +1397,24 @@ hinter dem Text, wie ein in die Karte geprägter Stempel. Deckkraft nicht tiefer
 matteste der drei Töne - darunter praktisch verschwindet; nichts liegt über dem Text, der Kontrast
 der Schrift bleibt also unberührt. Die Karte ist ausserdem auf 24rem gedeckelt, damit sie im
 gestapelten Layout nicht zum Banner über die ganze Seitenbreite wird.
+
+**D87 — Der Bestell-Import bekommt die Feldzuordnung des Mitglieder-Imports.** Claudio: «der Import
+bei den Bestellungen funktioniert nicht so wie bei den Mitgliedern, bitte den gleichen Prozess, also
+mit Felderzuordnung». Der erste Wurf verlangte exakt die Spaltennamen aus dem Auftrag
+(`external_ref;produkt;variante;…`) und lehnte jede echte Exportdatei ab. Neu: Datei → Zuordnung →
+Vorschau → Import, wie bei den Mitgliedern. Die Zuordnung wird aus den Kopfzeilen vorgeschlagen
+(Aliasse für die üblichen deutschen und englischen Bezeichnungen) und vom Admin bestätigt oder
+korrigiert; ohne Zuordnung aller Pflichtfelder bleibt «Weiter» gesperrt und nennt die fehlenden.
+
+Zwei Dinge gehen über den Mitglieder-Import hinaus, weil die Altdaten es verlangen:
+
+1. **Fester Wert für die ganze Datei** bei Produkt, Variante, Anzahl und Status. Ein Export nur mit
+   Red-Castle-Bestellungen schreibt nirgends «red_castle» hin - das weiss das Büro über die Datei,
+   nicht die Datei über sich. Ohne diese Möglichkeit wäre so eine Datei gar nicht importierbar.
+2. **Werte werden normalisiert**: «Red Castle Club» → red_castle, «Gold» → gold, «Bezahlt»/«Paid» →
+   bezahlt, «Rechnung versendet»/«fakturiert» → rechnung_versendet. Verglichen wird über einen Slug
+   (Umlaute ausgeschrieben, alles andere zu Wörtern), gegen den Variantenschlüssel *und* gegen das
+   Label aus `product_variant_catalog` - «Sponsoren Legi» findet also `legi`.
+
+Ohne Anzahl-Spalte gilt `included_passes` des Pakets, was der Normalfall ist: eine Zeile pro
+Bestellung, ohne zu wiederholen, was im Paket steckt. **Entschieden.**

@@ -214,9 +214,22 @@ Es gibt keinen automatischen Storno mehr (D69).
 
 ## Migration: Bestellungen aus CSV importieren
 
-Reiter Bestellungen → «CSV importieren». Datei mit Kopfzeile
-`external_ref;produkt;variante;firma;vorname;nachname;email;anzahl;status;rechnungsnummer;bestelldatum`
-(Semikolon, UTF-8). Die Vorschau zeigt pro Zeile ok / Fehler / bereits importiert; der Import legt
+Reiter Bestellungen → «CSV importieren», derselbe Ablauf wie beim Mitglieder-Import: Datei wählen,
+Felder zuordnen, Vorschau, bestätigen.
+
+Die Datei braucht eine Kopfzeile, sonst keine bestimmten Spaltennamen - im zweiten Schritt sagst du,
+welche Spalte zu welchem Feld gehört. Bekannte Bezeichnungen (Bestellnummer, Firma, Mail, Menge,
+Zahlungsstatus, Bestellt am …) werden vorgeschlagen, den Rest stellst du selbst ein. **Produkt,
+Variante, Anzahl und Status** kannst du statt einer Spalte auch als festen Wert für die ganze Datei
+setzen - für einen Export, der nur Red-Castle-Bestellungen enthält und das nirgends hinschreibt.
+Ohne Anzahl gilt die Kartenzahl des Pakets. Werte dürfen ausgeschrieben sein: «Red Castle Club»,
+«Gold», «Bezahlt», «Rechnung versendet» werden erkannt, ebenso Trennzeichen `;` `,` Tab und
+Windows-1252 statt UTF-8.
+
+Pflicht sind Bestellnummer im Altsystem, Produkt, Variante, E-Mail und Status. Die Bestellnummer ist
+der Schutz gegen einen doppelten Import.
+
+Die Vorschau zeigt pro Zeile ok / Fehler / bereits importiert; der Import legt
 Bestellungen, Karten und PDFs an und **versendet keine Mail**. Danach über die Mehrfachauswahl
 «E-Mail versenden…» die Kunden mit der Vorlage «Einführung neuer Ticketshop» informieren (Vorschau
 und Testmail vor dem Versand; bereits informierte werden übersprungen, ausser die Checkbox wird
