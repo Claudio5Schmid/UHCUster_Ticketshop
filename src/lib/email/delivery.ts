@@ -52,7 +52,14 @@ export async function recordSentEmail(input: RecordedEmail): Promise<void> {
   }
 }
 
-/** What the provider's event names mean here. Anything else is ignored. */
+/**
+ * What the provider's event names mean here. Anything else is ignored.
+ *
+ * "Suppressed" is the one that is easy to miss: after a hard bounce Resend puts
+ * the address on its suppression list and declines every further send to it
+ * without trying. Nothing left the building, so it counts as a failure - a
+ * second attempt at a bad address must not read as progress.
+ */
 const EVENT_STATUS: Record<string, DeliveryStatus> = {
   "email.sent": "accepted",
   "email.delivered": "delivered",
@@ -60,6 +67,7 @@ const EVENT_STATUS: Record<string, DeliveryStatus> = {
   "email.bounced": "bounced",
   "email.complained": "complained",
   "email.failed": "failed",
+  "email.suppressed": "failed",
 };
 
 export interface ResendEventPayload {

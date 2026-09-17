@@ -27,15 +27,24 @@ export interface SentMailRecord {
  * Resend's `last_event` in the shop's own words.
  *
  * An open or a click can only happen to a mail that arrived, so both count as
- * delivered even though the shop does not otherwise track reading. A cancelled
- * or queued mail never left, which is not a delivery and not a bounce either -
- * "accepted" is the honest reading of both.
+ * delivered even though the shop does not otherwise track reading. A queued or
+ * scheduled mail is on its way and has not failed, so it reads as accepted.
+ *
+ * "Suppressed" matters more than it looks: after one hard bounce Resend puts the
+ * address on its suppression list and quietly declines every further send to it.
+ * Nothing left the building, so it belongs with the failures - otherwise the
+ * second attempt at a bad address would look like progress.
+ *
+ * A cancelled mail will never arrive either. The shop never cancels one, but if
+ * one ever shows up, counting it as failed puts the cards back on the office's
+ * desk, which is the better way to be wrong.
  */
 const LAST_EVENT_STATUS: Record<string, DeliveryStatus> = {
   sent: "accepted",
   queued: "accepted",
   scheduled: "accepted",
-  canceled: "accepted",
+  suppressed: "failed",
+  canceled: "failed",
   delivered: "delivered",
   opened: "delivered",
   clicked: "delivered",
