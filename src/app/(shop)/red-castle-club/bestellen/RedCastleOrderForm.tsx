@@ -199,15 +199,17 @@ export function RedCastleOrderForm({ product }: { product: Product }) {
         <div className={styles.shell}>
           <header className={styles.header}>
             <span className={styles.eyebrow}>Bestellung auf Rechnung</span>
-            <h1 className={styles.title}>{product.name} bestellen</h1>
-            <p className={styles.lead}>
-              Deine {includedPasses === 1 ? "Karte wird" : `${includedPasses} Karten werden`} sofort ausgestellt. Rechnung und Karten kommen
-              innert 2 bis 4 Werktagen per E-Mail vom Büro des UHC Uster, zahlbar innert 30 Tagen.
-            </p>
           </header>
 
           <div className={styles.layout}>
-            <form ref={formRef} onSubmit={handleSubmit} className={styles.formColumn}>
+            <div className={styles.main}>
+              <h1 className={styles.title}>{product.name} bestellen</h1>
+              <p className={styles.lead}>
+                Deine {includedPasses === 1 ? "Karte wird" : `${includedPasses} Karten werden`} sofort ausgestellt. Rechnung und Karten
+                kommen innert 2 bis 4 Werktagen per E-Mail vom Büro des UHC Uster, zahlbar innert 30 Tagen.
+              </p>
+
+              <form ref={formRef} onSubmit={handleSubmit} className={styles.formColumn}>
               <fieldset className={styles.fieldset}>
                 <legend className={styles.legend}>Bestellende Person</legend>
                 <div className={styles.grid}>
@@ -323,7 +325,8 @@ export function RedCastleOrderForm({ product }: { product: Product }) {
                 </a>
                 .
               </p>
-            </form>
+              </form>
+            </div>
 
             <aside className={styles.aside} aria-label="Dein Paket">
               {/* The pass being ordered, drawn like the printed one. */}

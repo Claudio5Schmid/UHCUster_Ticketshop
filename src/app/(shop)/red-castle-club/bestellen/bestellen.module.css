@@ -23,8 +23,10 @@
   margin-inline: auto;
 }
 
+/* The eyebrow spans both columns; everything under it starts on one line, so the
+   pass and the headline share a top edge. */
 .header {
-  margin-bottom: var(--space-7);
+  margin-bottom: var(--space-5);
 }
 
 .eyebrow {
@@ -57,7 +59,6 @@
 
 .lead {
   margin-top: var(--space-3);
-  max-width: 34rem;
   font-size: var(--text-small-size);
   line-height: 1.6;
   color: var(--color-text-secondary);
@@ -70,26 +71,52 @@
   align-items: start;
 }
 
-@media (max-width: 860px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
-  .formColumn {
-    order: 2;
-  }
-
-  .aside {
-    order: 1;
-  }
+/* The left column: the headline, what it means, and the form under both. */
+.main {
+  min-width: 0;
+  max-width: 34rem;
 }
 
 .formColumn {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  margin-top: var(--space-7);
   min-width: 0;
-  max-width: 34rem;
+}
+
+/*
+ * Stacked, the column reads top to bottom and the pass belongs between what is
+ * being ordered and the fields that order it. The left column dissolves into
+ * the grid (display: contents) so its children can take their own place in that
+ * order - the headline first, then the pass, then the form.
+ */
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+
+  .main {
+    display: contents;
+  }
+
+  .title {
+    order: 1;
+  }
+
+  .lead {
+    order: 2;
+  }
+
+  .aside {
+    order: 3;
+  }
+
+  .formColumn {
+    order: 4;
+    margin-top: var(--space-2);
+  }
 }
 
 .fieldset {
