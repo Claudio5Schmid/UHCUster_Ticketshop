@@ -207,7 +207,10 @@
 
 /* ---------------------------------------------------------------- the pass */
 
+/* Stacked, the column is the page's full width - and a pass stretched across it
+   stops reading as a card. It keeps its own width and its place at the left. */
 .aside {
+  max-width: 24rem;
   position: sticky;
   top: calc(var(--header-height) + var(--space-4));
   display: flex;
@@ -233,22 +236,35 @@
   flex-direction: column;
 }
 
-.crestRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-bottom: var(--space-5);
-}
-
+/*
+ * The crest, alone and at size, cropped by the card's own edge.
+ *
+ * The wordmark used to sit small in the corner, saying "Red Castle Club" a
+ * second time directly above a title that says it in full, its red going dim
+ * against the black. The castle alone is the club's mark; masking rather than
+ * printing the PNG lets it take the tier's metal, so the logo and the tier are
+ * one thing instead of two decorations. Letting it run past the edge makes it
+ * a graphic element of the card rather than a logo parked in a corner.
+ */
 .crest {
-  height: 1.75rem;
-  width: auto;
+  position: absolute;
+  right: -1.25rem;
+  top: -1rem;
+  width: 8.5rem;
+  height: 5.75rem;
+  background-color: var(--tier);
+  -webkit-mask: url("/red-castle-club-icon.png") center / contain no-repeat;
+  mask: url("/red-castle-club-icon.png") center / contain no-repeat;
+  pointer-events: none;
 }
 
+/* Beside the tier word, where they belong to it - one per level, as on the
+   printed card (D59). */
 .stars {
-  display: flex;
+  display: inline-flex;
   gap: 3px;
+  margin-left: var(--space-2);
+  vertical-align: 0.15em;
   color: var(--tier);
 }
 
@@ -256,20 +272,11 @@
    section between them - where the printed card puts it (D65): 1.618 times as
    much air above as below. */
 .watermark {
-  align-self: flex-start;
-  margin-top: calc(var(--space-3) * 1.618);
-  margin-bottom: var(--space-3);
-  font-size: 2.5rem;
-  font-weight: 900;
-  line-height: 0.9;
-  letter-spacing: -0.03em;
-  color: transparent;
-  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.22);
-  pointer-events: none;
-  user-select: none;
+  display: none;
 }
 
 .passLabel {
+  position: relative;
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -278,6 +285,7 @@
 }
 
 .passTitle {
+  position: relative;
   margin-top: auto;
   font-size: 1.5rem;
   font-weight: 900;
@@ -292,6 +300,8 @@
 }
 
 .passName {
+  position: relative;
+  margin-top: var(--space-5);
   font-size: var(--text-small-size);
   font-weight: 600;
   line-height: 1.3;

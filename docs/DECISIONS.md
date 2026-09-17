@@ -1382,3 +1382,15 @@ Die Formularfelder waren erneut zu gross: der gemeinsame Input steht in 18px mit
 und 38px Höhe gesetzt, auf Touch-Geräten weiterhin 44px. Dazu höchstens zwei Spalten, PLZ schmal,
 und die Formularspalte bei 34rem gedeckelt - ein Namensfeld über die halbe Seite lädt zum Aufsatz
 ein. Die Kasse bleibt unverändert; die Regel ist auf diese Seite begrenzt. **Entschieden.**
+
+**Nachtrag zu D86 (gleicher Tag):** Claudio fand die Seite «massiv besser», die schwarze
+Kartenfläche aber noch nicht gut - «kannst du das noch anders gestalten, mit dem Logo einzeln?».
+Der Wortmarken-Logo sass klein in der Ecke und sagte «Red Castle Club» ein zweites Mal direkt über
+einem Titel, der es ausschreibt; sein Rot ging auf Schwarz zudem unter. Neu steht das Wappen
+allein: `red-castle-club-icon.png` als CSS-Maske statt als Bild, eingefärbt im Metallton der Stufe,
+gross und von der Kartenkante angeschnitten - ein Grafikelement der Karte statt eines Logos im Eck.
+Die VIP-Sterne stehen jetzt beim Stufenwort, wo sie hingehören, und die Saisonzahl läuft klein in
+der Kopfzeile mit, weil ein zweites Wasserzeichen neben dem Wappen zu viel war. Drei Varianten
+wurden gebaut und gezeigt (Wappen klein oben links / gross und transparent hinter dem Text /
+massiv angeschnitten); diese ist die dritte. Die Karte ist ausserdem auf 24rem gedeckelt, damit sie
+im gestapelten Layout nicht zum Banner über die ganze Seitenbreite wird.

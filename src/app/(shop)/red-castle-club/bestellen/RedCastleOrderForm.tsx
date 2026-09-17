@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useRef, useState, type CSSProperties } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { Container } from "@/components/layout/Container/Container";
 import { Button } from "@/components/ui/Button/Button";
@@ -330,22 +329,23 @@ export function RedCastleOrderForm({ product }: { product: Product }) {
               {/* The pass being ordered, drawn like the printed one. */}
               <div className={styles.pass}>
                 <div className={styles.passBody}>
-                  <div className={styles.crestRow}>
-                    <Image src="/red-castle-club-logo.png" alt="Red Castle Club" width={660} height={164} className={styles.crest} />
-                    {stars > 0 && (
-                      <span className={styles.stars} aria-hidden="true">
-                        {Array.from({ length: stars }, (_, index) => (
-                          <svg key={index} width="13" height="13" viewBox="0 0 20 20" fill="currentColor">
-                            <path d={STAR_PATH} />
-                          </svg>
-                        ))}
-                      </span>
-                    )}
-                  </div>
+                  <span className={styles.crest} aria-hidden="true" />
 
-                  <span className={styles.passLabel}>Saisonkarte</span>
+                  <span className={styles.passLabel}>Saisonkarte {CURRENT_SEASON_LABEL}</span>
                   <h2 className={styles.passTitle}>
-                    Red Castle Club <span className={styles.passTier}>{tierWord}</span>
+                    Red Castle Club{" "}
+                    <span className={styles.passTier}>
+                      {tierWord}
+                      {stars > 0 && (
+                        <span className={styles.stars} aria-hidden="true">
+                          {Array.from({ length: stars }, (_, index) => (
+                            <svg key={index} width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+                              <path d={STAR_PATH} />
+                            </svg>
+                          ))}
+                        </span>
+                      )}
+                    </span>
                   </h2>
 
                   <span className={styles.watermark} aria-hidden="true">
