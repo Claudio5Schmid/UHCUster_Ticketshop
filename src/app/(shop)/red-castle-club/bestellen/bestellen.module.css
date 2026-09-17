@@ -237,21 +237,23 @@
 }
 
 /*
- * The crest, alone and at size, cropped by the card's own edge.
+ * The crest, alone and at size, standing behind the card's own text.
  *
  * The wordmark used to sit small in the corner, saying "Red Castle Club" a
  * second time directly above a title that says it in full, its red going dim
  * against the black. The castle alone is the club's mark; masking rather than
  * printing the PNG lets it take the tier's metal, so the logo and the tier are
- * one thing instead of two decorations. Letting it run past the edge makes it
- * a graphic element of the card rather than a logo parked in a corner.
+ * one thing instead of two decorations. Held back to a fraction of its opacity
+ * and set behind the text, it reads as a mark stamped into the card - the text
+ * above it keeps its own contrast, since nothing here is painted on top of it.
  */
 .crest {
   position: absolute;
-  right: -1.25rem;
-  top: -1rem;
-  width: 8.5rem;
-  height: 5.75rem;
+  right: -1.5rem;
+  bottom: -0.5rem;
+  width: 11rem;
+  height: 7.5rem;
+  opacity: 0.3;
   background-color: var(--tier);
   -webkit-mask: url("/red-castle-club-icon.png") center / contain no-repeat;
   mask: url("/red-castle-club-icon.png") center / contain no-repeat;

@@ -1391,6 +1391,9 @@ allein: `red-castle-club-icon.png` als CSS-Maske statt als Bild, eingefärbt im 
 gross und von der Kartenkante angeschnitten - ein Grafikelement der Karte statt eines Logos im Eck.
 Die VIP-Sterne stehen jetzt beim Stufenwort, wo sie hingehören, und die Saisonzahl läuft klein in
 der Kopfzeile mit, weil ein zweites Wasserzeichen neben dem Wappen zu viel war. Drei Varianten
-wurden gebaut und gezeigt (Wappen klein oben links / gross und transparent hinter dem Text /
-massiv angeschnitten); diese ist die dritte. Die Karte ist ausserdem auf 24rem gedeckelt, damit sie
-im gestapelten Layout nicht zum Banner über die ganze Seitenbreite wird.
+wurden gebaut und vorgelegt (Wappen klein oben links / gross und transparent hinter dem Text /
+massiv angeschnitten); **Claudio hat die zweite gewählt**: das Wappen gross bei 0.3 Deckkraft
+hinter dem Text, wie ein in die Karte geprägter Stempel. Deckkraft nicht tiefer, weil Silber - der
+matteste der drei Töne - darunter praktisch verschwindet; nichts liegt über dem Text, der Kontrast
+der Schrift bleibt also unberührt. Die Karte ist ausserdem auf 24rem gedeckelt, damit sie im
+gestapelten Layout nicht zum Banner über die ganze Seitenbreite wird.
