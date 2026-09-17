@@ -236,3 +236,26 @@ und Testmail vor dem Versand; bereits informierte werden übersprungen, ausser d
 gesetzt). Ein Batch lässt sich auf seiner Seite (`/admin/import/<id>`) zurückrollen, solange keine
 seiner Karten gescannt wurde. Vor dem ersten Import den Preis von «Red Castle Club Spezial» setzen
 (D81).
+
+
+## Wenn eine E-Mail nicht ankommt (seit 2026-09-17)
+
+Resend meldet nach dem Versand, was mit einer Nachricht passiert ist, und der Shop übernimmt das.
+Auf der Bestellseite steht unter **E-Mails**, was rausging und wie es ausging: «Angenommen» heisst
+nur, dass Resend die Nachricht übernommen hat, «Zugestellt» heisst angekommen, «Unzustellbar» nennt
+den Grund von Resend.
+
+Bei einer unzustellbaren Nachricht macht der Shop die Markierungen rückgängig:
+- die angehängten Karten stehen wieder auf **offen** und können erneut versendet werden,
+- die Bestellung steht auf **Kundeninfo: fehlgeschlagen** mit dem Grund,
+- eine unzustellbare Bestellbestätigung zählt nicht mehr als versendet.
+
+Damit das funktioniert, muss in Resend unter Webhooks ein Endpunkt auf
+`https://tickets-uhcuster.ch/api/webhooks/resend` zeigen, mit den Ereignissen `email.sent`,
+`email.delivered`, `email.delivery_delayed`, `email.bounced` und `email.complained`. Das
+Signing-Secret von Resend (`whsec_…`) gehört als `RESEND_WEBHOOK_SECRET` in die Vercel-Umgebung.
+Ohne diese Variable weist der Endpunkt jedes Ereignis ab, und der Shop bleibt beim alten Verhalten.
+
+**Bounce-Mails im Postfach gibt es nicht.** Resend leitet Rückläufer nicht an die Absenderadresse
+weiter - es meldet sie im Dashboard und über genau diesen Webhook. Wer nur ins Postfach schaut,
+sieht nichts.

@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(161);
+select plan(178);
 
 -- ============================================================================
 -- Fixtures (inserted as the default/owner role, which bypasses RLS - the normal
@@ -1094,6 +1094,111 @@ select throws_ok(
 );
 reset role;
 reset request.jwt.claim.sub;
+
+-- ============================================================================
+-- Group P: delivery status from the mail provider (20260917100001)
+--
+-- The table is admin-readable and written by nobody with a session; the
+-- function that carries a bounce back into the orders and cards is system-only,
+-- like create_order and the scanner's writes.
+-- ============================================================================
+
+insert into public.email_messages (id, provider_message_id, kind, recipient, subject, order_id, ticket_ids)
+values (
+  '40000001-0000-0000-0000-000000000001',
+  'pgtap-message-1',
+  'member_cards',
+  'delivery@example.com',
+  'Deine Karte',
+  'd0000000-0000-0000-0000-000000000003',
+  array['f0000000-0000-0000-0000-000000000002'::uuid]
+);
+
+set local role anon;
+select is((select count(*) from public.email_messages)::int, 0, 'anon sees no e-mail messages');
+select throws_ok(
+  $$select public.record_email_status('pgtap-message-1', 'bounced')$$,
+  '42501',
+  'permission denied for function record_email_status',
+  'anon cannot report a delivery status'
+);
+reset role;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002';
+select is((select count(*) from public.email_messages)::int, 0, 'non-admin authenticated sees no e-mail messages');
+select throws_ok(
+  $$select public.record_email_status('pgtap-message-1', 'bounced')$$,
+  '42501',
+  'permission denied for function record_email_status',
+  'non-admin authenticated cannot report a delivery status either'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+set local role authenticated;
+set local request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+select ok((select count(*) from public.email_messages) >= 1, 'an admin can read the e-mail log');
+select throws_ok(
+  $$select public.record_email_status('pgtap-message-1', 'bounced')$$,
+  '42501',
+  'permission denied for function record_email_status',
+  'not even an admin reports a delivery status - the provider does, through the webhook'
+);
+select throws_ok(
+  $$insert into public.email_messages (provider_message_id, kind, recipient) values ('x', 'test', 'x@example.com')$$,
+  '42501',
+  'new row violates row-level security policy for table "email_messages"',
+  'an admin cannot write the e-mail log either'
+);
+reset role;
+reset request.jwt.claim.sub;
+
+-- Owner level, standing in for the webhook's service-role connection.
+select is(public.record_email_status('unbekannte-id', 'bounced'), false, 'an event for a message we never recorded is answered, not raised');
+select is(public.record_email_status('pgtap-message-1', 'delivered'), true, 'a delivery is recorded');
+select is(
+  (select status from public.email_messages where provider_message_id = 'pgtap-message-1'),
+  'delivered',
+  'the message now reads as delivered'
+);
+
+-- f...0002 was voided in Group L, so its card_sent_at is the thing to watch here.
+update public.tickets set card_sent_at = now() where id = 'f0000000-0000-0000-0000-000000000002';
+
+select is(
+  public.record_email_status('pgtap-message-1', 'bounced', 'Suppressed - on the suppression list'),
+  true,
+  'a bounce after a delivery is still applied'
+);
+select is(
+  (select card_sent_at is null from public.tickets where id = 'f0000000-0000-0000-0000-000000000002'),
+  true,
+  'the card the bounced mail carried is open to send again'
+);
+select is(
+  (select notification_status from public.orders where id = 'd0000000-0000-0000-0000-000000000003'),
+  'fehlgeschlagen',
+  'and the order says the customer was not reached'
+);
+select ok(
+  (select exists(select 1 from public.audit_log
+     where entity_type = 'order' and entity_id = 'd0000000-0000-0000-0000-000000000003'
+       and action = 'email_status' and actor_type = 'system')),
+  'the bounce is in the trail, attributed to the system'
+);
+select is(public.record_email_status('pgtap-message-1', 'delivered'), true, 'a delivery arriving after the bounce is accepted');
+select is(
+  (select status from public.email_messages where provider_message_id = 'pgtap-message-1'),
+  'bounced',
+  'but it does not walk the status back to delivered'
+);
+select throws_ok(
+  $$select public.record_email_status('pgtap-message-1', 'gelesen')$$,
+  'P0001',
+  'invalid delivery status gelesen',
+  'a status the shop does not know is refused'
+);
 
 select * from finish();
 

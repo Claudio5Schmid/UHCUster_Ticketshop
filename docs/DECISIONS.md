@@ -1418,3 +1418,36 @@ Zwei Dinge gehen über den Mitglieder-Import hinaus, weil die Altdaten es verlan
 
 Ohne Anzahl-Spalte gilt `included_passes` des Pakets, was der Normalfall ist: eine Zeile pro
 Bestellung, ohne zu wiederholen, was im Paket steckt. **Entschieden.**
+
+**D88 — Zustellung statt Annahme: der Shop übernimmt den Resend-Status.** Claudio nach dem ersten
+echten Versand: «96% hat es versendet, bei 3 hat es nicht funktioniert. Erstens sind keine
+Bounce-Mails im Postfach angekommen, zweitens müsste der Status von Resend übernommen werden.»
+
+Beides stimmt. `sendEmail()` gab bisher zurück, ob Resend die Nachricht *annimmt*, und darauf wurde
+die Bestellung als informiert und die Karte als versendet markiert. Ob sie ankommt, weiss Resend
+Sekunden bis Stunden später - und sagt es über einen Webhook, nicht per Mail an den Absender.
+Deshalb lag im Postfach nichts, und deshalb standen drei Bestellungen grün, deren Karte nie
+ankam.
+
+Neu: `sendEmail()` gibt die Message-ID zurück, jeder Versandweg schreibt sie mit Empfänger, Art,
+Bestellung, Mitglied und den angehängten Karten nach `email_messages`, und
+`/api/webhooks/resend` trägt den Ausgang zurück. Ein Bounce nimmt zurück, was die Annahme gesetzt
+hatte: Karten wieder offen, Bestellung auf «fehlgeschlagen» mit dem Grund von Resend, eine
+unzustellbare Bestellbestätigung nicht mehr als versendet. Jede dieser Rücknahmen steht mit
+`actor_type = system` im `audit_log`.
+
+Die Signatur wird von Hand geprüft statt mit dem Svix-SDK: das Schema ist ein HMAC über
+`id.timestamp.body`, das sind zwanzig Zeilen, und ein Paket mit eigenem HTTP-Client und eigener
+Krypto ist dafür ein schlechter Tausch. Geprüft werden Zeitfenster (5 Minuten gegen Replays),
+alle mitgelieferten Signaturen (eine Rotation schickt zwei) und konstante Laufzeit beim Vergleich.
+Der rohe Body wird verwendet, nicht das geparste JSON - neu serialisiert würde keine Signatur je
+wieder passen.
+
+Ereignisse zu Nachrichten, die der Shop nicht kennt (Testmails, alles vor dieser Änderung), werden
+mit 200 beantwortet statt mit einem Fehler: eine Wiederholschlaufe über ein Ereignis, mit dem
+niemand etwas anfangen kann, hilft nicht. `email.opened` und `email.clicked` werden ignoriert, der
+Shop verfolgt kein Leseverhalten.
+
+**Was das nicht erklärt:** warum genau diese drei Adressen abgelehnt wurden. Der Grund steht in
+Claudios Resend-Dashboard und ab jetzt auf der Bestellseite unter «E-Mails». Der lokale
+`RESEND_API_KEY` ist nicht mehr gültig, von hier aus war es nicht abfragbar. **Entschieden.**

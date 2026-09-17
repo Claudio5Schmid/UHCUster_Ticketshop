@@ -45,18 +45,34 @@ export function isUndeliverableAddress(email: string): boolean {
   return UNDELIVERABLE_TLDS.some((tld) => normalized.endsWith(tld));
 }
 
-/** Returns true if the message was accepted, false if the address was skipped as
- * structurally undeliverable (see isUndeliverableAddress). Throws only on a real
- * send failure.
+export interface SendEmailResult {
+  /** Whether the provider took the message. */
+  accepted: boolean;
+  /**
+   * The provider's id for it - what a later delivery event is tied to. Null when
+   * the address was skipped, and (defensively) when the provider answers without
+   * one; a message with no id simply cannot be followed up.
+   */
+  messageId: string | null;
+}
+
+/** Hands the message over and reports whether it was accepted, along with the
+ * provider's id for it. False means the address was skipped as structurally
+ * undeliverable (see isUndeliverableAddress); a real send failure throws.
  *
- * Note that acceptance says nothing about delivery: if the From domain can't pass
- * SPF/DKIM alignment for the sending path, receivers drop the message silently after
- * the provider has already reported success. MAIL_FROM_EMAIL therefore has to be an
- * address on a domain verified in Resend, with the DKIM records Resend issues present
- * in that domain's DNS - never a free-mail address like gmail.com, whose DNS the club
- * cannot authorise anyone in.
+ * Acceptance says nothing about delivery. The provider answers immediately and
+ * finds out whether the message actually arrived seconds or hours later, which is
+ * what /api/webhooks/resend and email_messages exist for: the id returned here is
+ * what a bounce is later matched against, so "versendet" in the admin can go back
+ * to open when the message did not arrive.
+ *
+ * MAIL_FROM_EMAIL has to be an address on a domain verified in Resend, with the
+ * DKIM records Resend issues present in that domain's DNS - never a free-mail
+ * address like gmail.com, whose DNS the club cannot authorise anyone in: mail that
+ * cannot pass SPF/DKIM alignment is dropped by receivers after the provider has
+ * already reported success.
  */
-export async function sendEmail(input: SendEmailInput): Promise<boolean> {
+export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const fromEmail = process.env.MAIL_FROM_EMAIL;
   if (!fromEmail) {
     throw new Error("MAIL_FROM_EMAIL must be set to send email.");
@@ -68,7 +84,7 @@ export async function sendEmail(input: SendEmailInput): Promise<boolean> {
 
   if (isUndeliverableAddress(input.to)) {
     console.warn(`[email] Skipped ${input.subject} to a reserved-TLD address - would hard-bounce.`);
-    return false;
+    return { accepted: false, messageId: null };
   }
 
   const attachments = (input.attachments ?? []).map((attachment) => ({
@@ -77,7 +93,7 @@ export async function sendEmail(input: SendEmailInput): Promise<boolean> {
     contentType: "application/pdf",
   }));
 
-  const { error } = await getClient().emails.send({
+  const { data, error } = await getClient().emails.send({
     from: fromEmail,
     to: input.to,
     ...(replyTo ? { replyTo } : {}),
@@ -95,7 +111,7 @@ export async function sendEmail(input: SendEmailInput): Promise<boolean> {
     throw new Error(`E-Mail konnte nicht versendet werden (${error.name}): ${error.message}`);
   }
 
-  return true;
+  return { accepted: true, messageId: data?.id ?? null };
 }
 
 export interface SendCardEmailInput {
@@ -107,13 +123,12 @@ export interface SendCardEmailInput {
 }
 
 /**
- * Returns false when the address was skipped as structurally undeliverable, the
- * same as sendEmail. This used to return void, which meant a member on a
- * reserved-TLD address was recorded as having received their cards when nothing
- * had been sent - harmless while sending was tracked per member and only test
- * data ever hit it, but the per-card status now shown in the admin has to be
- * true.
+ * Same result as sendEmail, including the provider's message id. It used to
+ * return void, which meant a member on a reserved-TLD address was recorded as
+ * having received their cards when nothing had been sent - harmless while
+ * sending was tracked per member and only test data ever hit it, but the
+ * per-card status now shown in the admin has to be true.
  */
-export async function sendCardEmail(input: SendCardEmailInput): Promise<boolean> {
+export async function sendCardEmail(input: SendCardEmailInput): Promise<SendEmailResult> {
   return sendEmail(input);
 }

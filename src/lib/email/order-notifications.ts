@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import { sendEmail } from "@/lib/email/mailer";
+import { recordSentEmail } from "@/lib/email/delivery";
 import { orderConfirmationSubject, orderConfirmationText, orderConfirmationHtml } from "@/lib/email/order-confirmation";
 import { internalOrderSubject, internalOrderText } from "@/lib/email/order-internal";
 import { buildOrderAccessUrl } from "@/lib/orders/access-token";
@@ -54,7 +55,7 @@ export async function sendOrderPlacedEmails(order: OrderForNotification): Promis
   const statusUrl = buildOrderAccessUrl(order.orderNumber);
   const greetingName = [order.customer.firstName, order.customer.lastName].filter(Boolean).join(" ").trim() || order.customer.name;
 
-  const customerSent = await sendEmail({
+  const customerResult = await sendEmail({
     to: order.customer.email,
     subject: orderConfirmationSubject(order.orderNumber),
     bodyText: orderConfirmationText({
@@ -81,9 +82,17 @@ export async function sendOrderPlacedEmails(order: OrderForNotification): Promis
     }),
   });
 
+  await recordSentEmail({
+    messageId: customerResult.messageId,
+    kind: "order_confirmation",
+    recipient: order.customer.email,
+    subject: orderConfirmationSubject(order.orderNumber),
+    orderId: order.id,
+  });
+
   const internalSent = await sendInternalNotification(order);
 
-  return { skipped: null, customerSent, internalSent };
+  return { skipped: null, customerSent: customerResult.accepted, internalSent };
 }
 
 /**
@@ -104,9 +113,10 @@ async function sendInternalNotification(order: OrderForNotification): Promise<bo
     [order.customer.addressZip, order.customer.addressCity].filter(Boolean).join(" "),
   ].filter((line): line is string => Boolean(line && line.trim()));
 
-  return sendEmail({
+  const subject = internalOrderSubject(order.orderNumber, categoryLabel);
+  const result = await sendEmail({
     to,
-    subject: internalOrderSubject(order.orderNumber, categoryLabel),
+    subject,
     bodyText: internalOrderText({
       orderNumber: order.orderNumber,
       createdAt: new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", dateStyle: "medium", timeStyle: "short" }).format(
@@ -129,6 +139,16 @@ async function sendInternalNotification(order: OrderForNotification): Promise<bo
       adminUrl: `${getSiteUrl()}/admin/orders/${order.orderNumber}`,
     }),
   });
+
+  await recordSentEmail({
+    messageId: result.messageId,
+    kind: "order_notification",
+    recipient: to,
+    subject,
+    orderId: order.id,
+  });
+
+  return result.accepted;
 }
 
 interface OrderRow {

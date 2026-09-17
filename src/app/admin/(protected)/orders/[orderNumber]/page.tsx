@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getOrderDetail, type OrderHistoryEntry } from "@/lib/admin/orders";
+import { getOrderDetail, getOrderEmails, type OrderEmail, type OrderHistoryEntry } from "@/lib/admin/orders";
 import { getOrderTickets } from "@/lib/admin/tickets";
 import { buildOrderAccessUrl } from "@/lib/orders/access-token";
 import { formatRappenAsChf } from "@/lib/pricing";
@@ -21,6 +21,25 @@ const STATUS_LABELS = {
   bezahlt: "bezahlt",
   storniert: "storniert",
 } as const;
+
+const EMAIL_KINDS: Record<OrderEmail["kind"], string> = {
+  order_confirmation: "Bestellbestätigung",
+  order_notification: "Meldung ans Büro",
+  order_info: "Kundeninfo",
+  member_cards: "Mitgliederkarten",
+  test: "Testmail",
+};
+
+/** What the provider has said so far. "Angenommen" is where every mail starts
+ *  and where it stays until the provider reports back. */
+const EMAIL_STATES: Record<OrderEmail["status"], { label: string; variant: "neutral" | "success" | "warning" | "info" }> = {
+  accepted: { label: "Angenommen", variant: "info" },
+  delivered: { label: "Zugestellt", variant: "success" },
+  delayed: { label: "Verzögert", variant: "warning" },
+  bounced: { label: "Unzustellbar", variant: "warning" },
+  complained: { label: "Als Spam gemeldet", variant: "warning" },
+  failed: { label: "Fehlgeschlagen", variant: "warning" },
+};
 
 const ACTION_LABELS: Record<string, string> = {
   status_change: "Status",
@@ -46,7 +65,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
   const order = await getOrderDetail(orderNumber);
   if (!order) notFound();
 
-  const tickets = await getOrderTickets(order.id);
+  const [tickets, emails] = await Promise.all([getOrderTickets(order.id), getOrderEmails(order.id)]);
   const liveTickets = tickets.filter((ticket) => ticket.status === "gueltig" || ticket.status === "eingeloest").length;
 
   const person = [order.customer.first_name, order.customer.last_name].filter(Boolean).join(" ");
@@ -182,6 +201,29 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
       </div>
 
       <TicketsPanel orderNumber={order.order_number} tickets={tickets} />
+
+      {emails.length > 0 && (
+        <section className={styles.section} aria-labelledby="emails">
+          <div className={styles.header}>
+            <h2 id="emails">E-Mails</h2>
+          </div>
+          <ul className={own.history}>
+            {emails.map((email) => {
+              const state = EMAIL_STATES[email.status];
+              return (
+                <li key={email.id} className={own.historyRow}>
+                  <span className={own.historyWhen}>{dateTime.format(new Date(email.sentAt))}</span>
+                  <span>
+                    <Badge variant={state.variant}>{state.label}</Badge> {EMAIL_KINDS[email.kind]} an {email.recipient}
+                    {email.cardCount > 0 ? ` · ${email.cardCount} Karte(n) angehängt` : ""}
+                    {email.statusDetail ? <span className={own.historyWho}> · {email.statusDetail}</span> : null}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {order.history.length > 0 && (
         <section className={styles.section} aria-labelledby="verlauf">

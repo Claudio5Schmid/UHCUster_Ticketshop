@@ -202,6 +202,20 @@ the sole marker of "already sent" — re-running an import or re-clicking "add m
 double-sends. Admin-only RLS (select/insert/update, no delete — matches every other admin-managed
 table in this schema).
 
+## email_messages
+
+One row per mail handed to the provider, with the provider's own message id and what it said about
+the delivery afterwards (D88). The shop used to record "versendet" the moment Resend accepted a
+message, which is not the same thing: on the first real send three of ninety-nine bounced and all
+three still read as sent. `/api/webhooks/resend` verifies Resend's Svix signature itself and calls
+`record_email_status()` service-role, which writes the outcome here and takes the marks back - the
+cards the mail carried go to `card_sent_at = null`, the order to `notification_status =
+fehlgeschlagen` with the provider's reason, a bounced checkout confirmation to
+`confirmation_email_sent_at = null` - each with a `system` row in `audit_log`. Admin-readable; no
+insert or update policy for anyone, like `orders` and `tickets`. A later "delivered" never walks a
+bounce back, and an event for a message the shop never recorded is answered rather than raised, so
+the provider stops retrying something nobody can act on.
+
 ## Mutation functions (not tables, but part of the data layer)
 
 Every write to `orders`, `tickets`, and non-price fields of `products` goes through one of:
@@ -260,7 +274,7 @@ ticket that's already `storniert` or `ersetzt`.
 
 ## RLS verification
 
-`supabase/tests/rls_test.sql` is a 161-assertion pgTAP suite (run via the Supabase SQL editor or
+`supabase/tests/rls_test.sql` is a 178-assertion pgTAP suite (run via the Supabase SQL editor or
 `execute_sql`, wrapped in a rolled-back transaction) covering: the public/admin product split, full
 lockout of `anon` and non-admin `authenticated` sessions across every other table, that bare
 writes to `orders`/`tickets` have no effect while the dedicated functions succeed and log correctly,
@@ -271,7 +285,10 @@ injected into a line is silently ignored in favour of the real product price), P
 `check_order_rate_limit`, the post-Phase-8 member-import additions (`create_member_order` access
 control and output shape, `members` table RLS), `void_ticket` (D46), and the invoice flow and order import (Group O: enforced transitions, the
 system issuance door, cancelling voids tickets, import with duplicate guard, rollback and its scan
-guard). All 161 pass as of 2026-09-16.
+guard), and the delivery-status function (Group P: the log is admin-read-only and written by
+nobody with a session, an unknown message id is answered rather than raised, a bounce reopens the
+cards it carried and marks the order as not reached, and a later delivery does not undo it). All
+178 pass as of 2026-09-17.
 
 Phase 7's scanner writes aren't in this suite: they don't go through a `SECURITY DEFINER` Postgres
 function at all (see D32) — `/api/scanner/scan` verifies its own signed session token and writes via

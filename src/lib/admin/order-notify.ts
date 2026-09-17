@@ -1,5 +1,6 @@
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { sendEmail, type EmailAttachment } from "@/lib/email/mailer";
+import { recordSentEmail } from "@/lib/email/delivery";
 import { cardMailHtml, cardMailText } from "@/lib/email/card-mail";
 import { applyPlaceholders } from "@/lib/email/templates";
 import { buildOrderAccessUrl } from "@/lib/orders/access-token";
@@ -178,14 +179,16 @@ export async function sendOrderTestMail(orderId: string, subjectTemplate: string
   if (!recipient) throw new Error("Bestellung nicht gefunden.");
   const mail = render(recipient, subjectTemplate, bodyTemplate);
   const attachments = await loadAttachments(recipient, mail.attachmentNames);
-  const delivered = await sendEmail({
+  const result = await sendEmail({
     to,
     subject: `[TEST] ${mail.subject}`,
     bodyText: mail.bodyText,
     bodyHtml: mail.bodyHtml,
     attachments,
   });
-  if (!delivered) throw new Error("Testadresse ist nicht zustellbar (reservierte Domain).");
+  if (!result.accepted) throw new Error("Testadresse ist nicht zustellbar (reservierte Domain).");
+  // Recorded as a test: a bounce here must not reopen the customer's cards.
+  await recordSentEmail({ messageId: result.messageId, kind: "test", recipient: to, subject: mail.subject });
 }
 
 export interface OrderSendResult {
@@ -229,14 +232,23 @@ export async function sendOrderMails(
     try {
       const mail = render(recipient, subjectTemplate, bodyTemplate);
       const attachments = await loadAttachments(recipient, mail.attachmentNames);
-      const delivered = await sendEmail({
+      const sendResult = await sendEmail({
         to: recipient.email,
         subject: mail.subject,
         bodyText: mail.bodyText,
         bodyHtml: mail.bodyHtml,
         attachments,
       });
-      if (!delivered) throw new Error("Adresse ist nicht zustellbar (reservierte Domain).");
+      if (!sendResult.accepted) throw new Error("Adresse ist nicht zustellbar (reservierte Domain).");
+
+      await recordSentEmail({
+        messageId: sendResult.messageId,
+        kind: "order_info",
+        recipient: recipient.email,
+        subject: mail.subject,
+        orderId: recipient.id,
+        ticketIds: recipient.tickets.map((ticket) => ticket.id),
+      });
 
       const { error } = await supabase.rpc("set_order_notification", { p_order_id: recipient.id, p_status: "versendet" });
       if (error) throw new Error(`Versendet, aber nicht vermerkt: ${error.message}`);

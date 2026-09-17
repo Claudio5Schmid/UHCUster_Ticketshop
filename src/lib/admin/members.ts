@@ -2,6 +2,7 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { issueTicketsForOrder, addMemberTickets, rerenderTicketsForOrder } from "@/lib/tickets/issue";
 import { getOrderTickets, type OrderTicket } from "@/lib/admin/tickets";
 import { sendCardEmail } from "@/lib/email/mailer";
+import { recordSentEmail } from "@/lib/email/delivery";
 import { memberCardsHtml, memberCardsText } from "@/lib/email/member-cards";
 import { applyPlaceholders } from "@/lib/email/templates";
 import { buildOrderAccessUrl } from "@/lib/orders/access-token";
@@ -686,13 +687,15 @@ export async function sendMemberTestMail(memberId: string, subjectTemplate: stri
     attachments.push({ filename: preview.attachmentNames[index], content: new Uint8Array(await file.arrayBuffer()) });
   }
 
-  const delivered = await sendCardEmail({
+  const result = await sendCardEmail({
     to,
     subject: `[TEST] ${preview.subject}`,
     bodyText: preview.bodyText,
     attachments,
   });
-  if (!delivered) throw new Error("Testadresse ist nicht zustellbar (reservierte Domain).");
+  if (!result.accepted) throw new Error("Testadresse ist nicht zustellbar (reservierte Domain).");
+  // A test, so a bounce here must not reopen the member's real cards.
+  await recordSentEmail({ messageId: result.messageId, kind: "test", recipient: to, subject: preview.subject });
 }
 
 /**
@@ -780,20 +783,33 @@ export async function sendMemberCards(
         cardCount: pending.length,
       };
 
-      const delivered = await sendCardEmail({
+      const subject = applyTemplate(subjectTemplate, member);
+      const sendResult = await sendCardEmail({
         to: member.email,
-        subject: applyTemplate(subjectTemplate, member),
+        subject,
         bodyText: memberCardsText(template),
         bodyHtml: memberCardsHtml(template),
         attachments,
       });
 
-      if (!delivered) {
+      if (!sendResult.accepted) {
         // A reserved-TLD address can never receive anything, so the cards stay
         // open. Reported rather than skipped quietly: an admin who selected this
         // member is owed the reason their cards did not go out.
         throw new Error("Adresse ist nicht zustellbar (reservierte Domain) - es wurde nichts versendet.");
       }
+
+      // Recorded before the cards are marked sent, so a bounce arriving moments
+      // later has something to match against and can take the mark back.
+      await recordSentEmail({
+        messageId: sendResult.messageId,
+        kind: "member_cards",
+        recipient: member.email,
+        subject,
+        orderId: member.order_id as string,
+        memberId: member.id as string,
+        ticketIds: pending.map((ticket) => ticket.id),
+      });
 
       const { error: markError } = await supabase.rpc("mark_tickets_sent", {
         p_ticket_ids: pending.map((ticket) => ticket.id),

@@ -367,3 +367,42 @@ export async function getOrderDetail(orderNumber: string): Promise<OrderDetail |
     history: (history ?? []) as OrderHistoryEntry[],
   };
 }
+
+export interface OrderEmail {
+  id: string;
+  kind: "order_confirmation" | "order_notification" | "order_info" | "member_cards" | "test";
+  recipient: string;
+  subject: string | null;
+  status: "accepted" | "delivered" | "delayed" | "bounced" | "complained" | "failed";
+  statusDetail: string | null;
+  sentAt: string;
+  statusAt: string | null;
+  cardCount: number;
+}
+
+/**
+ * Every mail this order produced, with what the provider said about it
+ * afterwards (D88). "Angenommen" is not "zugestellt": until the provider
+ * reports back, that is all the shop can honestly claim.
+ */
+export async function getOrderEmails(orderId: string): Promise<OrderEmail[]> {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("email_messages")
+    .select("id, kind, recipient, subject, status, status_detail, sent_at, status_at, ticket_ids")
+    .eq("order_id", orderId)
+    .order("sent_at", { ascending: false });
+  if (error) throw new Error(`Failed to load e-mails: ${error.message}`);
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    kind: row.kind as OrderEmail["kind"],
+    recipient: row.recipient as string,
+    subject: row.subject as string | null,
+    status: row.status as OrderEmail["status"],
+    statusDetail: row.status_detail as string | null,
+    sentAt: row.sent_at as string,
+    statusAt: row.status_at as string | null,
+    cardCount: ((row.ticket_ids as string[] | null) ?? []).length,
+  }));
+}
